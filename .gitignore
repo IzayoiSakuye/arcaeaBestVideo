@@ -1,0 +1,42 @@
+data/*
+!data/song-id-aliases.json
+docs/
+
+# 构建中间产物与发布包
+dist/
+build/
+.cache/
+
+# 曲绘原图（可选下载，默认只留 256px）
+data/jackets/full/
+
+# 研究文件
+research/
+
+#  Node
+node_modules/
+npm-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+*.tsbuildinfo
+
+#  Go / Wails（后续会用到）
+build/bin/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+frontend/dist/
+wailsjs/
+
+#  编辑器 / 系统
+.vscode/*
+!.vscode/extensions.json
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+desktop.ini

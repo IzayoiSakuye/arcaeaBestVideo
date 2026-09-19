@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>模板预览 · 音游成绩视频</title>
+
+<style>
+  html, body {
+    margin: 0; height: 100%; overflow: hidden;
+    background: #0f1116; color: #c9d1e4;
+    font-family: "Microsoft YaHei", system-ui, sans-serif; font-size: 13px;
+  }
+
+  /* ── 顶部工具条 ── */
+  #bar {
+    position: fixed; left: 0; right: 0; top: 0; height: 42px; z-index: 100;
+    display: flex; align-items: center; gap: 16px; padding: 0 14px;
+    background: #191d27; border-bottom: 1px solid #2b3242;
+  }
+  #bar label { display: flex; align-items: center; gap: 5px; cursor: pointer; user-select: none; white-space: nowrap; }
+  #bar input[type="checkbox"] { accent-color: #6c5ce7; }
+  #bar select, #bar input[type="range"] { background: #232936; color: #c9d1e4; border: 1px solid #384157; border-radius: 4px; }
+  #bar select { padding: 3px 6px; max-width: 190px; }
+  #bar input[type="range"] { width: 110px; }
+  #bar .sep { width: 1px; height: 20px; background: #2b3242; }
+  #readout {
+    margin-left: auto; font-family: Consolas, "Courier New", monospace;
+    color: #7fd0a8; font-size: 13px; white-space: nowrap;
+  }
+  #readout b { color: #ffd76e; font-weight: 600; }
+
+  /* ── 舞台 ── */
+  #viewport {
+    position: fixed; inset: 42px 0 0 0;
+    display: flex; align-items: center; justify-content: center;
+  }
+  #stage {
+    position: relative; flex: none;
+    width: 1920px; height: 1080px;
+    transform-origin: center center;
+    background: #000;
+    box-shadow: 0 0 0 1px #3a4356, 0 12px 40px rgba(0, 0, 0, .55);
+    overflow: hidden;
+  }
+  /* 四个图层全部铺满，靠 z-index 定顺序 */
+  #stage > .layer { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; }
+  #bg    { object-fit: cover; z-index: 1; }
+  #clip  { left: 20px; top: 157px; width: 934px; height: 526px; object-fit: cover; z-index: 2; }
+  #chrome{ z-index: 3; }
+  #text  { z-index: 4; border: 0; background: transparent; }
+
+  /* 网格：100px 细线 + 500px 亮线；坐标标签由 JS 生成 */
+  #grid { z-index: 90; display: none; pointer-events: none; }
+  #grid.on { display: block; }
+  #grid .lines {
+    position: absolute; inset: 0;
+    background-image:
+      repeating-linear-gradient(to right,  rgba(255,255,255,.20) 0 1px, transparent 1px 100px),
+      repeating-linear-gradient(to bottom, rgba(255,255,255,.20) 0 1px, transparent 1px 100px),
+      repeating-linear-gradient(to right,  rgba(255,215,110,.50) 0 1px, transparent 1px 500px),
+      repeating-linear-gradient(to bottom, rgba(255,215,110,.50) 0 1px, transparent 1px 500px);
+  }
+  #grid .tick {
+    position: absolute; font: 11px/1 Consolas, monospace; color: #ffd76e;
+    background: rgba(0,0,0,.6); padding: 1px 3px; border-radius: 2px; white-space: nowrap;
+  }
+
+  /* 占位提示（视频层没素材时显示） */
+  #noclip {
+    position: absolute; left: 20px; top: 157px; width: 934px; height: 526px; z-index: 2;
+    border: 1px dashed #4a5470; box-sizing: border-box;
+    display: flex; align-items: center; justify-content: center;
+    color: #6b7590; font-size: 14px; text-align: center;
+  }
+</style>
+</head>
+<body>
+
+<div id="bar">
+  <label><input type="checkbox" id="cbGrid"> 网格 <span style="color:#6b7590">(G)</span></label>
+  <span class="sep"></span>
+  <label><input type="checkbox" id="cbBg" checked> 背景 <span style="color:#6b7590">(1)</span></label>
+  <label><input type="checkbox" id="cbClip" checked> 视频 <span style="color:#6b7590">(2)</span></label>
+  <label><input type="checkbox" id="cbChrome" checked> 装饰 <span style="color:#6b7590">(3)</span></label>
+  <label><input type="checkbox" id="cbText" checked> 文字 <span style="color:#6b7590">(4)</span></label>
+  <span class="sep"></span>
+  <label>背景
+    <select id="selBg"></select>
+  </label>
+  <label>模板
+    <select id="selTpl">
+      <option value="169">16:9 视频</option>
+      <option value="43">4:3 视频</option>
+    </select>
+  </label>
+  <label>模糊 <input type="range" id="rngBlur" min="0" max="60" step="1" value="25">
+    <span id="blurVal" style="color:#ffd76e;font-family:Consolas,monospace;width:22px">25</span>
+  </label>  <div id="readout">x=<b>--</b> y=<b>--</b></div>
+</div>
+
+<div id="viewport">
+  <div id="stage">
+    <img class="layer" id="bg" alt="">
+    <video class="layer" id="clip" autoplay muted loop playsinline></video>
+    <div id="noclip">视频层：把片段放进 <code>template/clip.mp4</code><br>或直接在 devtools 里改 <code>#clip.src</code></div>
+    <img class="layer" id="chrome" src="bg16-9.png" alt="装饰层">
+    <iframe class="layer" id="text" src="text.html"></iframe>
+    <div class="layer" id="grid"><div class="lines"></div></div>
+  </div>
+</div>
+
+<script>
+// ─────────────────────────────────────────────────────────────────────────
+// 背景候选。想看别的背景就从 data/backgrounds/960/ 里挑个文件名加进来。
+// ─────────────────────────────────────────────────────────────────────────
+const BACKGROUNDS = [
+  'aegleseeker', 'base_light', 'base_conflict', 'prelude_conflict',
+  'nijuusei-light-b', 'yugamu', 'rei', 'zettai', 'shiawase', 'observer_light',
+];
+const BG_DIR = '../data/backgrounds/960/Background_';
+
+// ─────────────────────────────────────────────────────────────────────────
+// 两套模板。
+//
+// ⚠️ 为什么需要两套：实测 catalog 的 871 个视频来源里 **37.5% 是 4:3**
+//    （1920×1440 / 2732×2048 / 3840×2880），按谱面算有 **321/645 根本没有 16:9 来源**。
+//    把 4:3 塞进 16:9 的窗口会裁掉 25% 高度，所以 4:3 的片子要用另一套窗口。
+//
+// 洞口坐标是从装饰层的 alpha 通道量出来的（连通域分析），不是估的。
+//    脚本见 scripts/README.md「装饰层洞口怎么量」。
+// ─────────────────────────────────────────────────────────────────────────
+const TEMPLATES = {
+  169: { file: 'bg16-9.png', win: { x: 20, y: 157, w: 934, h: 526 } },
+  43: { file: 'bg4-3.png', win: { x: 58, y: 95, w: 855, h: 641 } },
+};
+
+const $ = (id) => document.getElementById(id);
+const stage = $('stage');
+
+// ── 缩放到适应窗口 ──
+let scale = 1;
+function fit() {
+  const vp = $('viewport');
+  const pad = 28;
+  scale = Math.min(
+    (vp.clientWidth  - pad * 2) / 1920,
+    (vp.clientHeight - pad * 2) / 1080,
+  );
+  stage.style.transform = `scale(${scale})`;
+}
+window.addEventListener('resize', fit);
+
+// ── 背景下拉 + 切换 ──
+const selBg = $('selBg');
+BACKGROUNDS.forEach((n) => {
+  const o = document.createElement('option');
+  o.value = n; o.textContent = n;
+  selBg.appendChild(o);
+});
+function applyBg() {
+  $('bg').src = BG_DIR + selBg.value + '.jpg';
+}
+selBg.addEventListener('change', applyBg);
+
+// ── 模板切换：换装饰层 + 把视频层挪到对应的洞口 ──
+function applyTemplate() {
+  const t = TEMPLATES[$('selTpl').value] ?? TEMPLATES[169];
+  $('chrome').src = t.file;
+  const { x, y, w, h } = t.win;
+  for (const el of [$('clip'), $('noclip')]) {
+    el.style.left = x + 'px';
+    el.style.top = y + 'px';
+    el.style.width = w + 'px';
+    el.style.height = h + 'px';
+  }
+}
+$('selTpl').addEventListener('change', applyTemplate);
+
+// ── 模糊 ──
+// ⚠️ 实测：CSS 的 blur(Npx) 和 ffmpeg 的 gblur=sigma=N **不是一回事**。
+//    把同一张图分别处理再跟未模糊的原图比相似度：
+//        CSS blur(25px) → PSNR 20.12（离原图最远 = 最糊）
+//        ffmpeg sigma=25 → PSNR 21.97
+//        ffmpeg sigma=10 → PSNR 24.80
+//    再反过来找「哪个 CSS 值最像 ffmpeg sigma=25」：SSIM 在 18–20px 处最高。
+//    → **CSS blur(N) ≈ ffmpeg gblur sigma(N × 1.3)**。
+//    所以滑块按 **ffmpeg 的 sigma 标**（跟管线一致），内部除以这个系数。
+const CSS_BLUR_DIVISOR = 1.3;
+
+function applyBlur(sigma) {
+  const cssBlur = sigma / CSS_BLUR_DIVISOR;
+  $('bg').style.filter = `blur(${cssBlur}px)`;
+  // CSS 模糊会把边缘"吃掉"露出底色（ffmpeg 的 gblur 是 clamp 边界，不会），
+  // 所以稍微放大一点补回来，否则预览边缘会有一圈暗边
+  $('bg').style.transform = `scale(${1 + (cssBlur * 3) / 1920})`;
+}
+
+$('rngBlur').addEventListener('input', (e) => {
+  $('blurVal').textContent = e.target.value;
+  applyBlur(Number(e.target.value));
+});
+
+// ── 图层开关 ──
+const toggle = (cbId, elId) => $(cbId).addEventListener('change', (e) => {
+  const el = $(elId);
+  el.style.visibility = e.target.checked ? 'visible' : 'hidden';
+  if (elId === 'clip') $('noclip').style.display = e.target.checked && !$('clip').src ? 'flex' : 'none';
+});
+toggle('cbBg', 'bg');
+toggle('cbClip', 'clip');
+toggle('cbChrome', 'chrome');
+toggle('cbText', 'text');
+$('cbClip').addEventListener('change', (e) => {
+  $('noclip').style.display = e.target.checked ? 'flex' : 'none';
+});
+
+// ── 网格 ──
+function buildGrid() {
+  const g = $('grid');
+  for (let x = 200; x < 1920; x += 200) {
+    const d = document.createElement('div');
+    d.className = 'tick'; d.textContent = x;
+    d.style.left = (x + 3) + 'px'; d.style.top = '3px';
+    g.appendChild(d);
+  }
+  for (let y = 200; y < 1080; y += 200) {
+    const d = document.createElement('div');
+    d.className = 'tick'; d.textContent = y;
+    d.style.left = '3px'; d.style.top = (y + 3) + 'px';
+    g.appendChild(d);
+  }
+}
+function setGrid(on) {
+  $('grid').classList.toggle('on', on);
+  $('cbGrid').checked = on;
+}
+$('cbGrid').addEventListener('change', (e) => setGrid(e.target.checked));
+
+// ── 坐标读数：鼠标在舞台上的 1920×1080 坐标 ──
+stage.addEventListener('mousemove', (e) => {
+  const r = stage.getBoundingClientRect();
+  const x = Math.round((e.clientX - r.left) / scale);
+  const y = Math.round((e.clientY - r.top) / scale);
+  if (x < 0 || y < 0 || x > 1920 || y > 1080) return;
+  $('readout').innerHTML = `x=<b>${x}</b> y=<b>${y}</b>`;
+});
+stage.addEventListener('mouseleave', () => { $('readout').innerHTML = 'x=<b>--</b> y=<b>--</b>'; });
+
+// ── 快捷键 ──
+window.addEventListener('keydown', (e) => {
+  const k = e.key.toLowerCase();
+  if (k === 'g') setGrid(!$('grid').classList.contains('on'));
+  if (k === '1') { $('cbBg').checked = !$('cbBg').checked; $('cbBg').dispatchEvent(new Event('change')); }
+  if (k === '2') { $('cbClip').checked = !$('cbClip').checked; $('cbClip').dispatchEvent(new Event('change')); }
+  if (k === '3') { $('cbChrome').checked = !$('cbChrome').checked; $('cbChrome').dispatchEvent(new Event('change')); }
+  if (k === '4') { $('cbText').checked = !$('cbText').checked; $('cbText').dispatchEvent(new Event('change')); }
+  if (k === 'f') $('rngBlur').focus();
+});
+
+// ── 初始化 ──
+buildGrid();
+fit();
+applyBg();
+applyTemplate();
+applyBlur(25);
+$('noclip').style.display = 'flex';
+</script>
+</body>
+</html>

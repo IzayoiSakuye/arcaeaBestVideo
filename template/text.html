@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>文字层</title>
+<!--
+  文字层 —— 成片的第四层（透明底 PNG），只有会随曲目变化的文字。
+
+  ⚠️ 标签（POTENTIAL / SCORE / PURE / FAR / LOST）是**烤在装饰层里的**，
+     所以这里只放**数值**，并且必须绕开标签的位置。
+
+  怎么用：
+    · 改本文件 → 刷新 preview.html → 立刻看到叠在成片上的效果
+    · 坐标用 preview.html 顶栏的读数量（打开网格 G 更好对）
+
+  硬要求：
+    1. html / body 不能有背景色（否则导出是不透明底）
+    2. 数字必须 tabular-nums（否则切换歌曲时宽度变化会左右跳）
+    3. 画布固定 1920×1080，用绝对定位，别用 vw/rem
+    4. 字体不能用游戏原版（铁律 8）
+-->
+<style>
+  /* ── 打包的 Exo 2（SIL OFL 1.1，许可证见 fonts/OFL.txt）── */
+  @font-face {
+    font-family: "Exo 2"; src: url("fonts/Exo2-Light.ttf") format("truetype");
+    font-weight: 300; font-style: normal; font-display: block;
+  }
+  @font-face {
+    font-family: "Exo 2"; src: url("fonts/Exo2-Regular.ttf") format("truetype");
+    font-weight: 400; font-style: normal; font-display: block;
+  }
+  @font-face {
+    font-family: "Exo 2"; src: url("fonts/Exo2-Medium.ttf") format("truetype");
+    font-weight: 500; font-style: normal; font-display: block;
+  }
+
+  :root {
+    /* 右侧文字列的可用区：从曲绘口右边起，到画面右边距止。
+       用 left/right 一起定位（而不是固定 width）—— 这样文字永远不会溢出画布，
+       宽度也自动等于真实可用宽度，供下面的自动字号逻辑测量。 */
+    --col-left: 1490px;
+    --col-right: 40px;
+
+    /* Arcaea 各难度配色。
+       取自 wiki 的 MediaWiki:Common.css —— 它有**浅色主题**和**深色主题**两套，
+       正好分工：浅色主题那套**深且饱和**，适合当**底板**（白字压上去对比度够）；
+       深色主题那套是浅色粉彩，只适合当文字色。
+
+       底板色（--d-*-bg）→ 难度的底色。
+       文字保持白色，**不要用难度色当文字色** —— 那样底板就白做了。 */
+    --d-pst-bg: #0a82be;   /* Past    */
+    --d-prs-bg: #648c3c;   /* Present */
+    --d-ftr-bg: #50194b;   /* Future  */
+    --d-byd-bg: #822328;   /* Beyond  */
+    --d-etr-bg: #5d4e76;   /* Eternal */
+  }
+
+  html, body { margin: 0; padding: 0; background: transparent; }
+  body {
+    width: 1920px; height: 1080px; position: relative; overflow: hidden;
+    color: #fff;
+    font-family: "Microsoft YaHei", "Segoe UI", sans-serif;
+    /* 数字全部等宽 —— 切换歌曲时不会左右抖动 */
+    font-variant-numeric: tabular-nums;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ⚠️ 拉丁字体后面必须跟 CJK 兜底，否则中日文曲名/曲师会掉到浏览器默认字体。 */
+
+  /* ── 顶部：潜力值（菱形正下方，居中）── */
+  .ptt {
+    position: absolute; left: 0; top: 58px; width: 1920px;
+    text-align: center;
+    font-size: 42px; font-weight: 500; letter-spacing: 0px;
+    color: #ffffff;
+    text-shadow: 0 2px 10px rgba(0, 0, 0, .55);
+    font-family: "Exo 2", "Microsoft YaHei", "Noto Sans SC", sans-serif;
+  }
+
+  /* ── 右侧：分数 ── */
+  .score {
+    position: absolute; left: 1250px; top: 135px; width: 720px;
+    text-align: center;
+    /* 原来是 font-weight:550 + "Exo 2 Light"，这俩是矛盾的（Light 只有 300 一档）。
+       静态字体下浏览器会往上取到 Medium，等于把你要的 Light 悄悄换掉。
+       这里按 Light(300) 定死，保持你原本看到的效果。想更粗就改成 400/500。 */
+    font-size: 100px; font-weight: 300; letter-spacing: -1px;
+    color: #ffffff;
+    text-shadow: 0 2px 12px rgba(0, 0, 0, .6);
+    font-family: "Exo 2", "Microsoft YaHei", "Noto Sans SC", sans-serif;
+  }
+
+  /* ── 右侧：判定计数（数值放在标签**右侧**，起点 x≈1490）── */
+  .judge {
+    position: absolute; left: var(--col-left); top: 522px;
+    width: 320px;
+    /* 原来是 font-weight:400 + "Exo 2 Medium" —— 族名会赢，实际用的是 Medium */
+    font-size: 42px; font-weight: 500; line-height: 63px;
+    text-align: center;
+    text-shadow: 0 1px 8px rgba(0, 0, 0, .55);
+    font-family: "Exo 2", "Microsoft YaHei", "Noto Sans SC", sans-serif;
+  }
+
+  /* ── 右侧：曲目信息 ──
+     ⚠️ 曲名和曲师必须**流式排布**（同一个容器里自然堆叠），不能各自钉死 y 坐标。
+        因为曲名在超长时会换行成 2 行，固定坐标会让第二行压到曲师头上。 */
+  .song {
+    font-family: "Exo 2", "Microsoft YaHei", "Noto Sans SC", sans-serif;
+    font-weight: 500;
+  }
+  .song-info {
+    position: absolute; left: var(--col-left); right: var(--col-right); top: 332px;
+  }
+  .song .title {
+    font-size: 54px; font-weight: 400; line-height: 1.15;
+    color: #ffffff;
+    text-shadow: 0 2px 10px rgba(0, 0, 0, .5);
+    /* 曲名可能是日文，给一条日文兜底链 */
+    font-family: "Exo 2", "Noto Sans JP", "Microsoft YaHei", "Noto Sans SC", sans-serif;
+    /* 自动字号会改 font-size；这里定住行数上限 */
+    --fit-min: 34px;     /* 单行缩小到这个值就不再缩，改为换行 */
+    --fit-hard: 26px;    /* 换行后也放不下时的绝对下限 */
+    --fit-lines: 2;
+  }
+  .song .author {
+    margin-top: 8px;
+    font-size: 32px; color: #ffffff;
+    --fit-min: 26px;
+    --fit-hard: 22px;
+    --fit-lines: 2;
+  }
+  /* ── 难度底板 ──
+     底色随难度变，**文字色保持白色**（不要用难度色当文字色）。
+
+     ⚠️ 形状不是矩形 —— 它是 SCORE 面板下方那条横条**右端那块斜边色块**，
+        从装饰层的像素量出来的四边形（左边缘 45° 斜切）：
+            左上 (1713, 269)  右上 (1920, 269)
+            左下 (1649, 326)  右下 (1920, 326)
+        → 外框 left=1649 top=269 尺寸 271×57，再用 clip-path 切出斜边。
+        左边斜切量 = 64px（1713 − 1649）。
+
+     改形状时只动下面这 5 个变量即可，clip-path 会跟着走。
+
+     ⚠️ **只想挪文字、不动形状** → 调 --diff-text-shift（见下）。
+        它是 padding-left，只影响内容位置；配合 box-sizing: border-box，
+        不会撑大外框，clip-path 形状完全不变。 */
+  .song .diff {
+    --diff-x: 1649px;
+    --diff-y: 269px;
+    --diff-w: 271px;
+    --diff-h: 57px;
+    --diff-slant: 64px;   /* 左上角相对左下角右移的量 = 斜边水平投影 */
+
+    /* ⭐ 只挪文字：正值右移、负值左移。形状不受影响。 */
+    --diff-text-shift: 40px;
+
+    position: absolute;
+    left: var(--diff-x); top: var(--diff-y);
+    width: var(--diff-w); height: var(--diff-h);
+    /* ⚠️ 必须是 border-box，否则 padding-left 会把外框撑大，
+           而 clip-path 是按外框算的 → 形状会被改掉 */
+    box-sizing: border-box;
+    padding-left: var(--diff-text-shift);
+    /* 斜边梯形：左上 / 右上 / 右下 / 左下 */
+    clip-path: polygon(
+      var(--diff-slant) 0,
+      100% 0,
+      100% 100%,
+      0 100%
+    );
+    display: flex; align-items: center; justify-content: center;
+    font-size: 35px; font-weight: 500;
+    color: #ffffff;
+    font-variant-numeric: tabular-nums;
+    background: rgba(255, 255, 255, .14);   /* 兜底：没拿到难度时的中性底板 */
+  }
+  /* 底板配色（由注入的 class 决定，值见 :root 的注释） */
+  .diff.d-pst { background: var(--d-pst-bg); }
+  .diff.d-prs { background: var(--d-prs-bg); }
+  .diff.d-ftr { background: var(--d-ftr-bg); }
+  .diff.d-byd { background: var(--d-byd-bg); }
+  .diff.d-etr { background: var(--d-etr-bg); }
+
+  /* ── 底部面板：评语（左侧）── */
+  .comment {
+    position: absolute; left: 60px; top: 845px; width: 660px;
+    font-size: 32px; line-height: 1.5; color: #dfe6f5;
+    text-align: left;
+    font-family: "Noto Sans SC", "Microsoft YaHei", sans-serif;
+  }
+</style>
+</head>
+<body>
+
+  <!--
+    ⚠️ 下面全是**默认值**（只为调版时能看见东西）。
+       真实值由渲染管线通过查询参数注入，例如：
+         text.html?ptt=12.34&score=10001127&pure=1024&far=11&lost=2
+         &title=Fracture%20Ray&author=削除&diff=Future%2011.2&diffClass=ftr&comment=第一行|第二行
+       规则：
+         · data-k          → 用同名查询参数覆盖内容（多行用 | 分隔）
+         · data-k-class    → 用同名查询参数覆盖**附加 class**（难度配色用）
+         · data-fit        → 渲染后自动量宽度缩字号（见页尾脚本）
+  -->
+
+  <div class="ptt"      data-k="ptt">+12.34</div>
+
+  <div class="score"    data-k="score">10,001,127</div>
+
+  <div class="judge">
+    <span data-k="pure">1024</span><br>
+    <span data-k="far">11</span><br>
+    <span data-k="lost">2</span>
+  </div>
+
+  <div class="song">
+    <div class="diff"   data-k="diff" data-k-class="diffClass">Future 11.2</div>
+    <div class="song-info">
+      <div class="title"  data-k="title" data-fit>Fracture Ray</div>
+      <div class="author" data-k="author" data-fit>削除</div>
+    </div>
+  </div>
+
+  <div class="comment"  data-k="comment">这首终于推上去了<br>感觉还能再压一点，下次试试不开音押</div>
+
+<script>
+(function () {
+  'use strict';
+
+  // ── ① 查询参数注入 ───────────────────────────────────────────────────
+  // 没有查询参数时什么都不做，所以直接双击打开仍是可用的调版预览。
+  var q = new URLSearchParams(location.search);
+
+  document.querySelectorAll('[data-k]').forEach(function (el) {
+    var v = q.get(el.dataset.k);
+    if (v === null) return;
+    // 先转义再换行，避免数据里的尖括号破坏结构
+    var esc = v.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    el.innerHTML = esc.replace(/\|/g, '<br>');
+  });
+
+  // 附加 class（难度配色）：data-k-class="diffClass" → ?diffClass=ftr → .diff.d-ftr
+  document.querySelectorAll('[data-k-class]').forEach(function (el) {
+    var v = q.get(el.dataset.kClass);
+    if (!v) return;
+    // 先清掉上一次注入的难度 class，避免重用时残留
+    el.className = el.className.replace(/\bd-[a-z]+\b/g, '').trim();
+    el.classList.add('d-' + v.toLowerCase());
+  });
+
+  // ── ② 自动字号 ───────────────────────────────────────────────────────
+  //
+  // 为什么需要：右侧文字列只有约 390px 宽，而最长曲名
+  // `Hiiro Gekka, Kyoushou no Zetsu (nayuta 2017 ver.)` 在 54px 下要 1400px。
+  // 533 首里有 150 首放不下。纯缩字号会缩到 16px 没法看，所以分两阶段：
+  //
+  //   阶段一  单行内逐像素缩小，缩到 --fit-min 为止
+  //   阶段二  还放不下就允许换行（最多 --fit-lines 行），继续缩到 --fit-hard
+  //
+  // ⚠️ 必须在字体加载完成后再量 —— 否则量到的是回退字体的宽度，字体会跳。
+  function fitText(el) {
+    var cs = getComputedStyle(el);
+    var minPx = parseFloat(cs.getPropertyValue('--fit-min')) || 28;
+    var hardPx = parseFloat(cs.getPropertyValue('--fit-hard')) || 22;
+    var maxLines = parseInt(cs.getPropertyValue('--fit-lines'), 10) || 1;
+
+    var startPx = parseFloat(cs.fontSize);
+    var size = startPx;
+    var maxW = el.clientWidth;
+    if (!maxW) return null;
+
+    function apply(px) { el.style.fontSize = px + 'px'; }
+    function lineCount() {
+      var lh = parseFloat(getComputedStyle(el).lineHeight);
+      if (!lh || Number.isNaN(lh)) lh = parseFloat(getComputedStyle(el).fontSize) * 1.2;
+      return Math.max(1, Math.round(el.scrollHeight / lh));
+    }
+    function fits() { return el.scrollWidth <= maxW && lineCount() <= maxLines; }
+
+    // 阶段一：单行
+    el.style.whiteSpace = 'nowrap';
+    apply(size);
+    while (size > minPx && !fits()) { size -= 1; apply(size); }
+
+    // 阶段二：换行
+    if (!fits() && maxLines > 1) {
+      el.style.whiteSpace = 'normal';
+      while (size > hardPx && !fits()) { size -= 1; apply(size); }
+    }
+    el.style.fontSize = size + 'px';
+
+    return { from: startPx, to: size, lines: lineCount(), maxW: maxW,
+             ok: el.scrollWidth <= maxW && lineCount() <= maxLines };
+  }
+
+  // 供截图前确认「已就绪」，也方便在 devtools 里查
+  window.__textLayer = { fitted: [] };
+
+  document.fonts.ready.then(function () {
+    document.querySelectorAll('[data-fit]').forEach(function (el) {
+      var r = fitText(el);
+      if (r) window.__textLayer.fitted.push({ el: el.className, from: r.from, to: r.to, lines: r.lines, ok: r.ok });
+    });
+    document.documentElement.setAttribute('data-ready', '1');
+  });
+})();
+</script>
+
+</body>
+</html>

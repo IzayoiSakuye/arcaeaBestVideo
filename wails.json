@@ -1,0 +1,13 @@
+{
+  "$schema": "https://wails.io/schemas/config.v2.json",
+  "name": "rhythm-game-bvideo",
+  "outputfilename": "rhythm-game-bvideo",
+  "frontend:install": "npm install",
+  "frontend:build": "npm run build",
+  "frontend:dev:watcher": "npm run dev",
+  "frontend:dev:serverUrl": "auto",
+  "author": {
+    "name": "IzayoiSakuye",
+    "email": "ischh.zhang@outlook.com"
+  }
+}
