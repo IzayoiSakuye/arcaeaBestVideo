@@ -1,26 +1,35 @@
-html {
-    background-color: rgba(27, 38, 54, 1);
-    text-align: center;
-    color: white;
-}
+/**
+ * 全局样式。
+ *
+ * ⚠️ 这里**只管全局**（html/body 的基础底色、字体栈），**不管布局** ——
+ *    每个页面自己的布局归各自的 CSS。
+ *
+ * 两条反直觉的：
+ *
+ * 1. **不要在 CSS 里写死背景色。** 窗口底色由 `main.go` 的 `BackgroundColour` 管，
+ *    两边都写会出现"改一处忘一处"（模板原本就是两处都写了，值是重复的）。
+ *    html 保持透明，让 WebView 透出 Go 设的底色。
+ *
+ * 2. **字体栈必须给中文兜底。** 模板自带的是 Nunito —— 一个**纯拉丁**字体，
+ *    中文一样要回退。这里直接用系统字体栈，不打包 webfont：
+ *    中文正文字体动辄 3–10MB，等 UI 定型了再决定要不要内嵌。
+ *    （对比：目前整个前端产物才 383KB。）
+ */
 
+html,
 body {
-    margin: 0;
-    color: white;
-    font-family: "Nunito", -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto",
-    "Oxygen", "Ubuntu", "Cantarell", "Fira Sans", "Droid Sans", "Helvetica Neue",
+  margin: 0;
+  padding: 0;
+  /* 不写 background-color —— 见上面第 1 条 */
+  color: #fff;
+  font-family:
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    "Microsoft YaHei",   /* Windows 中文 */
+    "PingFang SC",       /* macOS 中文 */
+    "Noto Sans SC",
+    Roboto,
     sans-serif;
-}
-
-@font-face {
-    font-family: "Nunito";
-    font-style: normal;
-    font-weight: 400;
-    src: local(""),
-    url("assets/fonts/nunito-v16-latin-regular.woff2") format("woff2");
-}
-
-#app {
-    height: 100vh;
-    text-align: center;
+  -webkit-font-smoothing: antialiased;
 }

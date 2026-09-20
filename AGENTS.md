@@ -35,15 +35,16 @@
 | 可行性调研 + 方案设计 | ✅ 完成 | `docs/00-方案讨论.md`（§0–§13 + 附录 A + 参考来源） |
 | 数据层（曲库 / 视频索引 / 曲绘 / 合并目录） | ✅ 完成 | `scripts/` + `data/` |
 | 数据发布打包 | ✅ 完成 | `scripts/pack-data.ts` → `dist/` |
-| 应用脚手架（Go / Wails / React） | 🟡 **只有模板脚手架，零业务代码** | `app.go` `main.go` `frontend/` |
-| 版本控制 | 🟡 **已 `git init`，但 0 个提交** | 见下方说明 |
-| 下一步 | **M0 · Arcaea 版**：见 §13.8 | 见 §13.8 + §8 M0 |
+| P0 地基 | ✅ **完成**（2026-09-19） | git / 清模板 demo / 目录骨架 / 体积基线 10.95 MB |
+| 应用脚手架（Go / Wails / React） | 🟡 **框架就绪，零业务代码** | `internal/` 只有 `doc.go`；`app.go` 只有 `Version()` |
+| 版本控制 | ✅ 有提交（`git log` 可查） | 铁律 1 已被真实检验 |
+| 下一步 | **P1 渲染管线 = M0 样片**（spike 已跑通，待翻译成 Go） | 见 `docs/01-开发流程.md` §3 |
 
-**脚手架的真实状态（别被"有 app.go"骗了）**：`app.go` 里只有一个 `Greet(name)` 的 Wails 模板 demo；`main.go` 是模板默认的 1024×768 窗口；`frontend/src/App.jsx` 是模板默认页；`frontend/node_modules` **尚未安装**。**业务代码一行都没有。**
+**脚手架的真实状态（别被"有 app.go"骗了）**：`app.go` 只有 `startup` + `Version()` 两个方法；`main.go` 是 1600×900 窗口 + 绑定；`internal/` 六个包**各只有一个 `doc.go`，零实现**；`frontend/src/App.tsx` 是最小壳（调 `Version()` 证明 bindings 通）。**业务代码一行都没有。**
 
-**⚠️ 版本控制说明**：仓库已初始化（分支 `master`），但**一次提交都还没有** —— 也就是说铁律 1「绝不提交 `data/`」虽然有了 `.gitignore` 兜着，却**还没有被任何一次提交验证过**。首次提交前务必确认 `git status` 里 `data/` 下**只有** `song-id-aliases.json`。
+**⚠️ 版本控制说明**：已有提交（`git log` 可查）。**铁律 1 已经被真实检验过** —— `git ls-files data/` 只有 `song-id-aliases.json` 一个文件。改动数据层后请重新确认这一点。
 
-**⚠️ `docs/` 与 `research/` 不入库是「有意为之」，不是漏配。** `.gitignore` 里那两行是显式决定，别当成配置错误去"修"它。后果要说清楚：克隆这个仓库**拿不到任何设计文档**（含 `00-方案讨论.md` 这个主文档），`AGENTS.md` 里那些「见 §13.6」的引用在仓库内无法跳转。
+**⚠️ `docs/` 与 `_research/` 不入库是「有意为之」，不是漏配。** `.gitignore` 里那两行是显式决定，别当成配置错误去"修"它。后果要说清楚：克隆这个仓库**拿不到任何设计文档**（含 `00-方案讨论.md` 这个主文档），`AGENTS.md` 里那些「见 §13.6」的引用在仓库内无法跳转。
 
 **M0 的两个版本（都保留，别搞混）**：
 
@@ -112,7 +113,7 @@ yt-dlp.exe \
   --download-sections "*60-73" \
   --ffmpeg-location "<随包/首启下载的 ffmpeg 路径>" \
   --merge-output-format mp4 \
-  --progress-template "PROG|%(progress._percent_str)s|%(progress._speed_str)s|%(progress._eta_str)s" \
+  --progress-templates "PROG|%(progress._percent_str)s|%(progress._speed_str)s|%(progress._eta_str)s" \
   -o "<cache>/clip.%(ext)s" \
   "https://www.bilibili.com/video/BV1T54y1s7f6?p=3"
 ```
@@ -159,15 +160,28 @@ yt-dlp.exe \
 
 ```
 AGENTS.md                  ← 本文件
-.gitignore                 ← data/* 全忽略（仅放行 song-id-aliases.json）；docs/ 暂不入库（见下）
-app.go                     🟡 Wails 脚手架：只有一个 Greet() demo，没有业务代码
-main.go                    🟡 Wails 模板默认入口（1024×768 窗口）
+.gitignore                 ← data/* 全忽略（仅放行 song-id-aliases.json）；docs/ 与 _research/ 不入库（见下）
+app.go                     🟡 Wails 脚手架：只有 startup + Version()，没有业务代码
+main.go                    🟡 入口：1600×900 窗口，绑定 App
 wails.json                 Wails 配置（前端构建命令、输出文件名）
 go.mod / go.sum            Go 1.25 模块（wails v2.16.0）
-frontend/                  🟡 React 19 + Vite 7 模板默认页（node_modules 未安装）
-  src/App.jsx              模板默认的 Wails logo 打招呼页
-  wailsjs/                 自动生成的 Go↔JS bindings（勿手改）
-build/                     Wails 打包资源（图标 / manifest / NSIS 脚本）
+internal/                  🟡 **目录骨架已建，只有 doc.go，零实现**
+  catalog/doc.go           曲目元数据只读查询（读 data/arcaea-catalog.json）
+  score/doc.go             成绩获取 + 统一格式（ScoreProvider 接口将放这里）
+  resource/doc.go          按 catalog 取素材（ResourceProvider 接口将放这里）
+  render/doc.go            调用 ffmpeg 渲染
+  job/doc.go               工具链编排（JobManager）
+  store/doc.go             SQLite 持久化（modernc.org/sqlite，纯 Go）
+frontend/                  🟡 React 19 + Vite 7（已迁 TypeScript）
+  src/App.tsx              最小壳：调 Go 的 Version() 证明 bindings 通
+  src/main.tsx             入口（index.html 指向它）
+  src/style.css            全局样式（字色 / 字体栈；**不写背景色**，那归 main.go）
+  tsconfig.json            类型检查配置（strict）。⚠️ Vite 用 esbuild 转译，不读它
+  vite.config.ts           Vite 配置
+  wailsjs/                 自动生成的 Go↔JS bindings（勿手改；wails build 会刷新）
+build/                     Wails 打包资源（图标 / manifest / NSIS 脚本）—— **是源码，要提交**
+  bin/                     ⚠️ 只有这里是产物，git 忽略
+templates/                 ★ 成片模板：装饰层(16:9 / 4:3) + 文字层 + 字体 + 预览台
 docs/
   00-方案讨论.md            ★ 主文档：设计评审/可行性/架构/数据契约/界面结构（§0–§13 + 附录 A）
   01-开发流程.md            ★ 开发路线图：P0–P6 阶段、门禁、风险回退、分工
@@ -304,8 +318,9 @@ Ashen 6oundary → ashenboundary  标题里 6 是风格化的 b
   - **`tsc` 只是检查工具，不进运行链路**。`scripts/tsconfig.json` 只影响编辑器与
     `npm run check`；`node xxx.ts` 根本不读它，删掉 `node_modules` 脚本照样跑。
 - **`scripts/` 的 devDependencies 装了 `typescript` + `@types/node`**，仅供类型检查。
-  ⚠️ 本机环境变量 `NODE_ENV=production`，npm 会**默认跳过 devDependencies** —— 装的时候
-  要加 `--include=dev`，否则它会报 "up to date" 却什么都不装（排查过一次）。
+  ⚠️ **agent 会话的环境里 `NODE_ENV=production`** —— 它不在用户级/系统级变量里，是会话注入的。
+  npm 会因此**默认跳过 devDependencies**，报 "up to date" 却什么都不装。
+  **agent 自己跑 npm 时要加 `--include=dev`；用户在自己终端里跑不受影响。**
 - **注释写「为什么」，不写「是什么」。** 参考 `lib/anubis-fetch.ts` 的注释密度 ——
   每个反直觉的写法旁边都要说明踩坑经过，否则后人会"顺手优化"掉。
 - **宁可记录也不丢弃。** 解析失败、数据冲突、无法归类的条目，一律进

@@ -4,14 +4,14 @@ docs/
 
 # 构建中间产物与发布包
 dist/
-build/
+build/bin
 .cache/
 
 # 曲绘原图（可选下载，默认只留 256px）
 data/jackets/full/
 
 # 研究文件
-research/
+_research/
 
 #  Node
 node_modules/
@@ -40,3 +40,6 @@ wailsjs/
 .DS_Store
 Thumbs.db
 desktop.ini
+
+# Wails CLI 生成的标记文件（package.json 的 md5，纯派生值）
+frontend/package.json.md5

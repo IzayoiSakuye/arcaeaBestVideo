@@ -17,9 +17,10 @@ func main() {
 
 	// Create application with options
 	err := wails.Run(&options.App{
-		Title:  "rhythm-game-bvideo",
-		Width:  1024,
-		Height: 768,
+		Title:         "Arcaea Best50视频生成器",
+		Width:         1600,
+		Height:        900,
+		DisableResize: false,
 		AssetServer: &assetserver.Options{
 			Assets: assets,
 		},

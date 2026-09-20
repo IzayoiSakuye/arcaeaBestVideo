@@ -674,7 +674,7 @@ node scripts/spike-sample-video.ts --limit 1
 
 | 项 | 说明 |
 |---|---|
-| 输入 | `data/arcaea-catalog.json`（视频来源 + 画幅 + 曲绘路径）+ `data/arcaea-backgrounds.json`（背景）+ `template/`（两套装饰层 bg16-9 / bg4-3） |
+| 输入 | `data/arcaea-catalog.json`（视频来源 + 画幅 + 曲绘路径）+ `data/arcaea-backgrounds.json`（背景）+ `templates/`（两套装饰层 bg16-9 / bg4-3） |
 | 产出 | `.cache/spike/work/<曲目>/`（中间产物）、`dist/sample/sample.mp4`（成片） |
 | 片段缓存 | `.cache/clips/<song_id>.mp4` —— **固定位置**，调设计重跑不会重新下载 |
 | 模板选择 | **按 `sources[].video_width/height` 自动选** 16:9 / 4:3 装饰层，**不用先下载** |

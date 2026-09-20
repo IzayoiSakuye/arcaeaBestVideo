@@ -12,8 +12,8 @@
  *
  *   ① 背景层   曲目背景 → 铺满 1920×1080 → 高斯模糊          （每首不同）
  *   ② 视频层   谱面录像片段 → 裁成 934×526                  （每首不同）
- *   ③ 装饰层   template/bg1.png（RGBA，带洞口）               （固定）
- *   ④ 文字层   template/text.html → Edge 无头截图 → RGBA PNG  （每首不同）
+ *   ③ 装饰层   templates/bg16-9.png（RGBA，带洞口）               （固定）
+ *   ④ 文字层   templates/text.html → Edge 无头截图 → RGBA PNG  （每首不同）
  *   ────────────────────────────────────────────────────────
  *   ffmpeg 四层叠加 → seg_NNN.mp4（参数锁死）
  *   全部完成后 → concat demuxer 无损拼接 → sample.mp4
@@ -103,8 +103,8 @@ const OUT = {
    *    4:3 塞进 16:9 窗口会裁掉 25% 高度，所以必须按来源画幅换窗口。
    */
   TEMPLATES: {
-    169: { chrome: 'template/bg16-9.png', win: { x: 20, y: 157, w: 934, h: 526 } },
-    43: { chrome: 'template/bg4-3.png', win: { x: 58, y: 95, w: 855, h: 641 } },
+    169: { chrome: 'templates/bg16-9.png', win: { x: 20, y: 157, w: 934, h: 526 } },
+    43: { chrome: 'templates/bg4-3.png', win: { x: 58, y: 95, w: 855, h: 641 } },
   },
   /**
    * 曲绘口。**两套模板的曲绘口完全一样**（4:3 那套是复制改的窗口），
@@ -343,7 +343,7 @@ async function buildBackground(tools: Tools, bgName: string, dest: string): Prom
 async function renderText(tools: Tools, values: Record<string, string | number>, dest: string): Promise<void> {
   const qs = new URLSearchParams();
   for (const [k, v] of Object.entries(values)) qs.set(k, String(v));
-  const url = `file:///${toPosix(path.join(ROOT, 'template/text.html'))}?${qs}`;
+  const url = `file:///${toPosix(path.join(ROOT, 'templates/text.html'))}?${qs}`;
   if (fsSync.existsSync(dest)) await fs.unlink(dest);
   await execFileAsync(tools.edge, [
     '--headless=new', '--disable-gpu', '--hide-scrollbars',

@@ -1,4 +1,4 @@
-# template/ —— 成片模板
+# templates/ —— 成片模板
 
 成片的画面是**五层用 ffmpeg 叠出来的**。这里放的是除视频素材外的四层，以及一个用来调版的预览台。
 
@@ -46,7 +46,7 @@
 
 ```bash
 # 直接双击打开就行，file:// 就够用
-start template/preview.html
+start templates/preview.html
 ```
 
 ### 预览台的操作
@@ -60,7 +60,7 @@ start template/preview.html
 
 **顶栏右侧实时显示鼠标处的 1920×1080 坐标** —— 量坐标不用回 PS。
 
-> 视频层需要 `template/clip.mp4`。没有的话会显示虚线占位框，不影响调文字坐标。
+> 视频层需要 `templates/clip.mp4`。没有的话会显示虚线占位框，不影响调文字坐标。
 
 ---
 
@@ -253,7 +253,7 @@ CSS 用 `clip-path: polygon(64px 0, 100% 0, 100% 100%, 0 100%)` 还原。
 ```bash
 msedge --headless=new --disable-gpu --hide-scrollbars --force-device-scale-factor=1 \
   --window-size=1920,1080 --default-background-color=00000000 \
-  --virtual-time-budget=3000 --screenshot=text.png file:///.../template/text.html
+  --virtual-time-budget=3000 --screenshot=text.png file:///.../templates/text.html
 ```
 
 - `--default-background-color=00000000` **不能省** —— 它是"默认背景透明"的开关

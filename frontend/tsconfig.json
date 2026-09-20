@@ -1,0 +1,34 @@
+{
+  // 前端（React + Vite）的类型配置。
+  //
+  // ⚠️ 这个文件**只为编辑器和 `npm run check`（tsc --noEmit）服务** ——
+  //    Vite 用 esbuild 转译，只擦类型不做检查，根本不读 tsconfig。
+  //    所以要验证类型，必须显式跑 `npm run check`。
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    // Vite 的解析规则：import 不写扩展名、支持 exports 字段
+    "moduleResolution": "bundler",
+    // React 17+ 的新 JSX 转换，组件里不用再 import React
+    "jsx": "react-jsx",
+    // vite/client 提供 import.meta.env 和「import 图片返回 string」的类型
+    "types": ["vite/client"],
+
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true,
+
+    // Vite 逐文件转译，没有全局类型信息，必须开
+    "isolatedModules": true,
+    "moduleDetection": "force",
+    "resolveJsonModule": true,
+    // ⚠️ wailsjs 下的 .d.ts 是 Wails **自动生成**的（标了 DO NOT EDIT，
+    //    下次 wails dev 会整个覆盖）。第三方生成的声明文件报错你改不了，
+    //    所以跳过对它们的检查 —— 但对 src 里自己的代码仍然全量检查。
+    "skipLibCheck": true,
+    "noEmit": true
+  },
+  "include": ["src", "wailsjs", "vite.config.ts"]
+}
