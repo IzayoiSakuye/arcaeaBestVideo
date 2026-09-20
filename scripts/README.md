@@ -10,7 +10,7 @@
 # ── 构建期：产出运行时数据 ──
 node scripts/build-song-db.ts        # ① 曲库（原始层，联网，~1s）
 node scripts/build-arcaea-index.ts   # ② 视频索引（原始层，联网，冷跑 ~180s）
-node scripts/build-jackets.ts        # ③ 曲绘 + 感知哈希（联网，冷跑 ~208s）
+node scripts/build-jackets.ts        # ③ 曲绘 + 感知哈希（联网，冷跑 ~208s / 热跑 ~2s）
 node scripts/build-backgrounds.ts    # ④ 游玩背景图 + 曲目→背景映射（联网，冷跑 ~100s）
 node scripts/build-catalog.ts        # ⑤ ⭐ 合并成应用唯一读取的目录（纯本地，0s）
 node scripts/report-arcaea-index.ts  # ⑥ 质量报告
@@ -178,7 +178,24 @@ node scripts/build-jackets.ts                      # 只下 256px 缩略图（~1
 node scripts/build-jackets.ts --sizes 256,full     # 同时下 768px 原图（~175MB）
 node scripts/build-jackets.ts --update-catalog     # 顺带回填 catalog 的 jacket/phash
 node scripts/build-jackets.ts --limit 20           # 调试用
+node scripts/build-jackets.ts --refresh            # 忽略缓存，强制重下 + 重算哈希
 ```
+
+### ⚠️ 感知哈希与限速都有缓存，别把它们重算一遍
+
+感知哈希（aHash / dHash）**每个各 spawn 一次 ffmpeg**。620 张曲绘就是
+**1240 个进程、约 160 秒** —— 这是整条数据管线里最贵的一步，而哈希对同一个文件是**确定值**。
+
+所以脚本会读上一轮的 `arcaea-jackets.json`：**图片文件命中缓存（没重新下载）时直接复用旧哈希**。
+只有「上一轮压根没算出哈希」（当时缺 ffmpeg / 哈希失败）才重算，会自愈。
+
+限速同理：`--delay`（默认 120ms）**只在真的发过请求之后**才 sleep。
+无条件 sleep 的话 620 张 × 120ms = 74 秒纯白等。
+
+两个加起来，重复跑从 **173s 降到 2.2s**，整条数据管线 **166s → 2.8s**。
+
+> `--refresh` 会同时关掉这两个复用（重新下载 + 重新哈希），这是它的语义。
+> 实测产物逐项一致：620 条哈希完全相同。
 
 ### ⭐ 曲绘文件命名规律
 

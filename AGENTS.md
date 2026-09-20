@@ -211,7 +211,7 @@ dist/                      发布包产物（不进版本库）：zip + latest.j
 ```bash
 node scripts/build-song-db.ts        # ① 曲库       联网  ~1s
 node scripts/build-arcaea-index.ts   # ② 视频索引    联网  冷跑 ~180s
-node scripts/build-jackets.ts        # ③ 曲绘+哈希   联网  冷跑 ~208s
+node scripts/build-jackets.ts        # ③ 曲绘+哈希   联网  冷跑 ~208s / 热跑 ~2s
 node scripts/build-backgrounds.ts    # ④ 游玩背景    联网  冷跑 ~100s
 node scripts/build-catalog.ts        # ⑤ 合并目录    本地  0s    ← 应用读这个
 node scripts/report-arcaea-index.ts  # ⑥ 质量报告
