@@ -1,0 +1,70 @@
+{
+  "schema_version": 1,
+  "game": "arcaea",
+  "region": "intl",
+  "player": {
+    "name": "（请替换成你的名字）",
+    "id": "000000000",
+    "rating": 12.34,
+    "rating_label": "Potential"
+  },
+  "snapshot_at": "2026-09-22T00:00:00+08:00",
+  "source": {
+    "type": "manual_import",
+    "provider": "user",
+    "confidence": 1.0
+  },
+  "defaults": {
+    "clip": {
+      "start_ms": 55000,
+      "duration_ms": 10000
+    }
+  },
+  "songs": [
+    {
+      "index": 1,
+      "song_id": "testify",
+      "difficulty": { "name": "BYD", "level": "12", "constant": 12.0 },
+      "score": {
+        "achievement": 99.84241,
+        "rank": "EX+",
+        "pure": 2215,
+        "far": 5,
+        "lost": 1
+      },
+      "user": {
+        "comment": "就差一点点理论值，可惜了"
+      }
+    },
+    {
+      "index": 2,
+      "song_id": "tempestissimo",
+      "difficulty": { "name": "BYD", "level": "11", "constant": 11.5 },
+      "score": {
+        "achievement": 99.9026,
+        "rank": "EX+",
+        "pure": 1537,
+        "far": 3,
+        "lost": 0
+      },
+      "user": {
+        "comment": "手感来了挡不住，第一次这么顺|下次试试关掉音押"
+      }
+    },
+    {
+      "index": 3,
+      "song_id": "arcanaeden",
+      "difficulty": { "name": "BYD", "level": "11", "constant": 11.4 },
+      "score": {
+        "achievement": 99.95314,
+        "rank": "EX+",
+        "pure": 2132,
+        "far": 2,
+        "lost": 0
+      },
+      "user": {
+        "comment": "这首的尾杀还是稳不住"
+      }
+    }
+  ]
+}

@@ -1,0 +1,164 @@
+{
+  "schema_version": 1,
+  "game": "arcaea",
+  "generated_at": "2026-01-01T00:00:00.000Z",
+  "songs": [
+    {
+      "song_id": "complete",
+      "song_id_source": "official",
+      "title_en": "Complete Song",
+      "title_jp": "完璧な曲",
+      "title_norm": "complete song",
+      "aliases": ["别名"],
+      "match_keys": ["complete song", "complete", "别名"],
+      "artist": "Artist A",
+      "bpm": 180,
+      "set": "base",
+      "set_friendly": "Arcaea",
+      "version": "1.0",
+      "date": 1500000000,
+      "time_sec": 150,
+      "bg": "base_light",
+      "jacket": {
+        "bundled": true,
+        "local_256": "data/jackets/256/complete.jpg",
+        "full_url": "https://example.invalid/Songs_complete.jpg",
+        "thumb_url_256": "https://example.invalid/Songs_complete.jpg/256px.jpg",
+        "native": "768x768",
+        "source": "arcwiki"
+      },
+      "phash": { "ahash": "0000000000000000", "dhash": "ffffffffffffffff" },
+      "charts": [
+        {
+          "difficulty": "FTR",
+          "level": "10",
+          "constant": 10.5,
+          "constant_source": "wiki",
+          "note": 1000,
+          "chart_designer": "Designer X",
+          "jacket_designer": "Designer Y",
+          "video": {
+            "sources": [
+              {
+                "bvid": "BV1xx411c7mD",
+                "p": 1,
+                "url": "https://www.bilibili.com/video/BV1xx411c7mD?p=1",
+                "duration_sec": 180,
+                "part_title": "(10.5) Complete Song [FTR 10]",
+                "collections": ["Arcaea谱面保管室（难度分类）"],
+                "video_width": 1920,
+                "video_height": 1080,
+                "owner_name": "TestUploader",
+                "owner_mid": 12345
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "song_id": "sparse",
+      "song_id_source": "derived",
+      "title_en": "Sparse Song",
+      "title_jp": "",
+      "title_norm": "sparse song",
+      "aliases": [],
+      "match_keys": ["sparse song", "sparse"],
+      "artist": "",
+      "bpm": null,
+      "set": "",
+      "set_friendly": "",
+      "version": "",
+      "date": null,
+      "time_sec": null,
+      "bg": "sparse",
+      "jacket": {
+        "bundled": false,
+        "full_url": null
+      },
+      "phash": null,
+      "charts": [
+        {
+          "difficulty": "PST",
+          "level": null,
+          "constant": null,
+          "constant_source": null,
+          "note": null,
+          "chart_designer": "",
+          "jacket_designer": "",
+          "video": null
+        }
+      ]
+    },
+    {
+      "song_id": "mixed",
+      "song_id_source": "official",
+      "title_en": "Mixed Song",
+      "title_jp": "",
+      "title_norm": "mixed song",
+      "aliases": [],
+      "match_keys": ["mixed song", "mixed"],
+      "artist": "Artist C",
+      "bpm": 200,
+      "set": "collab",
+      "set_friendly": "Collab",
+      "version": "5.0",
+      "date": 1700000000,
+      "time_sec": 120,
+      "bg": "mixed_conflict",
+      "jacket": {
+        "bundled": true,
+        "local_256": "data/jackets/256/mixed.jpg",
+        "full_url": "https://example.invalid/Songs_mixed.jpg",
+        "native": "768x768"
+      },
+      "phash": { "ahash": "1234567890abcdef" },
+      "charts": [
+        {
+          "difficulty": "BYD",
+          "level": "11",
+          "constant": 11.4,
+          "constant_source": "video",
+          "note": 1200,
+          "chart_designer": "Designer Z",
+          "jacket_designer": "Designer W",
+          "video": {
+            "sources": [
+              {
+                "bvid": "BV1yy411c7mE",
+                "p": 3,
+                "url": "https://www.bilibili.com/video/BV1yy411c7mE?p=3",
+                "duration_sec": 160,
+                "part_title": "(11.4) Mixed Song [BYD 11]",
+                "collections": ["Arcaea谱面保管室（曲包分类）", "Arcaea谱面保管室（难度分类）"],
+                "video_width": 1920,
+                "video_height": 1440,
+                "owner_name": "TestUploader",
+                "owner_mid": 12345
+              },
+              {
+                "bvid": "BV1zz411c7mF",
+                "p": 1,
+                "url": "https://www.bilibili.com/video/BV1zz411c7mF?p=1",
+                "duration_sec": 200,
+                "part_title": "Mixed Song [BYD 11] 谱面确认",
+                "collections": [],
+                "alt_difficulty": { "difficulty": "FTR", "level": "10", "constant": 10.8 }
+              }
+            ]
+          }
+        },
+        {
+          "difficulty": "ETR",
+          "level": "10",
+          "constant": 10.0,
+          "constant_source": "songdb",
+          "note": 900,
+          "chart_designer": "Designer Z",
+          "jacket_designer": "Designer W",
+          "video": null
+        }
+      ]
+    }
+  ]
+}
