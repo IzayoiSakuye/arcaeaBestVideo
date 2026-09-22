@@ -44,6 +44,33 @@ import type {
 
 const execFileAsync = promisify(execFile);
 
+/**
+ * ⚠️ **只是记录，不改变行为** —— 给 `--log-commands <file>` 用的。
+ *
+ * 为什么要有它：Go 侧要把这个 spike 的 ffmpeg / Edge 命令**逐字翻译**过去，
+ * 而"防止翻译漂移"的唯一可靠手段是 golden test。golden 的期望值如果靠人肉抄，
+ * 抄错就等于没测（真抄错过两次）。所以让 spike **自己把真实 argv 吐出来**。
+ *
+ * 输出格式：每行一个 JSON，`{"tool": "...", "argv": [...]}`。
+ * 只在传了 --log-commands 时才写，平时完全无副作用。
+ */
+let commandLogFile: string | null = null;
+
+function logCommand(tool: string, argv: readonly string[]): void {
+  if (!commandLogFile) return;
+  fsSync.appendFileSync(commandLogFile, JSON.stringify({ tool, argv }) + '\n');
+}
+
+/** 包一层：记录之后再真正执行 */
+const run = async (
+  file: string,
+  argv: readonly string[],
+  opts: { timeout?: number; maxBuffer?: number } = {}
+): Promise<{ stdout: string; stderr: string }> => {
+  logCommand(file, argv);
+  return execFileAsync(file, argv as string[], opts) as Promise<{ stdout: string; stderr: string }>;
+};
+
 const ROOT = path.resolve(import.meta.dirname, '..');
 
 // ---------------------------------------------------------------------------
@@ -63,6 +90,8 @@ interface Args {
   ffmpeg: string | null;
   ytdlp: string | null;
   edge: string | null;
+  /** 把每条外部命令的真实 argv 追加到这个文件（给 Go 侧的 golden test 当期望值） */
+  logCommands: string | null;
 }
 
 interface Tools { ffmpeg: string; ffprobe: string; ytdlp: string; edge: string }
@@ -133,6 +162,7 @@ const CFG: Args = {
   ffmpeg: null,
   ytdlp: null,
   edge: null,
+  logCommands: null,
 };
 
 function parseArgs(argv: string[]): Args {
@@ -147,6 +177,7 @@ function parseArgs(argv: string[]): Args {
     else if (v === '--ffmpeg') a.ffmpeg = argv[++i];
     else if (v === '--ytdlp') a.ytdlp = argv[++i];
     else if (v === '--edge') a.edge = argv[++i];
+    else if (v === '--log-commands') a.logCommands = argv[++i];
     else if (v === '-h' || v === '--help') {
       console.log(`用法: node scripts/spike-sample-video.ts [选项]
 
@@ -157,6 +188,9 @@ function parseArgs(argv: string[]): Args {
   --ffmpeg <路径>   覆盖 ffmpeg
   --ytdlp <路径>    覆盖 yt-dlp
   --edge <路径>     覆盖 msedge
+  --log-commands <文件>
+                    把每条外部命令的真实 argv 追加进去（每行一个 JSON）。
+                    **只记录、不改变行为** —— 给 Go 侧的 golden test 当期望值用。
   --quiet           少打印`);
       process.exit(0);
     }
@@ -166,6 +200,11 @@ function parseArgs(argv: string[]): Args {
 const args = parseArgs(process.argv);
 // --no-audio 覆盖配置（OUT 定义在 parseArgs 之前，所以在这里回填）
 OUT.audio = args.audio;
+// 开命令日志：先清空，避免上一轮的记录混进来
+if (args.logCommands) {
+  fsSync.writeFileSync(args.logCommands, '');
+  commandLogFile = path.resolve(args.logCommands);
+}
 const log = (...a: unknown[]): void => { if (!args.quiet) console.log(...a); };
 const toPosix = (p: string): string => p.split(path.sep).join('/');
 
@@ -315,7 +354,7 @@ async function downloadClip(tools: Tools, row: SongRow, workDir: string, delayMs
   const url = `https://www.bilibili.com/video/${row.video.bvid}?p=${row.video.p}`;
   log(`     ↳ 下载 ${row.video.bvid}?p=${row.video.p} 的 ${start}~${start + dur}s`);
   const t0 = Date.now();
-  await execFileAsync(tools.ytdlp, [
+  await run(tools.ytdlp, [
     '--no-warnings', '--newline',
     '-f', 'bv*[height<=1080][vcodec^=avc1]+ba[ext=m4a]',
     '--download-sections', `*${start}-${start + dur}`,
@@ -332,7 +371,7 @@ async function downloadClip(tools: Tools, row: SongRow, workDir: string, delayMs
 async function buildBackground(tools: Tools, bgName: string, dest: string): Promise<void> {
   const src = path.join(ROOT, 'data/backgrounds/960', `Background_${bgName}.jpg`);
   if (!fsSync.existsSync(src)) throw new Error(`背景图不存在：${src}`);
-  await execFileAsync(tools.ffmpeg, [
+  await run(tools.ffmpeg, [
     '-y', '-v', 'error', '-i', src,
     '-vf', `scale=${OUT.W}:${OUT.H}:force_original_aspect_ratio=increase,crop=${OUT.W}:${OUT.H},gblur=sigma=${OUT.BLUR_SIGMA}`,
     dest,
@@ -345,7 +384,7 @@ async function renderText(tools: Tools, values: Record<string, string | number>,
   for (const [k, v] of Object.entries(values)) qs.set(k, String(v));
   const url = `file:///${toPosix(path.join(ROOT, 'templates/text.html'))}?${qs}`;
   if (fsSync.existsSync(dest)) await fs.unlink(dest);
-  await execFileAsync(tools.edge, [
+  await run(tools.edge, [
     '--headless=new', '--disable-gpu', '--hide-scrollbars',
     '--force-device-scale-factor=1',
     `--window-size=${OUT.W},${OUT.H}`,
@@ -417,7 +456,7 @@ async function composite(tools: Tools, layers: CompositeLayers, dest: string): P
     ? [...mapAudio, '-c:a', 'aac', '-b:a', '192k', '-ar', '48000', '-ac', '2']
     : ['-an'];
 
-  await execFileAsync(tools.ffmpeg, [
+  await run(tools.ffmpeg, [
     '-y', '-v', 'error',
     ...inputs,
     '-filter_complex', fc.join(';'), '-map', '[v]',
@@ -462,7 +501,7 @@ async function concat(tools: Tools, segs: string[], outFile: string): Promise<vo
   // ⚠️ 列表里的路径用正斜杠 + 单引号包住；反斜杠在 concat demuxer 里是转义符
   const body = segs.map((s) => `file '${toPosix(s).replace(/'/g, "'\\''")}'`).join('\n') + '\n';
   await fs.writeFile(listFile, body);
-  await execFileAsync(tools.ffmpeg, [
+  await run(tools.ffmpeg, [
     '-y', '-v', 'error', '-f', 'concat', '-safe', '0', '-i', listFile,
     '-c', 'copy', '-movflags', '+faststart', outFile,
   ], { timeout: 300_000, maxBuffer: 8 << 20 });

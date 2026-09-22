@@ -574,6 +574,8 @@ async function main(): Promise<void> {
       collections: (s.collections ?? []).map((x) => x.name),
       // 画幅：渲染层据此选 16:9 / 4:3 模板（实测 37.5% 的来源是 4:3）
       ...(s.video_width ? { video_width: s.video_width, video_height: s.video_height } : {}),
+      // 署名（铁律 8）：片尾/简介要列出原作者，不能只给 BV 号
+      ...(s.owner_name ? { owner_name: s.owner_name, owner_mid: s.owner_mid } : {}),
       ...(s.alt_difficulty ? { alt_difficulty: s.alt_difficulty } : {}),
     }));
     if (sources.length) {

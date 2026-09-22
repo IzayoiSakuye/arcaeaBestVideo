@@ -478,6 +478,12 @@ interface BiliView extends BiliEnvelope {
     title?: string;
     videos?: number;
     duration?: number;
+    /**
+     * 上传者。**署名要用**（铁律 8：片尾/简介必须列出原作者 + BV号 + 链接）。
+     * 这个接口本来就要调（为了拿 pages[]），所以 owner 是**零额外请求**的。
+     * 早些时候漏采了它，导致下游只能拿到 mid、拿不到名字。
+     */
+    owner?: { mid?: number; name?: string };
     pages?: BiliViewPage[];
   };
 }
@@ -521,6 +527,8 @@ interface VideoInfo {
   title: string;
   videos: number;
   duration: number;
+  /** 上传者，署名用；上游没给时为 null */
+  owner: { mid: number | null; name: string | null };
   pages: VideoPage[];
 }
 
@@ -610,6 +618,8 @@ async function getVideoPages(bvid: string): Promise<VideoInfo | null> {
     title: d.title ?? '',
     videos: d.videos ?? 0,
     duration: d.duration ?? 0,
+    // 署名信息：接口本来就要调，顺手存下来，零额外请求
+    owner: { mid: d.owner?.mid ?? null, name: d.owner?.name ?? null },
     pages: (d.pages ?? []).map((p) => ({
       page: p.page, // 注意：从 1 开始，URL 的 ?p=N 与之一致
       part: p.part ?? '',
@@ -801,6 +811,10 @@ async function main() {
             video_width: p.dimension.rotate % 180 === 0 ? p.dimension.width : p.dimension.height,
             video_height: p.dimension.rotate % 180 === 0 ? p.dimension.height : p.dimension.width,
           }
+          : {}),
+        // 署名（铁律 8）：片尾/简介要列出原作者。上游没给就不写，**不要伪造**。
+        ...(info.owner.name
+          ? { owner_name: info.owner.name, owner_mid: info.owner.mid ?? undefined }
           : {}),
         ...(altDifficulty ? { alt_difficulty: altDifficulty } : {}),
       };

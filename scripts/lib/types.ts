@@ -40,6 +40,15 @@ export interface VideoSource {
    */
   video_width?: number;
   video_height?: number;
+  /**
+   * 上传者（UP主）。**署名用的，不是装饰**（铁律 8）。
+   *
+   * 数据来自 `x/web-interface/view` 响应的 `data.owner` —— 那个接口本来就要调
+   * （为了拿 pages[]），所以这一项是**零额外请求**的。
+   * 缺省表示上游没给或旧产物：调用方要按"未知"处理，**不要伪造**。
+   */
+  owner_name?: string;
+  owner_mid?: number;
   /** 视频标题里的难度与分P标题不一致时的另一组取值，交人工裁决 */
   alt_difficulty?: { difficulty: string; level: string | null; constant: number | null };
 }
