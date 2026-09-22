@@ -165,13 +165,17 @@ app.go                     🟡 Wails 脚手架：只有 startup + Version()，�
 main.go                    🟡 入口：1600×900 窗口，绑定 App
 wails.json                 Wails 配置（前端构建命令、输出文件名）
 go.mod / go.sum            Go 1.25 模块（wails v2.16.0）
-internal/                  🟡 **目录骨架已建，只有 doc.go，零实现**
+internal/                  🟡 **目录骨架已建，只有 doc.go，零实现**（Go 代码由用户手写）
   catalog/doc.go           曲目元数据只读查询（读 data/arcaea-catalog.json）
   score/doc.go             成绩获取 + 统一格式（ScoreProvider 接口将放这里）
   resource/doc.go          按 catalog 取素材（ResourceProvider 接口将放这里）
   render/doc.go            调用 ffmpeg 渲染
   job/doc.go               工具链编排（JobManager）
   store/doc.go             SQLite 持久化（modernc.org/sqlite，纯 Go）
+  catalog/testdata/        catalog 包的单测夹具（手写、专撞 nullable 边界）
+  render/testdata/         **从真实运行捕获的 golden argv**（给 golden test 当期望值）
+cmd/pipeline/               🟡 **尚未创建** —— P1 的 CLI 入口（不参与 wails build）
+samples/                   手工数据：sample-project.json（P1 的输入契约）
 frontend/                  🟡 React 19 + Vite 7（已迁 TypeScript）
   src/App.tsx              最小壳：调 Go 的 Version() 证明 bindings 通
   src/main.tsx             入口（index.html 指向它）
