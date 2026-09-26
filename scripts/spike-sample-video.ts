@@ -83,6 +83,8 @@ interface WinRect { x: number; y: number; w: number; h: number }
 /** null 一律表示「没指定，走自动探测」 */
 interface Args {
   songs: string[] | null;
+  /** 读 samples/sample-project.json：按【用户指定的曲目+难度+成绩】渲染，这才是真正的输入契约 */
+  project: string | null;
   limit: number;
   download: boolean;
   audio: boolean;
@@ -104,6 +106,27 @@ interface SongRow {
   bg: string | null;
   /** 来源是不是 16:9 —— 决定用哪套模板 */
   wide: boolean;
+  /**
+   * 来自 sample-project.json 的真实成绩。--project 模式下才有；
+   * 没有时回落到 fakeScore（旧行为，为了不破坏已有的 golden）。
+   */
+  fromProject?: {
+    ptt: string;
+    score: string;
+    pure: number;
+    far: number;
+    lost: number;
+    comment: string;
+  };
+}
+
+/**
+ * 曲绘解析：**难度专属优先，回落到歌曲默认**。
+ * ⚠️ 不写这个回落，Beyond 谱面会显示基础曲绘 —— 57 个难度的专属图全废。
+ */
+function pickJacket(row: SongRow): string | null {
+  const rel = row.chart.jacket?.local_256 ?? row.song.jacket?.local_256 ?? null;
+  return rel ?? null;
 }
 
 /** 命中缓存的没有下载耗时，所以用可辨识联合而不是 `ms?: number` */
@@ -163,7 +186,20 @@ const CFG: Args = {
   ytdlp: null,
   edge: null,
   logCommands: null,
+  project: null,
 };
+
+/**
+ * samples/sample-project.json —— P1 的输入契约（字段见 samples/README.md）。
+ * 这里只建模本 spike 用得到的部分。
+ */
+interface ProjectEntry {
+  index?: number;
+  song_id?: string;
+  difficulty?: { name?: string; level?: string; constant?: number };
+  score?: { achievement?: number; rank?: string; pure?: number; far?: number; lost?: number };
+  user?: { comment?: string; ptt?: number | string };
+}
 
 function parseArgs(argv: string[]): Args {
   const a: Args = { ...CFG };
@@ -178,10 +214,14 @@ function parseArgs(argv: string[]): Args {
     else if (v === '--ytdlp') a.ytdlp = argv[++i];
     else if (v === '--edge') a.edge = argv[++i];
     else if (v === '--log-commands') a.logCommands = argv[++i];
+    else if (v === '--project') a.project = argv[++i];
     else if (v === '-h' || v === '--help') {
       console.log(`用法: node scripts/spike-sample-video.ts [选项]
 
   --songs <列表>    指定 song_id，逗号分隔（默认自动挑 3 首）
+                    它自己选难度（第一个有录像的），只用来快速看效果
+  --project <文件>  ⭐ 按输入契约渲染：读 samples/sample-project.json，
+                    曲目 / 难度 / 成绩都照样例来。这才是应用的真实行为
   --limit <N>       自动挑时取前 N 首（默认 3）
   --no-download     跳过下载，复用 .cache/clips/ 里已有的片段
   --no-audio        不保留片段音频（排查音画问题时用）
@@ -384,6 +424,7 @@ async function renderText(tools: Tools, values: Record<string, string | number>,
   for (const [k, v] of Object.entries(values)) qs.set(k, String(v));
   const url = `file:///${toPosix(path.join(ROOT, 'templates/text.html'))}?${qs}`;
   if (fsSync.existsSync(dest)) await fs.unlink(dest);
+  const tEdge = Date.now();
   await run(tools.edge, [
     '--headless=new', '--disable-gpu', '--hide-scrollbars',
     '--force-device-scale-factor=1',
@@ -394,6 +435,7 @@ async function renderText(tools: Tools, values: Record<string, string | number>,
     `--screenshot=${dest}`,
     url,
   ], { timeout: 120_000, maxBuffer: 8 << 20 });
+  log(`       edge ${((Date.now() - tEdge) / 1000).toFixed(2)}s`);
   if (!fsSync.existsSync(dest)) throw new Error('Edge 没有产出截图');
 }
 
@@ -520,7 +562,39 @@ async function main() {
   const bgManifest = JSON.parse(await fs.readFile(path.join(ROOT, 'data/arcaea-backgrounds.json'), 'utf8')) as BackgroundManifest;
 
   let rows: SongRow[];
-  if (args.songs) {
+  if (args.project) {
+    // 按【输入契约】渲染：用户指定哪首、哪个难度、什么成绩，就照做。
+    // --songs 模式是"随便挑一首有录像的"，不能代表应用的真实行为。
+    const proj = JSON.parse(
+      await fs.readFile(path.resolve(args.project), 'utf8')
+    ) as { songs?: ProjectEntry[] };
+    rows = [];
+    for (const e of proj.songs ?? []) {
+      const id = e.song_id;
+      const want = e.difficulty?.name;
+      if (!id || !want) { console.warn('   ⚠️ 样例条目缺 song_id 或 difficulty.name'); continue; }
+      const song = catalog.songs.find((s) => s.song_id === id);
+      if (!song) { console.warn(`   ⚠️ 曲库里没有 ${id}`); continue; }
+      const chart = song.charts.find((c) => c.difficulty === want);
+      if (!chart) { console.warn(`   ⚠️ ${id} 没有 ${want} 谱面`); continue; }
+      const v = pickSource(chart);
+      if (!v) { console.warn(`   ⚠️ ${id}/${want} 没有视频来源`); continue; }
+      const b = bgManifest.songs[id];
+      // Arcaea 分数 = achievement% × 100000（满分 10,000,000）
+      const ach = Number(e.score?.achievement ?? 0);
+      rows.push({
+        song, chart, video: v, bg: b?.bg ?? null, wide: is169(v),
+        fromProject: {
+          ptt: PTT,
+          score: Math.round(ach * 100000).toLocaleString('en-US'),
+          pure: e.score?.pure ?? 0,
+          far: e.score?.far ?? 0,
+          lost: e.score?.lost ?? 0,
+          comment: e.user?.comment ?? '',
+        },
+      });
+    }
+  } else if (args.songs) {
     rows = [];
     for (const id of args.songs) {
       const song = catalog.songs.find((s) => s.song_id === id);
@@ -552,6 +626,8 @@ async function main() {
   const workRoot = await ensureDir(path.join(ROOT, '.cache/spike/work'));
   const distDir = await ensureDir(path.join(ROOT, 'dist/sample'));
   const segs: string[] = [];
+  /** 分阶段耗时。50 段外推要用它判断 §7.5 的「≤10 分钟」预算够不够 */
+  const marks: Array<{ song: string; phase: string; ms: number }> = [];
 
   for (let i = 0; i < rows.length; i++) {
     const r = rows[i];
@@ -559,23 +635,39 @@ async function main() {
     const dir = await ensureDir(path.join(workRoot, `${idx}-${r.song.song_id}`));
     console.log(`\n[${i + 1}/${rows.length}] ${r.song.title_en}`);
 
+    let tMark = Date.now();
+    const lap = (phase: string): void => {
+      marks.push({ song: r.song.song_id, phase, ms: Date.now() - tMark });
+      tMark = Date.now();
+    };
+
     // ① 片段
     const res = await downloadClip(tools, r, dir, 600);
     if (!res.cached) log(`     ↳ 下载完成 ${(res.ms / 1000).toFixed(1)}s  ${(fsSync.statSync(path.join(dir, 'clip.mp4')).size / 1048576).toFixed(2)} MB`);
     else log(`     ↳ 片段命中缓存`);
+    lap('clip');
 
     // ② 背景
     const bg = path.join(dir, 'bg.png');
     if (!r.bg) throw new Error(`${r.song.song_id} 没有背景`);
     await buildBackground(tools, r.bg, bg);
     log(`     ↳ 背景 bg=${r.bg} + blur(${OUT.BLUR_SIGMA})`);
+    lap('background');
 
     // ③ 文字层
-    const f = fakeScore(r.song.song_id, r.chart.note);
+    // --project 模式用样例里的真实成绩；否则回落到 fakeScore（保持旧行为不变）
+    let f = r.fromProject;
+    if (!f) {
+      const s = fakeScore(r.song.song_id, r.chart.note);
+      f = {
+        ptt: PTT, score: s.score.toLocaleString('en-US'),
+        pure: s.pure, far: s.far, lost: s.lost, comment: s.comment,
+      };
+    }
     const text = path.join(dir, 'text.png');
     await renderText(tools, {
-      ptt: PTT,
-      score: f.score.toLocaleString('en-US'),
+      ptt: f.ptt,
+      score: f.score,
       pure: f.pure, far: f.far, lost: f.lost,
       title: r.song.title_en,
       author: r.song.artist || '',
@@ -584,14 +676,17 @@ async function main() {
       comment: f.comment,
     }, text);
     log(`     ↳ 文字层已渲染`);
+    lap('text');
 
     // ④ 合成（按来源画幅选模板 + 曲绘）
     const tpl = r.wide ? OUT.TEMPLATES[169] : OUT.TEMPLATES[43];
     const seg = path.join(dir, `seg_${idx}.mp4`);
-    const jacketRel = r.song.jacket?.local_256;
+    const jacketRel = pickJacket(r);
     const jacketAbs = jacketRel ? path.join(ROOT, jacketRel) : null;
     if (!jacketAbs || !fsSync.existsSync(jacketAbs)) {
-      log(`     ⚠️ ${r.song.song_id} 没有曲绘，那个口会是空的`);
+      log(`     ⚠️ ${r.song.song_id}/${r.chart.difficulty} 没有曲绘，那个口会是空的`);
+    } else if (r.chart.jacket) {
+      log(`     ↳ 曲绘用【难度专属】${jacketRel}`);
     }
     await composite(tools, {
       bg, clip: path.join(dir, 'clip.mp4'), text,
@@ -600,13 +695,16 @@ async function main() {
     }, seg);
     const st = fsSync.statSync(seg);
     log(`     ↳ 合成 ${(st.size / 1048576).toFixed(2)} MB`);
+    lap('composite');
     segs.push(seg);
   }
 
   // ⑤ 拼接
   const outFile = path.join(distDir, 'sample.mp4');
   console.log(`\n拼接 ${segs.length} 段…`);
+  const tConcat = Date.now();
   await concat(tools, segs, outFile);
+  const concatMs = Date.now() - tConcat;
 
   const st = fsSync.statSync(outFile);
   console.log('\n' + '='.repeat(70));
@@ -614,6 +712,34 @@ async function main() {
   console.log('='.repeat(70));
   console.log(`  ${toPosix(outFile)}`);
   console.log(`  ${(st.size / 1048576).toFixed(2)} MB`);
+
+  // 分阶段耗时 + 50 段外推（§7.5 的预算是 ≤10 分钟）
+  const phases = ['clip', 'background', 'text', 'composite'];
+  const perSeg = phases.map((p) => {
+    const list = marks.filter((m) => m.phase === p).map((m) => m.ms);
+    const avg = list.length ? list.reduce((a, b) => a + b, 0) / list.length : 0;
+    return { phase: p, avg, total: list.reduce((a, b) => a + b, 0) };
+  });
+  const segTotal = perSeg.reduce((a, b) => a + b.total, 0);
+  const perSegMs = segTotal / Math.max(1, rows.length);
+  const extrapolated = (perSegMs * 50 + concatMs) / 1000;
+
+  console.log('\n分阶段耗时（' + rows.length + ' 段）：');
+  for (const p of perSeg) {
+    const pct = segTotal ? ((p.total / segTotal) * 100).toFixed(0) : '0';
+    console.log(`  ${p.phase.padEnd(12)} ${(p.avg / 1000).toFixed(2).padStart(6)}s/段   合计 ${(p.total / 1000).toFixed(1).padStart(5)}s   ${pct.padStart(3)}%`);
+  }
+  console.log(`  ${'concat'.padEnd(12)} ${'—'.padStart(6)}         合计 ${(concatMs / 1000).toFixed(1).padStart(5)}s`);
+  console.log(`  ${'单段合计'.padEnd(12)} ${(perSegMs / 1000).toFixed(2).padStart(6)}s/段`);
+  console.log('');
+  console.log(
+    `  ⚠️ 50 段外推 ≈ ${(extrapolated / 60).toFixed(1)} 分钟` +
+      `（§7.5 预算 ≤10 分钟 → ${extrapolated <= 600 ? '✅ 达标' : '❌ 超 ' + (extrapolated / 600).toFixed(1) + ' 倍'}）`
+  );
+  console.log('     ↑ 这是 TS spike 单线程串行的数字。Go 侧能优化的：');
+  console.log('       · 曲目之间并发（spike 是全串行）');
+  console.log('       · 背景/文字层与下载流水线化');
+  console.log('       · 音频不重编码（-c:a copy，spike 现在是 aac 重编）');
   console.log(`\n总耗时 ${((Date.now() - t0) / 1000).toFixed(1)}s`);
 }
 

@@ -141,6 +141,15 @@ export interface CatalogChart {
   chart_designer?: string;
   jacket_designer?: string;
   video: { sources: VideoSource[] } | null;
+  /** 该难度有独立曲名时才有，如 Last 的 BYD 叫 "Last | Moment" */
+  alt_title?: string;
+  /**
+   * 该难度专属曲绘（Beyond 谱面经常有自己的图）。没有就是显式 null。
+   * ⚠️ 应用侧的解析规则是 `chart.jacket ?? song.jacket` —— 不要自己拼文件名，
+   *    命名有两种写法（`<id>_<难度>` 与别名词），构建期已经解析好了。
+   * 实测 47 个难度有专属曲绘。
+   */
+  jacket: CatalogJacket | null;
 }
 
 export interface CatalogJacket {

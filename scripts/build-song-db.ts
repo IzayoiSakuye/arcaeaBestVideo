@@ -3,45 +3,46 @@
  * build-song-db.ts —— 构建 Arcaea 曲库（曲名 / 曲师 / 难度 / 定数 / 物量 / 别名）
  * ============================================================================
  *
- * 为什么需要它
- *   曲库是整个应用的基础设施，至少有三个用途：
- *     1. OCR 纠错 —— 曲名归一化 + 别名表，用于把识别结果拉回真实曲目
- *     2. 定数校验 —— 反解定数、交叉验证 OCR 结果（见 docs/00-方案讨论.md §13.5）
- *     3. 素材关联 —— 把索引里的视频挂到 song_id 上，再取曲绘、算 PTT
+ * 主源是 wiki 的 JSON 内容模型页面（游戏原始数据），2023 年的 GitHub 仓库只作补充：
  *
- * 数据源（都是 GitHub 托管，可全量离线）
- *   A. arcsong.json        Arcaea-Infinity/ArcaeaSongDatabase   335 首 / 2023-07
- *                          曲名·曲师·BPM·物量 note·**别名 alias[]**·难度定数
- *   B. ChartConstant.json  zh-arc-wiki-re-wg/chart-constant     318 首 / 2023-05
- *                          仅定数，可作交叉校验
+ *   Template:Songlist.json      554 首   曲名·曲师·BPM·曲包·版本·日期·背景·难度等级
+ *   Template:ChartConstant.json 552 首   精确定数（小数）
+ *   Template:ChartNotes.json    554 首   物量
+ *   Template:SongDuration.json  553 首   曲目时长
  *
- * ⚠️ 两份数据都停留在 2023 年，不含 v5.4 定数大调整之后的变动，也不含 2024–2026 新曲。
- *    运行时会打印告警。补充方式见 docs/00-方案讨论.md §13.3。
+ *   arcsong.json（GitHub）              补充：中文别名 alias、set_friendly 显示名
+ *   ChartConstant.json（GitHub）        交叉校验（2023-05，会跟 wiki 有分歧）
  *
- * ⚠️ 关键坑：arcsong.json 的 `difficulties[].difficulty` **不是难度类别，而是「等级×2」**
- *      （Aegleseeker = 10/18/22 → 等级 5/9/11；19/21 → 9+/10+）
- *      难度类别**只能按数组顺序推**：PST / PRS / FTR / BYD / ETR
+ * ⚠️ arcsong / GitHub ChartConstant 拉不到时不致命 —— 它们只是补充与校验，
+ *    wiki 那四份才是权威。拉不到会在 sources[] 里标 unavailable。
  *
  * 用法
  *   node scripts/build-song-db.ts
  *   node scripts/build-song-db.ts -o data/arcaea-songdb.json --refresh
- *
- * 依赖：Node.js >= 18（内置 fetch）。零第三方依赖。
  */
 
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import process from 'node:process';
 import { pathToFileURL } from 'node:url';
+import { WikiClient } from './lib/wiki.ts';
 
 // ---------------------------------------------------------------------------
 // 配置
 // ---------------------------------------------------------------------------
 
-/** 难度类别按数组顺序排列 —— 不要试图从 `difficulty` 字段推导 */
+/** 难度类别。wiki 用 `ratingClass` 数字索引这个数组。 */
 const DIFFICULTY_CLASSES = ['PST', 'PRS', 'FTR', 'BYD', 'ETR'];
 
-const SOURCES = {
+/** wiki 页面 → 本地缓存名。缓存目录沿用既有的 .cache/wiki（可安全删除）。 */
+const WIKI_PAGES = {
+  songlist: { cache: 'songlist.json', title: 'Template:Songlist.json' },
+  constant: { cache: 'chartconstant.json', title: 'Template:ChartConstant.json' },
+  notes: { cache: 'chartnotes.json', title: 'Template:ChartNotes.json' },
+  duration: { cache: 'songduration.json', title: 'Template:SongDuration.json' },
+} as const;
+
+const GITHUB_SOURCES = {
   arcsong: {
     label: 'arcsong.json',
     repo: 'Arcaea-Infinity/ArcaeaSongDatabase',
@@ -52,41 +53,78 @@ const SOURCES = {
     label: 'ChartConstant.json',
     repo: 'zh-arc-wiki-re-wg/chart-constant',
     file: 'ChartConstant.json',
-    // 该仓库的默认分支不固定，多试几个
     branch: 'main',
   },
-};
+} as const;
 
-/**
- * GitHub 镜像。裸 raw.githubusercontent.com 在部分网络环境不可达，
- * 而 api.github.com 只有 60 次/小时，构建脚本很容易打爆 —— 所以镜像优先。
- */
+type SourceKey = keyof typeof GITHUB_SOURCES;
+
+/** GitHub 镜像。裸 raw.githubusercontent.com 在部分网络环境不可达，镜像优先。 */
 const MIRRORS: Array<(repo: string, branch: string, file: string) => string> = [
   (repo, branch, file) => `https://gh-proxy.com/https://raw.githubusercontent.com/${repo}/${branch}/${file}`,
   (repo, branch, file) => `https://ghfast.top/https://raw.githubusercontent.com/${repo}/${branch}/${file}`,
   (repo, branch, file) => `https://raw.githubusercontent.com/${repo}/${branch}/${file}`,
 ];
 
-type SourceKey = keyof typeof SOURCES;
+const DEFAULT_UA =
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 ' +
+  '(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
 
 // ---------------------------------------------------------------------------
-// 上游 JSON 的最小建模
+// 上游 JSON 的最小建模（外部数据，只标注真正读取的字段）
 // ---------------------------------------------------------------------------
 
-/**
- * 两份上游 JSON 都是外部数据，字段随版本变动 —— 只标注本脚本真正读取的字段，
- * 其余不建模；缺字段仍由原来的 `??` 兜底，运行行为不变。
- */
-interface RawDifficulty {
-  /** ⚠️ 不是难度类别，是「等级 × 2」 */
-  difficulty?: number;
-  /** 定数 × 10 */
+interface SonglistDifficulty {
+  ratingClass?: number;
   rating?: number;
-  note?: number;
-  chart_designer?: string;
-  jacket_designer?: string;
+  /** true 表示该难度是 "+" 档（如 7+ / 10+） */
+  ratingPlus?: boolean;
+  chartDesigner?: string;
+  jacketDesigner?: string;
+  /** 该难度用了独立的曲绘（磁盘上是 <song_id>_<难度>.jpg） */
+  jacketOverride?: boolean;
+  /** 该难度有独立曲名，如 Last 的 BYD 叫 "Last | Moment" */
+  title_localized?: { en?: string; ja?: string };
+  /** 该难度有独立背景 */
+  bg?: string;
+}
+
+interface SonglistEntry {
+  id?: string;
+  title_localized?: { en?: string; ja?: string };
+  artist?: string;
+  bpm?: string;
+  bpm_base?: number;
+  set?: string;
+  side?: number;
+  bg?: string;
+  bg_inverse?: string;
+  remote_dl?: boolean;
+  date?: number;
   version?: string;
-  // 曲级字段被复制在每个难度条目上，取第 0 个即可
+  difficulties?: SonglistDifficulty[];
+  /** 该曲已从游戏内移除（实测 1 首 particlearts） */
+  deleted?: boolean;
+}
+
+interface SonglistFile {
+  songs?: SonglistEntry[];
+}
+
+/** Template:ChartConstant.json：[song_id] → 按 ratingClass 索引的难度槽位 */
+type ConstantSlots = Array<{ constant?: number; old?: boolean } | null>;
+
+/** Template:ChartNotes.json：[song_id] → 按 ratingClass 索引的物量 */
+type NoteSlots = Array<number | null>;
+
+/** Template:SongDuration.json：{ normal: {id: "mm:ss"}, beyond: {...} } */
+interface DurationFile {
+  normal?: Record<string, string>;
+  beyond?: Record<string, string>;
+}
+
+/** arcsong.json 的难度条目（曲级字段被复制在每个难度上，取第 0 个） */
+interface ArcsongDifficulty {
   name_en?: string;
   name_jp?: string;
   artist?: string;
@@ -97,28 +135,21 @@ interface RawDifficulty {
   side?: number;
   date?: number;
   time?: number;
-  remote_download?: boolean;
-  bg?: string;
+  difficulty?: number;
+  rating?: number;
+  note?: number;
 }
 
-interface RawSong extends RawDifficulty {
+interface ArcsongSong {
   song_id?: string;
-  difficulties?: RawDifficulty[];
+  difficulties?: ArcsongDifficulty[];
   alias?: string[];
 }
-
-/** ChartConstant.json 的值：每个谱面一个条目 */
-interface WikiConstantEntry {
-  constant?: number;
-}
-
-const DEFAULT_UA =
-  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 ' +
-  '(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
 
 interface CliArgs {
   out: string;
   cacheDir: string;
+  wikiCacheDir: string;
   refresh: boolean;
   quiet: boolean;
 }
@@ -127,6 +158,7 @@ function parseArgs(argv: string[]): CliArgs {
   const args: CliArgs = {
     out: 'data/arcaea-songdb.json',
     cacheDir: '.cache/arcaea-songdb',
+    wikiCacheDir: '.cache/wiki',
     refresh: false,
     quiet: false,
   };
@@ -134,10 +166,11 @@ function parseArgs(argv: string[]): CliArgs {
     const a = argv[i];
     if (a === '-o' || a === '--out') args.out = argv[++i];
     else if (a === '--cache-dir') args.cacheDir = argv[++i];
+    else if (a === '--wiki-cache-dir') args.wikiCacheDir = argv[++i];
     else if (a === '--refresh') args.refresh = true;
     else if (a === '--quiet') args.quiet = true;
     else if (a === '-h' || a === '--help') {
-      console.log('用法: node scripts/build-song-db.ts [-o <输出>] [--refresh]');
+      console.log('用法: node scripts/build-song-db.ts [-o <输出>] [--refresh] [--quiet]');
       process.exit(0);
     }
   }
@@ -168,13 +201,32 @@ export function normalizeTitle(s: string): string {
 }
 
 /**
- * `difficulty` 字段 = 等级 × 2。把它还原成展示用的等级标签。
- *   10 → "5"    19 → "9+"    21 → "10+"    22 → "11"    24 → "12"
+ * 等级代号 = 等级×2（"+" 档 +1）。保留它是为了能反查，以及与旧产物对齐。
+ *   10 → "5"    15 → "7+"    21 → "10+"    22 → "11"
  */
 export function levelFromCode(code: unknown): string | null {
   if (typeof code !== 'number' || Number.isNaN(code)) return null;
   const lv = code / 2;
   return Number.isInteger(lv) ? String(lv) : `${Math.floor(lv)}+`;
+}
+
+/** wiki 的等级是 `rating` + `ratingPlus` 两个字段，合成展示用标签。 */
+function levelLabel(rating: unknown, plus: unknown): string | null {
+  if (typeof rating !== 'number') return null;
+  return `${rating}${plus === true ? '+' : ''}`;
+}
+
+function levelCode(rating: unknown, plus: unknown): number | null {
+  if (typeof rating !== 'number') return null;
+  return rating * 2 + (plus === true ? 1 : 0);
+}
+
+/** "02:28" → 148 */
+function parseDuration(s: unknown): number | null {
+  if (typeof s !== 'string') return null;
+  const m = /^(\d+):(\d{2})$/.exec(s.trim());
+  if (!m) return null;
+  return Number(m[1]) * 60 + Number(m[2]);
 }
 
 async function ensureDir(p: string): Promise<void> {
@@ -199,15 +251,15 @@ async function writeCache(name: string, data: unknown): Promise<void> {
   }
 }
 
-/** 依次尝试各镜像拉取一个 JSON 文件。返回值是外部 JSON，收窄交给调用方。 */
-async function fetchJson(fileKey: SourceKey): Promise<{ data: unknown; via: string }> {
+/** 拉一个 GitHub 上的 JSON。失败返回 null —— 它们只是补充源，不该拖垮整轮。 */
+async function fetchGithub(fileKey: SourceKey): Promise<{ data: unknown; via: string } | null> {
   const cached = await readCache(fileKey);
   if (cached) {
     log(`  ${fileKey}: 命中缓存`);
     return { data: cached, via: 'cache' };
   }
 
-  const src = SOURCES[fileKey];
+  const src = GITHUB_SOURCES[fileKey];
   const branches = fileKey === 'constants' ? [src.branch, 'master'] : [src.branch];
   const errors: string[] = [];
 
@@ -231,7 +283,8 @@ async function fetchJson(fileKey: SourceKey): Promise<{ data: unknown; via: stri
       }
     }
   }
-  throw new Error(`拉取 ${fileKey} 失败，已尝试所有镜像：\n    ${errors.join('\n    ')}`);
+  log(`  ⚠️ ${fileKey} 拉取失败（已试 ${errors.length} 个镜像），将跳过该补充源`);
+  return null;
 }
 
 // ---------------------------------------------------------------------------
@@ -240,77 +293,166 @@ async function fetchJson(fileKey: SourceKey): Promise<{ data: unknown; via: stri
 
 async function main() {
   const t0 = Date.now();
-  log('▶ 构建 Arcaea 曲库');
+  log('▶ 构建 Arcaea 曲库（主源：wiki）');
 
-  // ---- 拉取 ----
-  const { data: arcsongRaw, via: viaA } = await fetchJson('arcsong');
-  const { data: ccRaw, via: viaB } = await fetchJson('constants');
+  const wiki = new WikiClient({
+    cacheDir: CFG.wikiCacheDir,
+    refresh: CFG.refresh,
+    log,
+  });
 
-  const rawSongs = Array.isArray(arcsongRaw)
-    ? (arcsongRaw as RawSong[])
-    : ((arcsongRaw as { songs?: RawSong[] }).songs);
-  if (!Array.isArray(rawSongs)) throw new Error('arcsong.json 结构异常：找不到 songs 数组');
-  log(`  arcsong songs: ${rawSongs.length}`);
-  log(`  ChartConstant: ${Object.keys(ccRaw as Record<string, unknown>).length}`);
+  // ---- ① wiki 四份权威数据 ----
+  const sl = await wiki.page<SonglistFile>(WIKI_PAGES.songlist.cache, WIKI_PAGES.songlist.title);
+  const cc = await wiki.page<Record<string, ConstantSlots>>(
+    WIKI_PAGES.constant.cache,
+    WIKI_PAGES.constant.title
+  );
+  const notes = await wiki.page<Record<string, NoteSlots>>(
+    WIKI_PAGES.notes.cache,
+    WIKI_PAGES.notes.title
+  );
+  const dur = await wiki.page<DurationFile>(WIKI_PAGES.duration.cache, WIKI_PAGES.duration.title);
 
-  // ---- ChartConstant 建索引（键是 song_id）----
-  const ccBySongId = new Map<string, WikiConstantEntry[]>();
-  for (const [k, v] of Object.entries(ccRaw as Record<string, unknown>)) {
-    ccBySongId.set(k, Array.isArray(v) ? (v as WikiConstantEntry[]) : []);
+  const songlist = sl.data.songs ?? [];
+  if (!songlist.length) throw new Error('Songlist 为空 —— 检查页面标题或 contentmodel');
+  log(
+    `① wiki  Songlist ${songlist.length} 首${sl.hit ? '（缓存）' : ''}` +
+      `｜定数 ${Object.keys(cc.data).length}｜物量 ${Object.keys(notes.data).length}` +
+      `｜时长 ${Object.keys(dur.data.normal ?? {}).length}`
+  );
+
+  // ---- ② GitHub 补充源（可选）----
+  const arcRaw = await fetchGithub('arcsong');
+  const ghCcRaw = await fetchGithub('constants');
+
+  const arcsongSongs: ArcsongSong[] = (() => {
+    if (!arcRaw) return [];
+    const d = arcRaw.data;
+    if (Array.isArray(d)) return d as ArcsongSong[];
+    const s = (d as { songs?: ArcsongSong[] }).songs;
+    return Array.isArray(s) ? s : [];
+  })();
+  const ghCc = (ghCcRaw?.data ?? {}) as Record<string, ConstantSlots>;
+
+  // set → 显示名。wiki 没有这个字段，只能从 arcsong 取。
+  const setFriendly = new Map<string, string>();
+  const aliasById = new Map<string, string[]>();
+  for (const s of arcsongSongs) {
+    const head = s.difficulties?.[0];
+    if (head?.set && head.set_friendly && !setFriendly.has(head.set)) {
+      setFriendly.set(head.set, head.set_friendly);
+    }
+    if (s.song_id && Array.isArray(s.alias) && s.alias.length) {
+      aliasById.set(s.song_id, s.alias.filter(Boolean));
+    }
   }
+  log(
+    `② 补充  arcsong ${arcsongSongs.length} 首 → set_friendly ${setFriendly.size} 条` +
+      `｜别名 ${aliasById.size} 首｜GitHub 定数表 ${Object.keys(ghCc).length}`
+  );
 
-  // ---- 合并 ----
+  // ---- ③ 合并 ----
   const songs = [];
-  let ccMatched = 0;
+  let chartsWithConstant = 0;
+  let chartsWithNote = 0;
+  let timeSecFilled = 0;
+  let setFriendlyFilled = 0;
   let constantMismatch = 0;
+  let jacketOverride = 0;
+  let altTitle = 0;
+  let altTitleSongs = 0;
+  const missingSetFriendly = new Set<string>();
+  /** 进不了曲库的条目。没有这一项就只能靠猜"为什么 554 变成了 553"。 */
+  const skipped: Array<{ id: string | null; title: string | null; reason: string }> = [];
 
-  for (const raw of rawSongs) {
-    const songId = raw.song_id;
-    if (!songId) continue;
+  const normalDur = dur.data.normal ?? {};
+  const beyondDur = dur.data.beyond ?? {};
 
-    const diffsRaw = Array.isArray(raw.difficulties) ? raw.difficulties : [];
-    if (!diffsRaw.length) continue;
+  for (const e of songlist) {
+    const songId = e.id;
+    if (!songId) {
+      skipped.push({ id: null, title: e.title_localized?.en ?? null, reason: 'no_id' });
+      continue;
+    }
 
-    // 曲级字段从第 0 个难度条目里取（arcsong.json 把它们重复在每个难度上）
-    const head = diffsRaw[0];
-    const ccSlots = ccBySongId.get(songId);
-    if (ccSlots) ccMatched++;
+    const diffsRaw = Array.isArray(e.difficulties) ? e.difficulties : [];
+    if (!diffsRaw.length) {
+      // ⚠️ 不要静默跳过。实测 particlearts 带 deleted:true 且没有 difficulties。
+      skipped.push({
+        id: songId,
+        title: e.title_localized?.en ?? null,
+        reason: e.deleted ? 'deleted' : 'no_difficulties',
+      });
+      continue;
+    }
+
+    const titleEn = e.title_localized?.en || songId;
+    const titleJp = e.title_localized?.ja || '';
+
+    // 别名 = 社区别名（arcsong）+ **别名难度名**（wiki 的 difficulties[].title_localized）。
+    // ⚠️ 后者必须进 alias：索引里有视频标题写的是 "Last | Moment" 而不是 "Last"，
+    //    不并进来就会解析出一首独立的假曲目（实测因此多出 3 首幻影条目）。
+    const altTitles = diffsRaw
+      .map((d) => d.title_localized?.en || d.title_localized?.ja || '')
+      .filter(Boolean);
+    if (altTitles.length) altTitleSongs++;
+    const alias = [...new Set([...(aliasById.get(songId) ?? []), ...altTitles])];
+
+    const set = e.set ?? '';
+    const friendly = setFriendly.get(set) ?? '';
+    if (friendly) setFriendlyFilled++;
+    else if (set) missingSetFriendly.add(set);
+
+    const timeSec = parseDuration(normalDur[songId]) ?? parseDuration(beyondDur[songId]);
+    if (timeSec != null) timeSecFilled++;
+
+    const ccSlots = cc.data[songId];
+    const noteSlots = notes.data[songId];
+    const ghSlots = ghCc[songId];
 
     const difficulties = diffsRaw.map((d, idx) => {
-      const cls = DIFFICULTY_CLASSES[idx] ?? `UNKNOWN_${idx}`;
-      const constant = typeof d.rating === 'number' ? Number((d.rating / 10).toFixed(2)) : null;
+      // ⚠️ 定数/物量数组按 **ratingClass** 索引，不是按 difficulties 的数组下标。
+      //    实测 110 首歌有 ETR 没 BYD（rc = 0,1,2,4），用下标会把 ETR 的值读错位。
+      const rc = d.ratingClass ?? idx;
+      const cls = DIFFICULTY_CLASSES[rc] ?? `UNKNOWN_${rc}`;
 
-      // 交叉校验：wiki 定数表按同样的数组顺序对齐
-      let constantWiki: number | null = null;
-      if (ccSlots && ccSlots[idx] && typeof ccSlots[idx].constant === 'number') {
-        constantWiki = ccSlots[idx].constant;
-      }
+      // 精确定数：wiki 页面是权威，GitHub 那份只作交叉校验
+      const ccSlot = ccSlots?.[rc] ?? null;
+      const ghSlot = ghSlots?.[rc] ?? null;
+      const constant = ccSlot && typeof ccSlot.constant === 'number' ? ccSlot.constant : null;
+      const constantRepo = ghSlot && typeof ghSlot.constant === 'number' ? ghSlot.constant : null;
       const mismatch =
-        constant != null && constantWiki != null && Math.abs(constant - constantWiki) > 1e-9;
+        constant != null && constantRepo != null && Math.abs(constant - constantRepo) > 1e-9;
       if (mismatch) constantMismatch++;
+
+      const noteRaw = noteSlots?.[rc];
+      const note = typeof noteRaw === 'number' ? noteRaw : null;
+      if (note != null) chartsWithNote++;
+      if (constant != null) chartsWithConstant++;
+      if (d.jacketOverride) jacketOverride++;
+      const alt = d.title_localized?.en || d.title_localized?.ja || '';
+      if (alt) altTitle++;
 
       return {
         class: cls,
-        level: levelFromCode(d.difficulty),
-        level_code: d.difficulty, // 原样保留 = 等级×2，便于反查
+        level: levelLabel(d.rating, d.ratingPlus),
+        level_code: levelCode(d.rating, d.ratingPlus),
         constant,
-        constant_wiki: constantWiki,
+        ...(constantRepo != null ? { constant_repo: constantRepo } : {}),
         ...(mismatch ? { constant_mismatch: true } : {}),
-        note: d.note ?? null, // 物量，用于判定数守恒校验
-        chart_designer: d.chart_designer ?? '',
-        jacket_designer: d.jacket_designer ?? '',
-        version: d.version ?? '',
+        note,
+        chart_designer: d.chartDesigner ?? '',
+        jacket_designer: d.jacketDesigner ?? '',
+        version: e.version ?? '',
+        ...(d.jacketOverride ? { jacket_override: true } : {}),
+        ...(alt ? { alt_title: alt } : {}),
       };
     });
 
-    const titleEn = head.name_en || songId;
-    const titleJp = head.name_jp || '';
-    const alias = Array.isArray(raw.alias) ? raw.alias.filter(Boolean) : [];
-
-    // 用于 join 的归一化键集合：英文名 / 日文名 / 全部别名 / song_id 本身
-    const matchKeys = [...new Set(
-      [titleEn, titleJp, songId, ...alias].filter(Boolean).map(normalizeTitle)
-    )].filter(Boolean);
+    // 用于 join 的归一化键集合：英文名 / 日文名 / song_id 本身 / 全部别名
+    const matchKeys = [
+      ...new Set([titleEn, titleJp, songId, ...alias].filter(Boolean).map(normalizeTitle)),
+    ].filter(Boolean);
 
     songs.push({
       song_id: songId,
@@ -320,47 +462,56 @@ async function main() {
       alias,
       alias_norm: alias.map(normalizeTitle),
       match_keys: matchKeys,
-      artist: head.artist ?? '',
-      bpm: head.bpm_base ?? (head.bpm ? Number(head.bpm) : null),
-      set: head.set ?? '',
-      set_friendly: head.set_friendly ?? '',
-      side: head.side ?? null,
-      version: head.version ?? '',
-      date: head.date ?? null,
-      time_sec: head.time ?? null,
-      remote_download: head.remote_download ?? false,
-      // 曲绘：官方 CDN 实测 403，此处仅记录 bg 名（通常与 song_id 同构）
-      bg: head.bg ?? songId,
+      artist: e.artist ?? '',
+      bpm: e.bpm_base ?? (e.bpm ? Number(e.bpm) : null),
+      set,
+      set_friendly: friendly,
+      side: e.side ?? null,
+      version: e.version ?? '',
+      date: e.date ?? null,
+      time_sec: timeSec,
+      remote_download: e.remote_dl ?? false,
+      // bg / bg_inverse 是游戏原始数据，权威。应用读的是 arcaea-backgrounds.json。
+      bg: e.bg ?? '',
+      bg_inverse: e.bg_inverse ?? '',
       difficulties,
     });
   }
 
-  // ---- 输出 ----
+  // ---- ④ 输出 ----
   const out = {
     schema_version: 1,
     game: 'arcaea',
     generated_at: new Date().toISOString(),
     generator: 'scripts/build-song-db.ts',
     difficulty_class_order: DIFFICULTY_CLASSES,
-    freshness_warning:
-      '上游数据停留在 2023 年，不含 v5.4 定数大调整后的变动与 2024–2026 新曲，' +
-      '请以 wiki 最新值为准并定期重建。',
     sources: [
-      { name: SOURCES.arcsong.label, repo: SOURCES.arcsong.repo, fetched_via: viaA, songs: rawSongs.length },
-      { name: SOURCES.constants.label, repo: SOURCES.constants.repo, fetched_via: viaB, matched_songs: ccMatched },
+      { name: 'Template:Songlist.json', page: WIKI_PAGES.songlist.title, fetched_via: sl.hit ? 'cache' : 'wiki', songs: songlist.length },
+      { name: 'Template:ChartConstant.json', page: WIKI_PAGES.constant.title, fetched_via: cc.hit ? 'cache' : 'wiki', songs: Object.keys(cc.data).length },
+      { name: 'Template:ChartNotes.json', page: WIKI_PAGES.notes.title, fetched_via: notes.hit ? 'cache' : 'wiki', songs: Object.keys(notes.data).length },
+      { name: 'Template:SongDuration.json', page: WIKI_PAGES.duration.title, fetched_via: dur.hit ? 'cache' : 'wiki' },
+      { name: GITHUB_SOURCES.arcsong.label, repo: GITHUB_SOURCES.arcsong.repo, fetched_via: arcRaw?.via ?? 'unavailable', songs: arcsongSongs.length },
+      { name: GITHUB_SOURCES.constants.label, repo: GITHUB_SOURCES.constants.repo, fetched_via: ghCcRaw?.via ?? 'unavailable' },
     ],
     stats: {
       songs: songs.length,
       songs_with_alias: songs.filter((s) => s.alias.length).length,
       charts: songs.reduce((n, s) => n + s.difficulties.length, 0),
-      charts_with_constant: songs.reduce((n, s) => n + s.difficulties.filter((d) => d.constant != null).length, 0),
-      constant_mismatch: constantMismatch,
-      matched_by_chart_constant: ccMatched,
+      charts_with_constant: chartsWithConstant,
+      charts_with_note: chartsWithNote,
+      songs_with_time_sec: timeSecFilled,
+      songs_with_set_friendly: setFriendlyFilled,
+      set_friendly_missing: [...missingSetFriendly].sort(),
+      jacket_override_charts: jacketOverride,
+      alt_title_charts: altTitle,
+      alt_title_songs: altTitleSongs,
+      constant_mismatch_vs_repo: constantMismatch,
       class_histogram: songs
         .flatMap((s) => s.difficulties.map((d) => d.class))
         .reduce<Record<string, number>>((m, c) => ((m[c] = (m[c] ?? 0) + 1), m), {}),
       elapsed_sec: Number(((Date.now() - t0) / 1000).toFixed(1)),
     },
+    skipped,
     songs,
   };
 
@@ -373,23 +524,23 @@ async function main() {
   log('══════════════ 曲库构建完成 ══════════════');
   log(`  输出          ${path.resolve(CFG.out)}`);
   log(`  曲目          ${s.songs} 首（${s.songs_with_alias} 首带别名）`);
-  log(`  谱面          ${s.charts} 个（${s.charts_with_constant} 个有定数）`);
+  log(`  谱面          ${s.charts} 个（定数 ${s.charts_with_constant}｜物量 ${s.charts_with_note}）`);
   log(`  难度分布      ${Object.entries(s.class_histogram).map(([k, v]) => `${k}:${v}`).join('  ')}`);
-  log(`  定数交叉校验  ${s.matched_by_chart_constant} 首命中 wiki 定数表，其中 ${s.constant_mismatch} 个谱面定数不一致`);
+  log(`  时长覆盖      ${s.songs_with_time_sec} / ${s.songs}`);
+  log(`  曲包显示名    ${s.songs_with_set_friendly} / ${s.songs}（缺 ${s.set_friendly_missing.length} 个曲包）`);
+  log(`  独立曲绘难度  ${s.jacket_override_charts} 个｜别名难度 ${s.alt_title_charts} 个`);
+  log(`  定数交叉校验  ${s.constant_mismatch_vs_repo} 个谱面与 GitHub 旧表不一致（wiki 为准）`);
   log(`  耗时          ${s.elapsed_sec}s`);
-  log('');
-  log('  ⚠️  两份上游数据均停留在 2023 年 —— 不含 v5.4 定数大调整之后的变动，');
-  log('      也不含 2024–2026 新曲。实际使用前需按 §13.3 补充最新数据。');
+  if (s.set_friendly_missing.length) {
+    log(`  ⚠️  缺显示名的曲包：${s.set_friendly_missing.join(', ')}`);
+  }
   log('══════════════════════════════════════════');
 }
 
-// ⚠️ 必须用 pathToFileURL 比较。`import.meta.url === \`file://${argv[1]}\`` 在 Windows 上
-//    **恒为 false** —— import.meta.url 是三斜杠的 `file:///D:/...`，而模板串给出 `file://D:\...`。
-//    之前还有个 `endsWith('...mjs')` 兜底，改名成 .ts 之后也失效了，
-//    结果 isMain 恒 false、main() 永不执行、脚本静默什么都不做（退出码 0）。
+// ⚠️ 必须用 pathToFileURL 比较。`import.meta.url === \`file://${argv[1]}\`` 在 Windows 上恒为 false
+//    （三斜杠 vs 两斜杠），会让 isMain 恒 false、main() 永不执行、脚本静默退出 0。
 const isMain =
-  process.argv[1] !== undefined &&
-  import.meta.url === pathToFileURL(process.argv[1]).href;
+  process.argv[1] !== undefined && import.meta.url === pathToFileURL(process.argv[1]).href;
 if (isMain) {
   main().catch((e) => {
     console.error('✗ 构建失败：', e?.stack || e);

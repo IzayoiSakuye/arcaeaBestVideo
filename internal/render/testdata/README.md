@@ -1,6 +1,13 @@
 # testdata/（render 包）
 
-`golden-commands.json` —— **从真实运行里捕获的 argv**，给 `internal/render` 的 golden test 当期望值。
+**从真实运行里捕获的 argv**，给 `internal/render` 的 golden test 当期望值。**有两份**：
+
+| 文件 | 用例数 | 说明 |
+|---|---|---|
+| `golden-commands.json` | 7 | spike 的 `--songs` 模式（自己挑谱面）—— 历史行为基线 |
+| **`golden-commands-project.json`** | **10** | ⭐ spike 的 `--project` 模式（按 `samples/sample-project.json` 的契约）—— **应该对齐这个** |
+
+两份的区别与各自覆盖什么，见下面「两份 golden，别搞混」一节。
 
 ## 为什么是"捕获"而不是"手抄"
 
@@ -45,6 +52,64 @@ func tok(s, root string) string {
 
 > ⚠️ 注意**两种斜杠形式都要换** —— 普通参数用的是 Windows 反斜杠，
 > 而 Edge 的 URL 用的是正斜杠（spike 里有个 `toPosix()`）。
+
+## ⚠️ 捕获时发现的两个 spike 行为（翻译前必读）
+
+### ① `diff` 传的是**定数**，不是等级
+
+```
+spike 实际传的：  diff=Future+10.9        ← DIFF_NAME[难度] + chart.constant
+规格 §3.3 写的是：diff=Future 10+         ← 应该是 level
+```
+
+`spike-sample-video.ts:582` 那行是 `` diff: `${DIFF_NAME[...]} ${r.chart.constant}` ``。
+
+**Go 侧要自己决定用哪个**，不能默认"照抄 spike"：
+
+- 用 **`level`**（`"10+"`）→ 和游戏内显示一致，但部分曲目区分不出 10.7 / 10.8 / 10.9
+- 用 **`constant`**（`"10.9"`）→ 信息更精确，但和游戏内写法不一致
+
+**改了就要同步改这份 golden**，否则测试会红在一个"其实是你故意改的"地方。
+
+### ② spike 默认不读 `samples/sample-project.json` —— **已加 `--project` 修掉**
+
+默认模式（`--songs` / 自动挑）自己选谱面（`spike-sample-video.ts:308`、`529`）：
+
+```ts
+if (!['FTR', 'ETR', 'BYD'].includes(ch.difficulty)) continue;   // 先滤掉 PST/PRS
+const chart = song.charts.find(c => pickSource(c) && c.constant != null && c.note)
+           ?? song.charts.find(c => pickSource(c));              // 取第一个有录像的
+```
+
+后果：样例文件里 `testify` 写的是 **BYD 12**，这个模式实际渲染的是 **FTR 10.9**。
+
+**现在加了 `--project` 模式**，按输入契约走（曲目 + 难度 + 成绩都照样例来）：
+详见下面的「两份 golden」一节。
+
+---
+
+## ⭐ 两份 golden，别搞混
+
+| 文件 | 怎么捕获的 | 是什么 | 用来测什么 |
+|---|---|---|---|
+| `golden-commands.json` | `--songs testify,tempestissimo` | **spike 的历史行为**（自己挑到 FTR / PRS） | 早期翻译期的基线，覆盖 4:3+16:9 两套模板 |
+| **`golden-commands-project.json`** | `--project samples/sample-project.json` | ⭐ **应用的真实行为**（按契约选曲） | **`internal/render` 应该对齐这个** |
+
+**两份并存是有意的**：argv 对不上时，能一眼区分「翻译错了」还是「行为有意改了」。
+
+### `golden-commands-project.json` 多覆盖了什么
+
+```
+3 首全 BYD 谱面      ← 旧 golden 只覆盖 FTR / PRS
+难度专属曲绘          ← composite-20x157-ownjacket-tempestissimo 用 tempestissimo_byd.jpg
+样例里的真实成绩      ← score 用 achievement×100000 算，不再是 fakeScore 编的
+16:9 与 4:3 混合      ← testify/arcanaeden 是 4:3（overlay 58:95），tempestissimo 是 16:9（overlay 20:157）
+```
+
+> ⚠️ **`composite-20x157-ownjacket-tempestissimo` 是唯一覆盖 `chart.jacket ?? song.jacket` 的用例。**
+> 删了它，难度专属曲绘就完全没测了。
+
+---
 
 ## 覆盖到的用例（7 条）
 

@@ -92,11 +92,17 @@ interface RawIndexFile extends Omit<IndexFile, 'charts' | 'unparsed'> {
 interface SongDbDifficulty {
   class: Difficulty;
   level: string | null;
+  /** wiki Template:ChartConstant 的值，权威 */
   constant: number | null;
-  constant_wiki: number | null;
+  /** GitHub 上 2023 年的 ChartConstant.json，仅作交叉校验 */
+  constant_repo?: number | null;
   note: number | null;
   chart_designer?: string;
   jacket_designer?: string;
+  /** 该难度有独立曲绘（磁盘上是 <song_id>_<难度>.jpg） */
+  jacket_override?: boolean;
+  /** 该难度有独立曲名，如 Last 的 BYD 叫 "Last | Moment" */
+  alt_title?: string;
 }
 
 interface SongDbSong {
@@ -114,6 +120,7 @@ interface SongDbSong {
   date?: number | null;
   time_sec?: number | null;
   bg?: string;
+  bg_inverse?: string;
   difficulties?: SongDbDifficulty[];
 }
 
@@ -342,15 +349,9 @@ function diceSimilarity(a: string, b: string): number {
   return (2 * inter) / (a.length - 1 + b.length - 1);
 }
 
-/** 把曲绘信息（含感知哈希）填进曲目条目 */
-function fillJacket(song: SongEntry, jackets: JacketTable | null): boolean {
-  const j = jackets?.byId.get(song.song_id);
-  if (!j) {
-    song.jacket = { bundled: false, full_url: null, source: null };
-    song.phash = null;
-    return false;
-  }
-  song.jacket = {
+/** 把曲绘条目转成产物里的 jacket 字段形态 */
+function toJacketOut(j: JacketEntry): JacketOut {
+  return {
     bundled: !!j.local?.thumb256,
     local_256: j.local?.thumb256 ?? null,
     full_url: j.url,
@@ -358,8 +359,45 @@ function fillJacket(song: SongEntry, jackets: JacketTable | null): boolean {
     native: j.width && j.height ? `${j.width}x${j.height}` : null,
     source: 'arcwiki',
   };
-  song.phash = j.ahash ? { ahash: j.ahash, dhash: j.dhash } : null;
-  return true;
+}
+
+/**
+ * 每难度专属曲绘。文件名两种写法都要试：
+ *   ① `<song_id>_<难度小写>` —— 绝大多数，如 tempestissimo_byd.jpg、avril_prs.jpg
+ *   ② 别名难度的曲名宽松键 —— 仅 4 个：ignotus/dropdead/redandblue/singularity
+ *      的 BYD 在 wiki 上直接用了别名词（ignotusafterburn.jpg / overdead.jpg / …）
+ * 找不到返回 null，调用方回落到歌曲默认曲绘。
+ */
+function resolveChartJacket(
+  songId: string,
+  chart: ChartEntry,
+  jackets: JacketTable
+): JacketOut | null {
+  const cands = [`${songId}_${chart.difficulty.toLowerCase()}`];
+  if (chart.alt_title) cands.push(looseKey(chart.alt_title));
+  for (const c of cands) {
+    const j = jackets.byId.get(c);
+    if (j) return toJacketOut(j);
+  }
+  return null;
+}
+
+/** 把曲绘信息（含感知哈希）填进曲目条目，顺带解析各难度的专属曲绘 */
+function fillJacket(song: SongEntry, jackets: JacketTable | null): boolean {
+  const j = jackets?.byId.get(song.song_id);
+  if (!j) {
+    song.jacket = { bundled: false, full_url: null, source: null };
+    song.phash = null;
+  } else {
+    song.jacket = toJacketOut(j);
+    song.phash = j.ahash ? { ahash: j.ahash, dhash: j.dhash } : null;
+  }
+  if (jackets) {
+    for (const chart of song.charts) {
+      chart.jacket = resolveChartJacket(song.song_id, chart, jackets);
+    }
+  }
+  return !!j;
 }
 
 // ---------------------------------------------------------------------------
@@ -439,8 +477,10 @@ async function main(): Promise<void> {
       phash: null, // 感知哈希索引待后续步骤填充
       charts: (s.difficulties ?? []).map((d): ChartEntry => {
         const raw: ConstantCandidates = {};
-        if (d.constant != null) raw.songdb = d.constant;
-        if (d.constant_wiki != null) raw.wiki = d.constant_wiki;
+        // wiki 页面是权威 → 标成优先级最高的 wiki 来源；
+        // GitHub 那份 2023 年的旧表降级为 songdb，只用来暴露分歧。
+        if (d.constant != null) raw.wiki = d.constant;
+        if (d.constant_repo != null) raw.songdb = d.constant_repo;
         const cands = dedupeCandidates(raw); // 同值只保留优先级最高的来源
         return {
           difficulty: d.class,
@@ -451,7 +491,9 @@ async function main(): Promise<void> {
           note: d.note ?? null,
           chart_designer: d.chart_designer ?? '',
           jacket_designer: d.jacket_designer ?? '',
+          ...(d.alt_title ? { alt_title: d.alt_title } : {}),
           video: null,
+          jacket: null, // 第 3 步解析
         };
       }),
     };
@@ -545,6 +587,7 @@ async function main(): Promise<void> {
         chart_designer: '',
         jacket_designer: '',
         video: null,
+        jacket: null, // 第 3 步解析
       };
       entry.charts.push(chart);
       createdCharts++;
@@ -708,6 +751,11 @@ async function main(): Promise<void> {
       jackets_loaded: !!jackets,
       songs_with_jacket: jacketFilled,
       songs_with_phash: songs.filter((s) => s.phash).length,
+      /** 有专属曲绘的难度数（Beyond 谱面经常有自己的图） */
+      charts_with_own_jacket: songs.reduce(
+        (n, s) => n + s.charts.filter((c) => c.jacket).length,
+        0
+      ),
       unresolved_from_index: (index.unparsed ?? []).length,
       elapsed_sec: Number(((Date.now() - t0) / 1000).toFixed(1)),
     },
@@ -739,7 +787,7 @@ async function main(): Promise<void> {
   log(`  从索引新建     ${s.songs_created_from_index} 首曲 / ${s.charts_created_from_index} 个谱面`);
   log(`  推导 ID 撞车   ${s.derived_id_collisions}`);
   if (s.jackets_loaded) {
-    log(`  🖼  曲绘         ${s.songs_with_jacket}/${s.songs} 首有图（${s.songs_with_phash} 首带感知哈希）`);
+    log(`  🖼  曲绘         ${s.songs_with_jacket}/${s.songs} 首有图（${s.songs_with_phash} 首带感知哈希｜${s.charts_with_own_jacket} 个难度有专属图）`);
     log(`      ID 校正     ${s.derived_id_aligned_to_jacket} 个推导 ID 被曲绘表校正为官方 ID`);
   } else {
     log(`  ⚠️  未加载曲绘（--no-jackets 或文件缺失）`);

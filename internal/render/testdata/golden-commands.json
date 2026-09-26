@@ -1,8 +1,8 @@
 {
-  "captured_at": "2026-09-22T14:09:27.448Z",
+  "captured_at": "2026-09-23T15:49:50.290Z",
   "source": "scripts/spike-sample-video.ts --log-commands",
   "root_token": "<ROOT>",
-  "note": "机器相关路径已换成 token；测试里把本地根目录替换成同样的 token 再比对",
+  "note": "机器相关路径已换成 token；测试里把本地根目录替换成同样的 token 再比对。2026-09 切 wiki 主源后重捕过：7 条里只有 testify 的定数 10.8→10.9 变了（2023 旧数据过时，wiki 值正确）",
   "cases": [
     {
       "name": "background",
@@ -33,7 +33,7 @@
         "--virtual-time-budget=4000",
         "--user-data-dir=<PROFILE>",
         "--screenshot=<WORK>\\text.png",
-        "file:///<ROOT>/templates/text.html?ptt=%2B12.34&score=9%2C980%2C181&pure=1760&far=5&lost=1&title=Testify&author=void+%28Mournfinale%29+feat.+%E6%98%9F%E7%86%8A%E5%8D%97%E5%B7%AB&diff=Future+10.8&diffClass=ftr&comment=%E5%B0%B1%E5%B7%AE%E4%B8%80%E7%82%B9%E7%82%B9%E7%90%86%E8%AE%BA%E5%80%BC%EF%BC%8C%E5%8F%AF%E6%83%9C%E4%BA%86"
+        "file:///<ROOT>/templates/text.html?ptt=%2B12.34&score=9%2C980%2C181&pure=1760&far=5&lost=1&title=Testify&author=void+%28Mournfinale%29+feat.+%E6%98%9F%E7%86%8A%E5%8D%97%E5%B7%AB&diff=Future+10.9&diffClass=ftr&comment=%E5%B0%B1%E5%B7%AE%E4%B8%80%E7%82%B9%E7%82%B9%E7%90%86%E8%AE%BA%E5%80%BC%EF%BC%8C%E5%8F%AF%E6%83%9C%E4%BA%86"
       ]
     },
     {

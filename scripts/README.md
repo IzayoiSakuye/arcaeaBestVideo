@@ -4,6 +4,31 @@
 
 运行时依赖：**Node.js ≥ 18**（用内置 `fetch`），**零第三方依赖**，不需要 `npm install`。
 
+---
+
+## ⭐ 2026-09：曲库主源已切到 wiki
+
+① 不再以 2023 年的 GitHub `arcsong.json`（335 首）为主源，改用 wiki 的 4 个 JSON 内容模型页面：
+
+| 页面 | 提供 |
+|---|---|
+| `Template:Songlist.json` | 曲名 / 曲师 / BPM / 曲包 / 版本 / 日期 / 背景 / 难度等级（554 首） |
+| `Template:ChartConstant.json` | 精确定数（小数） |
+| `Template:ChartNotes.json` | 物量 |
+| `Template:SongDuration.json` | 时长 |
+
+`arcsong.json` 降为**补充源**，只留两个用途：**中文别名**、**`set_friendly` 显示名**。**拉不到不致命**。
+
+**效果（实测）**：`song_id_source: derived`（元数据不全的曲目）**198 → 11 首**，
+谱面 1350 → 1849，定数 1045 → 1832，索引的 song_id 关联率 355/650 → 638/650。
+
+抓取统一走 `lib/wiki.ts`（缓存 + 重试 + Anubis 过盾）——**不要在脚本里另抄一份**。
+
+> ⚠️ **本文档下文凡是写「上游停在 2023」「198 首 derived」「对不上 12 首」的地方，
+> 都是切换前写的，保留原文是为了记下当时的推理过程。** 数字以本节与实际 `data/` 为准。
+
+---
+
 ## 执行顺序
 
 ```bash

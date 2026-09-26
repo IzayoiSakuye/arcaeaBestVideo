@@ -54,7 +54,8 @@ import path from 'node:path';
 import process from 'node:process';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { anubisFetch, mwApi, CookieJar } from './lib/anubis-fetch.ts';
+import { anubisFetch, mwApi } from './lib/anubis-fetch.ts';
+import { WikiClient } from './lib/wiki.ts';
 import { normalizeTitle, looseKey } from './build-catalog.ts';
 import type {
   BackgroundEntry, BackgroundManifest, CatalogFile, CatalogSong, SongListEntry, SongListFile,
@@ -184,53 +185,7 @@ const log = (...a: unknown[]): void => { if (!args.quiet) console.log(...a); };
  */
 const toPosix = (p: string): string => p.split(path.sep).join('/');
 
-/**
- * 网络请求必须带重试。社区维基 + PoW 门，链路本来就慢，
- * 一次瞬断就让整轮白跑（缓存虽然能续上，但要白等）。
- */
-async function withRetry<T>(fn: () => Promise<T>, label: string, tries = 3): Promise<T> {
-  let lastErr: unknown = null;
-  for (let i = 0; i < tries; i++) {
-    try {
-      return await fn();
-    } catch (e) {
-      lastErr = e;
-      if (i < tries - 1) {
-        log(`    ↻ 重试 ${i + 2}/${tries}（${label}）：${(e instanceof Error ? e.message : String(e)).slice(0, 70)}`);
-        await sleep(1200 * (i + 1));
-      }
-    }
-  }
-  throw lastErr;
-}
-
-async function cached<T>(name: string, fetcher: () => Promise<T>): Promise<{ data: T; hit: boolean }> {
-  const p = path.join(args.cacheDir, name);
-  if (!args.refresh) {
-    try {
-      // 缓存里的结构在运行时无法校验，按调用方声明的契约读取
-      return { data: JSON.parse(await fs.readFile(p, 'utf8')) as T, hit: true };
-    } catch { /* 没缓存，正常 */ }
-  }
-  const data = await fetcher();
-  await fs.mkdir(args.cacheDir, { recursive: true });
-  await fs.writeFile(p, JSON.stringify(data, null, 2));
-  return { data, hit: false };
-}
-
-// ---------------------------------------------------------------------------
-
-/** 取一个 JSON 内容模型页面的正文并解析。契约由调用方用泛型声明（MediaWiki 返回的是任意 JSON） */
-async function fetchJsonPage<T>(title: string, jar: CookieJar): Promise<T> {
-  const rev = await mwApi(args.origin, {
-    action: 'query', prop: 'revisions', rvprop: 'content', rvslots: 'main',
-    titles: title, redirects: '1',
-  }, { jar });
-  const page = rev.query?.pages?.[0];
-  const content = page?.revisions?.[0]?.slots?.main?.content;
-  if (content == null) throw new Error(`${title} 取不到正文（contentmodel 可能不是 json）`);
-  return JSON.parse(content) as T;
-}
+// wiki 请求（缓存 / 重试 / JSON 页面正文）统一在 lib/wiki.ts —— 别在这里再抄一份
 
 /** catalog song_id 与 Songlist 条目的对齐方式 */
 type MatchHow = 'id' | 'title' | 'loose';
@@ -294,17 +249,26 @@ function buildCrosswalk(catalog: CatalogFile, songlist: SongListFile) {
 
 async function main(): Promise<void> {
   const t0 = Date.now();
-  const jar = await CookieJar.load(args.cookieFile);
+  // wiki 客户端（缓存 + 重试 + Anubis 过盾）统一在 lib/wiki.ts，别在这里再抄一份
+  const wiki = new WikiClient({
+    cacheDir: args.cacheDir,
+    origin: args.origin,
+    cookieFile: args.cookieFile,
+    delay: args.delay,
+    refresh: args.refresh,
+    log,
+  });
+  const jar = await wiki.cookieJar();
   const catalog = JSON.parse(await fs.readFile(path.resolve(args.catalog), 'utf8')) as CatalogFile;
 
   // ── ① Songlist（权威的曲目→背景映射）──
-  const { data: songlist, hit: slHit } = await cached('songlist.json', () =>
-    withRetry(() => fetchJsonPage<SongListFile>('Template:Songlist.json', jar), 'Songlist'));
+  const { data: songlist, hit: slHit } = await wiki.page<SongListFile>(
+    'songlist.json', 'Template:Songlist.json');
   log(`① Songlist：${songlist.songs?.length ?? 0} 首${slHit ? '（缓存）' : ''}`);
 
   // ── ② 背景图片清单 ──
-  const { data: imgs, hit: imgHit } = await cached('images.json', () =>
-    withRetry(async () => {
+  const { data: imgs, hit: imgHit } = await wiki.cached('images.json', () =>
+    wiki.withRetry(async () => {
       const out: WikiImage[] = [];
       let cont: string | null = null;
       for (let p = 0; p < 8; p++) {
@@ -412,7 +376,7 @@ async function main(): Promise<void> {
       const url = w >= f.width
         ? f.url
         : f.url.replace('/images/', '/images/thumb/') + `/${w}px-${f.name}`;
-      const res = await withRetry(() => anubisFetch(url, { jar }), `${bg}@${w}`).catch(() => null);
+      const res = await wiki.withRetry(() => anubisFetch(url, { jar }), `${bg}@${w}`).catch(() => null);
       // 必须验 JPEG 魔数：404 返回的是 34KB HTML，光看状态码/体积会误判
       const isJpeg = !!res && res.buffer[0] === 0xff && res.buffer[1] === 0xd8;
       if (res && res.status === 200 && isJpeg) {

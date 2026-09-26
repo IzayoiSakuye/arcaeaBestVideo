@@ -56,7 +56,9 @@
 > §13.8 的第 3 步是关键：B站 证据显示 Arcaea 玩家目前只用**静态分表图**（§13.1.3），
 > 这既可能"没人做过好的"、也可能"大家真的只要一张图"。**在投入 OCR 工程之前先问出这个问题。**
 
-**数据层现状快照**（`data/arcaea-catalog.json`）：533 首曲目 / 1350 个谱面 / 1045 个定数 / 1044 个物量 / 645 个谱面有视频 / 507 首有曲绘与感知哈希。
+**数据层现状快照**（`data/arcaea-catalog.json`）：**564 首曲目（official 553 / derived 11）/ 1849 个谱面 / 1832 个定数 / 1834 个物量 / 647 个谱面有视频 / 554 首有曲绘与感知哈希 / 57 个难度有专属曲绘**。
+（2026-09 主源切到 wiki 之后的数据；切换前的旧值是 533/1350/1045/1044/645/507。
+剩下 11 首 `derived` 是索引从视频标题解析出的条目，wiki 里没有对应曲目，**待人工裁决**。）
 
 ---
 
@@ -196,8 +198,9 @@ scripts/                   ★ 构建期工具（TypeScript，零依赖，不参
   node_modules/            仅类型定义，git 忽略。删掉不影响脚本运行
   lib/types.ts             数据契约（各脚本间传递的 JSON 结构，改产出时同步改这里）
   lib/anubis-fetch.ts      Anubis PoW 反爬客户端（含三个必读的坑）
+  lib/wiki.ts              wiki JSON 内容模型页面客户端（缓存 + 重试，封装 Anubis）
   lib/zip.ts               自写的 store-only ZIP 写入器
-  build-song-db.ts        ① 曲库（⚠️ 上游停在 2023，待切 wiki）
+  build-song-db.ts        ① 曲库（⭐ 主源已是 wiki 的 4 个 JSON 页面，GitHub 只作补充）
   build-arcaea-index.ts   ② 视频索引（含 --self-test）
   build-jackets.ts        ③ 曲绘 + 感知哈希
   build-backgrounds.ts    ④ 游玩背景图 + 曲目→背景映射（含 --coverage）
@@ -207,13 +210,13 @@ scripts/                   ★ 构建期工具（TypeScript，零依赖，不参
   spike-sample-video.ts   ⚠️ **临时** P1 样片管线（背景→视频→曲绘→装饰→文字→concat）
   README.md                ★ 脚本用法 + Anubis 过盾细节 + 数据分发策略 + 各类实测坑
 data/                      ⚠️ 构建产物，不进版本库（例外见下）
-  arcaea-catalog.json      ⭐ 应用唯一读取的目录（533 曲 / 1350 谱面）
+  arcaea-catalog.json      ⭐ 应用唯一读取的目录（564 曲 / 1849 谱面）
   arcaea-backgrounds.json  曲目→背景映射（权威，来自 Songlist.json）
-  arcaea-songdb.json       原始层：曲库（335 首，2023）
+  arcaea-songdb.json       原始层：曲库（553 首，源为 wiki，官方 song_id）
   arcaea-index.json        原始层：B站视频索引（650 谱面）
-  arcaea-jackets.json      原始层：曲绘 + 感知哈希
-  jackets/256/*.jpg        620 张 256px 曲绘（~12MB）
-  backgrounds/960/*.jpg    140 张 960×540 背景（~9.5MB，已裁 16:9）
+  arcaea-jackets.json      原始层：曲绘 + 感知哈希（625 张，含难度变体）
+  jackets/256/*.jpg        625 张 256px 曲绘（~12MB）
+  backgrounds/960/*.jpg    147 张 960×540 背景（~10MB，已裁 16:9）
   song-id-aliases.json     ✅ 唯一进版本库的文件（人工配置）
 dist/                      发布包产物（不进版本库）：zip + latest.json + tree/
 .cache/                    管线缓存（不进版本库，可安全删除）
@@ -244,18 +247,18 @@ node scripts/pack-data.ts            # ⑦ 打包发布
 |---|---|---|
 | 成绩（运行时不涉及） | 查分器 API / OCR | 见 §3.5 数据源矩阵 |
 | 视频素材 | B站「谱面保管室」合集 | 索引由标题正则构建，非人工审核 |
-| 曲绘 + 官方 song_id | Arcaea 中文维基 | 文件名 `Songs_<song_id>.jpg` |
-| **游玩背景** | wiki `Template:Songlist.json` | ⭐ **游戏原始数据**，含 `bg`/`bg_inverse`/`side`，零歧义 |
-| 定数 | **wiki > songdb > video** | 汇编视频带的是发布当时的旧值，43 处已知分歧 |
-| 物量 note | arcsong.json | 用于 OCR 判定数守恒校验 |
+| **曲库主源** | wiki `Template:Songlist.json` | ⭐ 554 首**游戏原始数据**，官方 song_id |
+| 定数 | wiki `Template:ChartConstant.json` | 精确小数；GitHub 那份旧表降为交叉校验 |
+| 物量 note | wiki `Template:ChartNotes.json` | OCR 判定数守恒校验要用 |
+| 时长 | wiki `Template:SongDuration.json` | 覆盖 552/553 |
+| 曲绘 | wiki 文件页 | `Songs_<id>.jpg`；难度变体 `Songs_<id>_<难度>.jpg` |
+| 中文别名 / 曲包显示名 | arcsong.json（GitHub） | ⚠️ 唯一还依赖 GitHub 的两项，**拉不到不致命** |
+| 游玩背景 | wiki `Template:Songlist.json` | 含 `bg`/`bg_inverse`/`side`，零歧义 |
 
-> ⭐ **wiki 上有 26 个 JSON 内容模型页面**（`contentmodel: json`），实测全部可取，
-> 包括 `Songlist` / `ChartConstant` / `ChartNotes` / `SongDuration` / `ChartConstantHistory` 等。
-> 其中 `Songlist`（554 首）与 `ChartNotes`（554 首，与现有值 **1041 一致 / 0 不一致**）
-> **都已超过 2023 年的上游数据**（arcsong.json 335 首 / ChartConstant.json 318 首）。
-> **把曲库主源切到 wiki 是既定方向，但会改动 song_id**，详见 `scripts/README.md`。
-
-**⚠️ 上游曲库（arcsong.json / ChartConstant.json）停留在 2023 年**，不含 2024–2026 新曲。脚本每次运行都会打印告警。
+> ⭐ **wiki 上有 26 个 JSON 内容模型页面**（`contentmodel: json`），实测全部可取。
+> **2026-09 已把曲库主源从 2023 年的 GitHub 仓库切到这里** —— 可解析曲目 335 → 553，
+> 「元数据不全」的曲目 198 → **11**。切换经过与踩过的坑见 `scripts/README.md`。
+> ⚠️ GitHub 那两份（arcsong / ChartConstant）**仍然停在 2023 年**，只作补充与交叉校验。
 
 ### song_id 的三级对齐
 
