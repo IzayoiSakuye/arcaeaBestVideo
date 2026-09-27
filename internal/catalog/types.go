@@ -50,6 +50,7 @@ type Chart struct {
 	Constant       *float64 `json:"constant"`
 	ConstantSource *string  `json:"constant_source"`
 	Video          *Video   `json:"video"`
+	Jacket         *Jacket  `json:"jacket"`
 }
 
 // Video 是歌曲对应的视频信息表，如果有多个视频来源会填入slice

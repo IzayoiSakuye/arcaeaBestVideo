@@ -74,6 +74,32 @@ func Load(path string, supportedSchema int) (*Catalog, error) {
 	return &catalog, nil
 }
 
+// JacketPath 用于快速获取歌曲封面的本地路径
+func (c *Catalog) JacketPath(SongID, diff string) (string, error) {
+	if SongID == "" || diff == "" {
+		return "", fmt.Errorf("catalog: invalid song id or difficulty")
+	}
+	song, ok := c.Song(SongID)
+	if !ok {
+		return "", fmt.Errorf("catalog: unable to find song %s (%s)", SongID, diff)
+	}
+	if ch, ok := c.Chart(SongID, diff); ok && usableJacket(ch.Jacket) {
+		return *ch.Jacket.Local256, nil
+	}
+	if usableJacket(song.Jacket) {
+		return *song.Jacket.Local256, nil
+	}
+	return "", fmt.Errorf("catalog: unable to find jacket for song %s (%s)", SongID, diff)
+}
+
+// usableJacket 判断该封面是否可以使用
+func usableJacket(j *Jacket) bool {
+	if j != nil && j.Bundled && j.Local256 != nil && *j.Local256 != "" {
+		return true
+	}
+	return false
+}
+
 // validateSongInfo 校验一条曲目记录是否可用
 func validateSongInfo(song *Song) error {
 	if song == nil {
