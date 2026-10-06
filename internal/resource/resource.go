@@ -1,12 +1,32 @@
 package resource
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
 	"rhythm-game-bvideo/internal/catalog"
 	"rhythm-game-bvideo/internal/tools"
 )
+
+// LoadBgManifest 用于将bg.json相关数据解析为BgManifest结构体
+func LoadBgManifest(path string) (*BgManifest, error) {
+	if path == "" {
+		return nil, fmt.Errorf("no path provided")
+	}
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read %s bg manifest: %w", path, err)
+	}
+	var r BgManifest
+	if err := json.Unmarshal(b, &r); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal %s bg manifest: %w", path, err)
+	}
+	if len(r.Songs) == 0 {
+		return nil, fmt.Errorf("no songs found in %s", path)
+	}
+	return &r, nil
+}
 
 // BgPath 用于拼接背景的文件路径
 func (bm *BgManifest) BgPath(songID, size string) (string, error) {
