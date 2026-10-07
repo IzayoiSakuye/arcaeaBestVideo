@@ -30,7 +30,8 @@
 | 阶段 1–4：`catalog` / `tools` / `render` / `resource` + `cmd/pipeline` | ✅ **端到端跑通** |
 | 阶段 5 性能实测 | ✅ **50 段外推 6.3 分钟**（预算 ≤10） |
 | 阶段 6 收尾 | ✅ spike 已删（`b49a19c`）· 从零重跑通过 · G1 材料已写 |
-| **🚦 门禁 G1** | ⬅ 下一步：把成品给 5–10 个 Arcaea 玩家看 |
+| **🚦 门禁 G1** | ✅ **已过**（2026-10，多数玩家说想要） |
+| **P2 成绩层** | ⬅ 下一步：骨架优先（导入 → 校对 → 出片），规格见 `docs/04-P2实现规格.md` |
 
 **验收已过的四条**：`go build/vet/test` 干净 · 每段 ffprobe 参数一致且 `concat -c copy` 成功 ·
 单段耗时 ×50 ≤10 分钟 · **运行时不写 `data/`** · 产物幂等（输入指纹 + `.part` 原子改名）。
@@ -51,6 +52,12 @@ concat      0.5s/次
 
 **G1 门禁**（`docs/01-开发流程.md` §3.7）：把成品给 **5–10 个 Arcaea 玩家**看，
 问「你会想要一个吗？」**多数人说想要 → 进 P2；反应平淡 → 停下来重新想产品形态。**
+
+> ✅ **2026-10 已过**：多数玩家说想要。反馈里唯一的**具体短板是「成绩录入太麻烦 / 要能直接导入截图」**
+> —— 所以 P2 的顺序是**骨架优先**（导入 → 校对 → 出片），OCR 押后；
+> 且校对表要能在录入时**实时跑六条自检**，把"打错数字"当场暴露（见 `docs/04-P2实现规格.md` §0）。
+> ⚠️ 另有两条待办：**3–5 张真实成绩图**（G2 的测试集，已收集待归档）与
+> **wiki 的 Anubis 盾目前过不去**（`anubis-fetch.ts` 连续 3 次挑战失败，数据管线刷新可能已受影响）。
 
 ---
 
@@ -118,7 +125,7 @@ samples/                  sample-project.json（P1 的输入契约）
 frontend/                 React 19 + Vite 7（最小壳，只调 Version() 验证 bindings）
 templates/                ★ 成片模板：bg16-9.png / bg4-3.png / text.html / 字体
 build/                    Wails 打包资源（是源码，要提交）；build/bin/ 是产物，忽略
-docs/                     00-方案讨论.md / 01-开发流程.md / 02-P1实现规格.md / 03-G1门禁材料.md（**都不入库**）
+docs/                     00-方案讨论.md / 01-开发流程.md / 02-P1实现规格.md / 03-G1门禁材料.md / 04-P2实现规格.md（**都不入库**）
 scripts/                  构建期工具（TS，零依赖，不参与运行时）
   lib/types.ts            数据契约
   lib/anubis-fetch.ts     Anubis PoW 反爬客户端（三个必读的坑）
@@ -130,6 +137,7 @@ scripts/                  构建期工具（TS，零依赖，不参与运行时�
   build-catalog.ts        ⑤ 合并成应用唯一读取的目录
   report-arcaea-index.ts  ⑥ 质量报告
   pack-data.ts            ⑦ 打包发布
+  check-ptt-formula.ts    § 潜力值公式自检（**不产数据**；Go 版公式的对拍 oracle）
 data/                     ⚠️ 构建产物，不进版本库（例外：song-id-aliases.json）
   arcaea-catalog.json     ⭐ 应用唯一读取的目录（564 曲 / 1849 谱面）
   arcaea-backgrounds.json 曲目→背景映射（权威）
@@ -258,6 +266,7 @@ node scripts/build-song-db.ts && node scripts/build-arcaea-index.ts --quiet \
 node scripts/build-backgrounds.ts --coverage   # 背景映射覆盖率（不下载）
 node scripts/build-arcaea-index.ts --self-test # 解析器回归（改解析逻辑后必跑）
 node scripts/report-arcaea-index.ts            # 质量报告
+node scripts/check-ptt-formula.ts              # 潜力值公式自检（改公式 / 曲库刷新后必跑）
 node scripts/pack-data.ts --emit-tree --base-url https://<域名>/arcaea
 ```
 
@@ -273,6 +282,7 @@ node scripts/pack-data.ts --emit-tree --base-url https://<域名>/arcaea
 | `docs/01-开发流程.md` | ★ **路线图**：P0–P6 阶段、**门禁**、风险回退、分工 |
 | `docs/02-P1实现规格.md` | ★ **P1 实现规格**：阶段 0–6，含接口签名、锁定常量、golden test 方法、验收点 |
 | `docs/03-G1门禁材料.md` | ★ **G1 材料**：开场白、判定标准、耗时/覆盖度数据、**怎么问才不问坏** |
+| `docs/04-P2实现规格.md` | ★ **P2 实现规格**：成绩层契约、字段权威性、六条自检、编排搬迁、验收点（**§2 三个前提已裁决**） |
 | `internal/render/testdata/README.md` | golden argv 怎么捕获、**两份 golden 的区别**、翻译时的坑 |
 | `scripts/README.md` | 脚本用法、Anubis 过盾、曲绘命名规律、数据分发策略 |
 | `docs/*-research.md` | 调研原始报告（部分结论已被主文档修正，**冲突时以主文档为准**） |

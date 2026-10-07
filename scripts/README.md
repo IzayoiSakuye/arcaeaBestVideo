@@ -685,6 +685,38 @@ node scripts/report-arcaea-index.ts --no-song-db
 
 ---
 
+## check-ptt-formula.ts
+
+潜力值公式自检 —— **不产出数据，只做验证**（不参与构建管线，随时可跑）。
+
+```bash
+node scripts/check-ptt-formula.ts
+node scripts/check-ptt-formula.ts --catalog data/arcaea-catalog.json --expect 13.438
+```
+
+两部分：
+
+1. **单曲 ptt 参考节点**（15 项断言）：wiki「潜力值」页给的 7 个分数节点 × TL/TC 两列，
+   外加一条下界（`max(0, …)`）。
+2. **用曲库反推理论最高 PTT**：每个谱面按"1000 万分 + PM"（定数 + 2.2）取最高的 50 个，
+   算 `(Σb50 + Σb10) / 60`，与 wiki 公布的 **13.438** 对拍（容差 0.001，不过就 exit 1）。
+
+**为什么值得单独留一个脚本：**
+
+- **数据层回归**：13.438 是**独立于我们曲库的第三方事实**。定数分布被上游改坏（漏抓、错位、
+  版本回退），这个数立刻漂 —— 比翻 catalog 快得多。
+- **Go 版公式的 oracle**：`internal/score` 的单曲 ptt 写完，用同一张表对拍。
+  **只让 Go 自己跟自己比不行** —— 那只能证明它自洽，证明不了它没抄错。
+
+> 当前实测（2026-10，`data/arcaea-catalog.json` 1832 条定数）：
+> 最高定数 12（`deinosphainein` BYD）、第 50 名单曲 ptt 13.0000（`blackmind` FTR）、
+> 理论最高 PTT **13.4383** ✅ 与 wiki 的 13.438 一致。
+
+> ⚠️ 13.438 是**池相关**的量：受"最高定数的谱面数量有限"约束，**不是**公式上限
+> （单曲 ptt 上限是 最高定数 + 2.2）。别把它当成常量写死进代码去断言。
+
+---
+
 ## 索引重建频率
 
 合集是"活的"——UP 主可以随时增删改合集与分P。建议：
