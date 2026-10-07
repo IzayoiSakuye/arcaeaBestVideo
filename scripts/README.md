@@ -694,42 +694,15 @@ node scripts/report-arcaea-index.ts --no-song-db
 
 ---
 
-## spike-sample-video.ts —— P1 样片（⚠️ 临时脚本）
+## spike-sample-video.ts（已删除）
 
-```bash
-node scripts/spike-sample-video.ts                 # 默认 3 首
-node scripts/spike-sample-video.ts --songs fractureray,aegleseeker
-node scripts/spike-sample-video.ts --limit 1
-```
+P1 的临时样片脚本，2026-10 阶段 6 删掉 —— 它的使命是**把管线跑通、把编码参数定死、把坑暴露出来**。
+argv 已被 `internal/render/testdata/golden-commands*.json` 逐字固化，Go 侧照它对齐；
+它原来的活（`.cache/spike/work/`、`dist/sample/sample.mp4`）现在由 `go run ./cmd/pipeline` 接管。
 
-把整条成片管线跑通：**背景(模糊) → 谱面录像 → 装饰层 → 文字层 → 四层合成 → concat 拼接**。
+---
 
-| 项 | 说明 |
-|---|---|
-| 输入 | `data/arcaea-catalog.json`（视频来源 + 画幅 + 曲绘路径）+ `data/arcaea-backgrounds.json`（背景）+ `templates/`（两套装饰层 bg16-9 / bg4-3） |
-| 产出 | `.cache/spike/work/<曲目>/`（中间产物）、`dist/sample/sample.mp4`（成片） |
-| 片段缓存 | `.cache/clips/<song_id>.mp4` —— **固定位置**，调设计重跑不会重新下载 |
-| 模板选择 | **按 `sources[].video_width/height` 自动选** 16:9 / 4:3 装饰层，**不用先下载** |
-| 图层 | 背景 → 视频 → **曲绘** → 装饰层 → 文字（曲绘必须在装饰层**下面**，洞口是挖出来的） |
-| 音频 | 保留片段自带音频，统一编码成 `aac 192k / 48000Hz / 立体声`，这样 concat `-c copy` 对音视频都成立 |
-| 依赖 | ffmpeg、ffprobe、yt-dlp、Edge（可用 `--ffmpeg/--ytdlp/--edge` 覆盖） |
-
-> ⚠️ **这是 spike，不是应用的实现。** 它存在的唯一意义是把管线跑通、把编码参数定死、
-> 把坑暴露出来。**之后 Go 侧照着重写，然后这个脚本就该删掉。不要往它上面加功能。**
-
-**实测数据**（3 首，2026-09）：
-
-| 项 | 数值 |
-|---|---|
-| 纯处理（下载命中缓存） | **6.28 s/首** → 50 首约 **5.2 分钟** |
-| 下载 | 约 **8 s/首**（1080p，只取 55–69s 区间，约 7MB） |
-| 单段产物 | 10 s / 1920×1080@30 / 约 4.5 MB |
-| 三段参数一致性 | `h264,1920,1080,1:1,yuv420p,30/1` —— concat `-c copy` 成功 |
-
-> 串行跑 50 首约 11.9 分钟，**略超 ≤10 分钟的目标，瓶颈全在下载**。
-> 把「下载下一首」和「渲染当前首」做成流水线之后，总时长约等于 max(渲染, 下载) ≈ 6.7 分钟。
-
-### ⭐ ffmpeg 的 Range 行为（用本地代理实测出来的）
+## ⭐ ffmpeg 的 Range 行为（用本地代理实测出来的）
 
 **结论：`-ss` 放在 `-i` 前面时，ffmpeg 只拉两段就把片段取回来了，不会下全片。**
 

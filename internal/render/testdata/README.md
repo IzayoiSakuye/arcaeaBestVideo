@@ -9,6 +9,10 @@
 
 两份的区别与各自覆盖什么，见下面「两份 golden，别搞混」一节。
 
+> 同目录下的 `golden-raw.jsonl` / `golden-project-raw.jsonl` 是**捕获回来的原料**
+> （一行一条 argv，没做 token 替换，含本机绝对路径）。两份 golden 是从它整理出来的，
+> **别删** —— 派生文件对不上时，只能靠它回溯。
+
 ## 为什么是"捕获"而不是"手抄"
 
 Go 侧要把 spike 的命令**逐字翻译**过去，而防翻译漂移的唯一可靠手段是 golden test。
@@ -20,11 +24,19 @@ Go 侧要把 spike 的命令**逐字翻译**过去，而防翻译漂移的唯一
 
 ## 怎么重新捕获
 
+⚠️ **捕获用的 spike 已于 2026-10 删除**（`b49a19c`），现在只存在于 git 历史里。
+`cmd/pipeline` 也还没有 `--log-commands`，所以捕获路径目前是**断的**。要重新捕获：
+
 ```bash
-# 在仓库根目录
-node scripts/spike-sample-video.ts --songs testify,tempestissimo \
+# 从历史里把 spike 捞出来（752 行）
+git show b49a19c^:scripts/spike-sample-video.ts > /tmp/spike.ts
+
+node /tmp/spike.ts --project samples/sample-project.json \
   --log-commands /tmp/cmds.jsonl --quiet
 ```
+
+> 长期做法是给 `cmd/pipeline` 补一个**只记录、不改变行为**的 `--log-commands`。
+> **改 `templates/` 版式或洞口坐标时你就需要它** —— 那正是这两份 golden 唯一测不住的地方。
 
 然后把 `/tmp/cmds.jsonl` 里的机器相关路径换成下面三个 token。
 

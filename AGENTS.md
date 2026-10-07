@@ -29,7 +29,8 @@
 | P0 地基 | ✅ |
 | 阶段 1–4：`catalog` / `tools` / `render` / `resource` + `cmd/pipeline` | ✅ **端到端跑通** |
 | 阶段 5 性能实测 | ✅ **50 段外推 6.3 分钟**（预算 ≤10） |
-| **阶段 6 收尾 + 🚦 门禁 G1** | ⬅ 下一步 |
+| 阶段 6 收尾 | ✅ spike 已删（`b49a19c`）· 从零重跑通过 · G1 材料已写 |
+| **🚦 门禁 G1** | ⬅ 下一步：把成品给 5–10 个 Arcaea 玩家看 |
 
 **验收已过的四条**：`go build/vet/test` 干净 · 每段 ffprobe 参数一致且 `concat -c copy` 成功 ·
 单段耗时 ×50 ≤10 分钟 · **运行时不写 `data/`** · 产物幂等（输入指纹 + `.part` 原子改名）。
@@ -44,6 +45,8 @@ concat      0.5s/次
 50 段外推 ≈ 6.3 分钟 ✅
 ```
 
+> ⚠️ **冷启动最慢**：`.cache/edge-profile/` 不存在时首轮 text 涨到 1.55s/段，外推 **6.8 分钟**，
+> 之后回落到 0.96s/段。两个数都在预算内，但报数时要说清是冷还是热。
 > 真超预算时第一个该动的是 `-preset`（`medium` → `veryfast`，快 2–3 倍、文件大 10–20%）。
 
 **G1 门禁**（`docs/01-开发流程.md` §3.7）：把成品给 **5–10 个 Arcaea 玩家**看，
@@ -115,7 +118,7 @@ samples/                  sample-project.json（P1 的输入契约）
 frontend/                 React 19 + Vite 7（最小壳，只调 Version() 验证 bindings）
 templates/                ★ 成片模板：bg16-9.png / bg4-3.png / text.html / 字体
 build/                    Wails 打包资源（是源码，要提交）；build/bin/ 是产物，忽略
-docs/                     00-方案讨论.md / 01-开发流程.md / 02-P1实现规格.md（**都不入库**）
+docs/                     00-方案讨论.md / 01-开发流程.md / 02-P1实现规格.md / 03-G1门禁材料.md（**都不入库**）
 scripts/                  构建期工具（TS，零依赖，不参与运行时）
   lib/types.ts            数据契约
   lib/anubis-fetch.ts     Anubis PoW 反爬客户端（三个必读的坑）
@@ -127,7 +130,6 @@ scripts/                  构建期工具（TS，零依赖，不参与运行时�
   build-catalog.ts        ⑤ 合并成应用唯一读取的目录
   report-arcaea-index.ts  ⑥ 质量报告
   pack-data.ts            ⑦ 打包发布
-  spike-sample-video.ts   ⚠️ 临时 P1 样片管线（阶段 6 要删）
 data/                     ⚠️ 构建产物，不进版本库（例外：song-id-aliases.json）
   arcaea-catalog.json     ⭐ 应用唯一读取的目录（564 曲 / 1849 谱面）
   arcaea-backgrounds.json 曲目→背景映射（权威）
@@ -270,6 +272,7 @@ node scripts/pack-data.ts --emit-tree --base-url https://<域名>/arcaea
 | `docs/00-方案讨论.md` | ★ **主文档**：设计评审、可行性、架构与流水线、性能预算、数据契约、界面结构、Arcaea 专项、竞品逆向 |
 | `docs/01-开发流程.md` | ★ **路线图**：P0–P6 阶段、**门禁**、风险回退、分工 |
 | `docs/02-P1实现规格.md` | ★ **P1 实现规格**：阶段 0–6，含接口签名、锁定常量、golden test 方法、验收点 |
+| `docs/03-G1门禁材料.md` | ★ **G1 材料**：开场白、判定标准、耗时/覆盖度数据、**怎么问才不问坏** |
 | `internal/render/testdata/README.md` | golden argv 怎么捕获、**两份 golden 的区别**、翻译时的坑 |
 | `scripts/README.md` | 脚本用法、Anubis 过盾、曲绘命名规律、数据分发策略 |
 | `docs/*-research.md` | 调研原始报告（部分结论已被主文档修正，**冲突时以主文档为准**） |
