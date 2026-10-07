@@ -104,6 +104,60 @@ type SegInput struct {
 	Value    map[string]string `json:"value"`
 }
 
+// 分阶段计算耗时
+type mark struct {
+	phase string
+	ms    int64
+}
+
+var (
+	marks   []mark
+	lastLap time.Time
+)
+
+// lapStart 起表, 要在幂等判断后调用 —— 跳过的段不该计入耗时
+func lapStart() { lastLap = time.Now() }
+
+func lap(phase string) {
+	now := time.Now()
+	marks = append(marks, mark{phase, now.Sub(lastLap).Milliseconds()})
+	lastLap = now
+}
+
+// reportPhases 汇总分阶段耗时
+func reportPhases(concatMs int64) {
+	phases := []string{"background", "text", "composite"}
+	rendered := len(marks) / len(phases) // 每渲染一段记 3 条
+	if rendered == 0 {
+		log.Printf("全部命中缓存，没有渲染耗时可报")
+		return
+	}
+
+	per := map[string]int64{}
+	var total int64
+	for _, m := range marks {
+		per[m.phase] += m.ms
+		total += m.ms
+	}
+
+	log.Printf("分阶段耗时（%d 段）：", rendered)
+	for _, p := range phases {
+		log.Printf("  %-11s %5.2fs/段   合计 %6.1fs   %3.0f%%",
+			p, float64(per[p])/float64(rendered)/1000,
+			float64(per[p])/1000, float64(per[p])/float64(total)*100)
+	}
+	log.Printf("  %-11s %11s   合计 %6.1fs", "concat", "—", float64(concatMs)/1000)
+
+	perSeg := float64(total) / float64(rendered) / 1000
+	est := (perSeg*50 + float64(concatMs)/1000) / 60
+	verdict := "达标"
+	if est > 10 {
+		verdict = fmt.Sprintf("超 %.1f 倍", est/10)
+	}
+	log.Printf("  单段合计      %5.2fs/段", perSeg)
+	log.Printf("  50 段外推 ≈ %.1f 分钟（预算 ≤10 分钟 → %s）", est, verdict)
+}
+
 // run 是pipeline的主体运行逻辑
 func run(c Config) error {
 	// 绝对值化路径
@@ -150,8 +204,13 @@ func run(c Config) error {
 		}
 		segs = append(segs, seg)
 	}
+	tConcat := time.Now()
 	listFile := filepath.Join(c.WorkDir, "concat.txt")
-	return render.Concat(context.Background(), tl.FFmpeg, listFile, c.Output, segs)
+	if err := render.Concat(context.Background(), tl.FFmpeg, listFile, c.Output, segs); err != nil {
+		return err
+	}
+	reportPhases(time.Since(tConcat).Milliseconds())
+	return nil
 }
 func main() {
 	args, err := parseArgs()
@@ -247,11 +306,13 @@ func renderOne(c Config, cata *catalog.Catalog, bgm *resource.BgManifest, tl *to
 	}
 
 	// 渲染
+	lapStart()
 	bgPng := filepath.Join(dir, "bg.png")
 	err = render.BuildBackground(context.Background(), tl.FFmpeg, filepath.Join(root, filepath.FromSlash(bg)), bgPng)
 	if err != nil {
 		return "", err
 	}
+	lap("background")
 
 	textPng := filepath.Join(dir, "text.png")
 	err = render.RenderText(context.Background(), valuesOf(song, chart, s), tl.Edge,
@@ -261,6 +322,8 @@ func renderOne(c Config, cata *catalog.Catalog, bgm *resource.BgManifest, tl *to
 	if err != nil {
 		return "", err
 	}
+	lap("text")
+
 	tmp := filepath.Join(dir, fmt.Sprintf("seg_%03d.part.mp4", i))
 	err = render.Composite(context.Background(), render.Layers{
 		Clip: clip, BG: bgPng,
@@ -272,6 +335,7 @@ func renderOne(c Config, cata *catalog.Catalog, bgm *resource.BgManifest, tl *to
 		os.Remove(tmp)
 		return "", err
 	}
+	lap("composite")
 
 	if err := os.Rename(tmp, seg); err != nil {
 		return "", err
