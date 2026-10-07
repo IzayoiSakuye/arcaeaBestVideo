@@ -29,15 +29,15 @@ func realCatalogPath() string {
 	return filepath.Join("..", "..", "data", "arcaea-catalog.json")
 }
 
-// sources 把 *[]VideoSource 解引用成 []VideoSource，nil 安全。
+// sources 返回该 video 的来源列表，nil 安全。
 //
-// 注：字段类型是 *[]VideoSource，每个调用点都得先解引用一次。
-// 若改成 []VideoSource，这个 helper 就能删掉（nil slice 的 len() 本来就是 0）。
+// 之所以留着这个 helper 而不是直接写 v.Sources：Video 本身可能为 nil
+// （实测 705/1350 个谱面没录像），直接取字段会 panic。
 func sources(v *Video) []VideoSource {
-	if v == nil || v.Sources == nil {
+	if v == nil {
 		return nil
 	}
-	return *v.Sources
+	return v.Sources
 }
 
 // loadFixture 用指定的 supportedSchema 加载夹具。

@@ -55,7 +55,7 @@ type Chart struct {
 
 // Video 是歌曲对应的视频信息表，如果有多个视频来源会填入slice
 type Video struct {
-	Sources *[]VideoSource `json:"sources"`
+	Sources []VideoSource `json:"sources"`
 }
 
 // PHash 是曲绘对应的哈希信息，用于OCR匹配
