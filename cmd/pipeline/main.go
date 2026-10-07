@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -91,6 +93,15 @@ type Project struct {
 	Source        Source    `json:"source"`
 	Defaults      Defaults  `json:"defaults"`
 	Songs         []Song    `json:"songs"`
+}
+
+type SegInput struct {
+	Clip     string            `json:"clip"`
+	Bg       string            `json:"bg"`
+	Jacket   string            `json:"jacket"`
+	Template string            `json:"template"`
+	Win      render.RectWin    `json:"win"`
+	Value    map[string]string `json:"value"`
 }
 
 // run 是pipeline的主体运行逻辑
@@ -195,12 +206,6 @@ func renderOne(c Config, cata *catalog.Catalog, bgm *resource.BgManifest, tl *to
 	}
 	seg := filepath.Join(dir, fmt.Sprintf("seg_%03d.mp4", i))
 
-	// 幂等
-	if !c.Force && isFile(seg) {
-		log.Printf("skipping song %s", s.SongID)
-		return seg, nil
-	}
-
 	// 计算路径
 	song, ok := cata.Song(s.SongID)
 	if !ok {
@@ -224,6 +229,22 @@ func renderOne(c Config, cata *catalog.Catalog, bgm *resource.BgManifest, tl *to
 		return "", fmt.Errorf("parse clip failed: %w", err)
 	}
 	tpl := render.Templates[resource.TemplateFor(&src)]
+	tplPath := filepath.Join(root, tpl.Source)
+	val := valuesOf(song, chart, s)
+
+	// 幂等
+	in := SegInput{
+		Clip:     clip,
+		Bg:       bg,
+		Jacket:   jacket,
+		Template: tplPath,
+		Win:      tpl.Win,
+		Value:    val,
+	}
+	if !c.Force && reusable(dir, seg, in) {
+		log.Printf("skipping song %s", s.SongID)
+		return seg, nil
+	}
 
 	// 渲染
 	bgPng := filepath.Join(dir, "bg.png")
@@ -240,17 +261,24 @@ func renderOne(c Config, cata *catalog.Catalog, bgm *resource.BgManifest, tl *to
 	if err != nil {
 		return "", err
 	}
-
+	tmp := filepath.Join(dir, fmt.Sprintf("seg_%03d.part.mp4", i))
 	err = render.Composite(context.Background(), render.Layers{
 		Clip: clip, BG: bgPng,
-		Jacket:   filepath.Join(c.Root, filepath.FromSlash(jacket)),
-		Template: filepath.Join(c.Root, tpl.Source),
+		Jacket:   filepath.Join(root, filepath.FromSlash(jacket)),
+		Template: filepath.Join(root, tpl.Source),
 		Text:     textPng, Win: tpl.Win,
-	}, seg, tl.FFmpeg)
+	}, tmp, tl.FFmpeg)
 	if err != nil {
+		os.Remove(tmp)
 		return "", err
 	}
 
+	if err := os.Rename(tmp, seg); err != nil {
+		return "", err
+	}
+	if err := os.WriteFile(filepath.Join(dir, "input.json"), []byte(in.hash()), 0o644); err != nil {
+		return "", err
+	}
 	return seg, nil
 }
 
@@ -312,4 +340,27 @@ func diffName(d string) string {
 func isFile(p string) bool {
 	fi, err := os.Stat(p)
 	return err == nil && fi.Mode().IsRegular()
+}
+
+// hash 用于幂等去重的证据
+func (in SegInput) hash() string {
+	b, err := json.Marshal(in)
+	if err != nil {
+		return ""
+	}
+	sum := sha256.Sum256(b)
+	return hex.EncodeToString(sum[:])
+}
+
+// reusable 用于去重
+func reusable(dir, seg string, in SegInput) bool {
+	if !isFile(seg) {
+		return false
+	}
+	b, err := os.ReadFile(filepath.Join(dir, "input.json"))
+	if err != nil {
+		return false
+	}
+	want := in.hash()
+	return want != "" && strings.TrimSpace(string(b)) == want
 }
