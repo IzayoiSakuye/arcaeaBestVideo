@@ -70,7 +70,7 @@ func TextArgs(textHTMLPath, profileDir, dest string, values map[string]string) [
 	for k, v := range values {
 		qu.Set(k, v)
 	}
-	htmlPath := url.URL{Scheme: "file", Path: "/" + textHTMLPath, RawQuery: qu.Encode()}
+	htmlPath := url.URL{Scheme: "file", Path: "/" + filepath.ToSlash(textHTMLPath), RawQuery: qu.Encode()}
 	return []string{
 		"--headless=new",
 		"--disable-gpu",
