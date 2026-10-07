@@ -57,6 +57,9 @@ func RenderText(ctx context.Context, values map[string]string, edge, textHTMLPat
 	if err != nil {
 		return fmt.Errorf("render text error: %w, output=%s", err, strings.TrimSpace(string(out)))
 	}
+	if !isFile(dest) {
+		return fmt.Errorf("edge render text error, output=%s", strings.TrimSpace(string(out)))
+	}
 	return nil
 }
 
@@ -254,4 +257,10 @@ func Probe(ctx context.Context, ffprobe string, file string) (StreamInfo, error)
 	// 视频流和音频流拼接
 	info.CodecName = vCodec + "/" + aCodec // "h264/aac"
 	return info, nil
+}
+
+// isFile 判断传入的是不是文件
+func isFile(p string) bool {
+	fi, err := os.Stat(p)
+	return err == nil && fi.Mode().IsRegular()
 }
