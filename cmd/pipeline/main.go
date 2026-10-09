@@ -2,22 +2,16 @@ package main
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
-	"encoding/json"
 	"flag"
 	"fmt"
 	"log"
-	"math"
-	"os"
 	"path/filepath"
+	"time"
+
 	"rhythm-game-bvideo/internal/catalog"
-	"rhythm-game-bvideo/internal/render"
+	"rhythm-game-bvideo/internal/job"
 	"rhythm-game-bvideo/internal/resource"
 	"rhythm-game-bvideo/internal/tools"
-	"strconv"
-	"strings"
-	"time"
 )
 
 // flags 参数初始化
@@ -32,399 +26,88 @@ var (
 	limit   = flag.Int("limit", 0, "只处理前 N 首（0 = 全部）")
 )
 
-// Config 是flags用到的参数
-type Config struct {
-	Project  string
-	Output   string
-	Root     string
-	DataDir  string
-	WorkDir  string
-	ClipsDir string
-	Force    bool
-	Limit    int
+func main() {
+	flag.Parse()
+	if flag.NArg() >= 1 {
+		log.Fatal(fmt.Errorf("unknown argument: %s", flag.Args()))
+	}
+
+	abs, err := filepath.Abs(*dataDir)
+	if err != nil {
+		log.Fatal(err)
+	}
+	cata, err := catalog.Load(filepath.Join(abs, "arcaea-catalog.json"), 1)
+	if err != nil {
+		log.Fatal(fmt.Errorf("catalog load failed: %w", err))
+	}
+	bgm, err := resource.LoadBgManifest(filepath.Join(abs, "arcaea-backgrounds.json"))
+	if err != nil {
+		log.Fatal(fmt.Errorf("bg load failed: %w", err))
+	}
+	tl, err := tools.Resolve(tools.Detect(tools.Tools{}))
+	if err != nil {
+		log.Fatal(fmt.Errorf("tools resolve failed: %w", err))
+	}
+
+	// CLI 只把事件打成日志；App 里换成 runtime.EventsEmit，编排本身不用动。
+	j := job.NewJob(
+		job.Deps{Catalog: cata, Bg: bgm, Tools: tl},
+		job.Config{
+			Project:  *project,
+			Output:   *out,
+			Root:     *root,
+			DataDir:  *dataDir,
+			WorkDir:  *workDir,
+			ClipsDir: *clips,
+			Force:    *force,
+			Limit:    *limit,
+		},
+		func(ev job.Event) {
+			if ev.Status == job.StatusSkipped {
+				log.Printf("skipping song %s", ev.SongID)
+			}
+		},
+	)
+
+	res, err := j.Run(context.Background())
+	if err != nil {
+		log.Fatal(err)
+	}
+	printPhases(res)
 }
 
-// 下面的接口是Project接口细分
-type Player struct {
-	Name        string  `json:"name"`
-	Rating      float64 `json:"rating"`
-	RatingLabel string  `json:"rating_label"`
-}
-type Source struct {
-	Type       string  `json:"type"`
-	Provider   string  `json:"provider"`
-	Confidence float64 `json:"confidence"`
-}
-type Defaults struct {
-	Clips struct {
-		StartMs    int `json:"start_ms"`
-		DurationMs int `json:"duration_ms"`
-	} `json:"clips"`
-}
-type DiffRef struct {
-	Name     string  `json:"name"`
-	Level    string  `json:"level"`
-	Constant float64 `json:"constant"`
-}
-type ScoreRef struct {
-	Achievement float64 `json:"achievement"`
-	Rank        string  `json:"rank"`
-	Pure        int     `json:"pure"`
-	Far         int     `json:"far"`
-	Lost        int     `json:"lost"`
-}
-type UserRef struct {
-	Comment string `json:"comment"`
-}
-
-type Song struct {
-	Index      int      `json:"index"`
-	SongID     string   `json:"song_id"`
-	Difficulty DiffRef  `json:"difficulty"`
-	Score      ScoreRef `json:"score"`
-	User       UserRef  `json:"user"`
-}
-type Project struct {
-	SchemaVersion int       `json:"schema_version"`
-	Game          string    `json:"game"`
-	Region        string    `json:"region"`
-	Player        Player    `json:"player"`
-	SnapshotAt    time.Time `json:"snapshot_at"`
-	Source        Source    `json:"source"`
-	Defaults      Defaults  `json:"defaults"`
-	Songs         []Song    `json:"songs"`
-}
-
-type SegInput struct {
-	Clip     string            `json:"clip"`
-	Bg       string            `json:"bg"`
-	Jacket   string            `json:"jacket"`
-	Template string            `json:"template"`
-	Win      render.RectWin    `json:"win"`
-	Value    map[string]string `json:"value"`
-}
-
-// 分阶段计算耗时
-type mark struct {
-	phase string
-	ms    int64
-}
-
-var (
-	marks   []mark
-	lastLap time.Time
-)
-
-// lapStart 起表, 要在幂等判断后调用 —— 跳过的段不该计入耗时
-func lapStart() { lastLap = time.Now() }
-
-func lap(phase string) {
-	now := time.Now()
-	marks = append(marks, mark{phase, now.Sub(lastLap).Milliseconds()})
-	lastLap = now
-}
-
-// reportPhases 汇总分阶段耗时
-func reportPhases(concatMs int64) {
-	phases := []string{"background", "text", "composite"}
-	rendered := len(marks) / len(phases) // 每渲染一段记 3 条
-	if rendered == 0 {
+// printPhases 汇总分阶段耗时。格式沿用 P1，别改宽度（AGENTS.md / docs 的耗时表按它对口径）。
+func printPhases(res job.Result) {
+	if res.Rendered == 0 {
 		log.Printf("全部命中缓存，没有渲染耗时可报")
 		return
 	}
 
-	per := map[string]int64{}
-	var total int64
-	for _, m := range marks {
-		per[m.phase] += m.ms
-		total += m.ms
-	}
-
-	log.Printf("分阶段耗时（%d 段）：", rendered)
-	for _, p := range phases {
+	log.Printf("分阶段耗时（%d 段）：", res.Rendered)
+	for _, p := range job.PhaseOrder {
+		d := res.Phases[p]
 		log.Printf("  %-11s %5.2fs/段   合计 %6.1fs   %3.0f%%",
-			p, float64(per[p])/float64(rendered)/1000,
-			float64(per[p])/1000, float64(per[p])/float64(total)*100)
+			p, d.Seconds()/float64(res.Rendered), d.Seconds(), share(d, res.Phases))
 	}
-	log.Printf("  %-11s %11s   合计 %6.1fs", "concat", "—", float64(concatMs)/1000)
+	log.Printf("  %-11s %11s   合计 %6.1fs", job.PhaseConcat, "—", res.Concat.Seconds())
 
-	perSeg := float64(total) / float64(rendered) / 1000
-	est := (perSeg*50 + float64(concatMs)/1000) / 60
+	est := job.EstimateMinutes(res.Phases, res.Rendered, res.Concat)
 	verdict := "达标"
 	if est > 10 {
 		verdict = fmt.Sprintf("超 %.1f 倍", est/10)
 	}
-	log.Printf("  单段合计      %5.2fs/段", perSeg)
+	log.Printf("  单段合计      %5.2fs/段", job.PerSegment(res.Phases, res.Rendered).Seconds())
 	log.Printf("  50 段外推 ≈ %.1f 分钟（预算 ≤10 分钟 → %s）", est, verdict)
 }
 
-// run 是pipeline的主体运行逻辑
-func run(c Config) error {
-	// 绝对值化路径
-	for _, p := range []*string{&c.Root, &c.DataDir, &c.WorkDir, &c.ClipsDir} {
-		abs, err := filepath.Abs(*p)
-		if err != nil {
-			return fmt.Errorf("failed to parse filepath.Abs: %w", err)
-		}
-		*p = abs
+// share 是某阶段占三个渲染阶段总和的百分比。总和为 0 时返回 0，避免亚毫秒阶段打出 NaN。
+func share(d time.Duration, phases map[string]time.Duration) float64 {
+	var total time.Duration
+	for _, p := range job.PhaseOrder {
+		total += phases[p]
 	}
-	root := c.Root
-	for _, rel := range []string{"templates/text.html", "templates/bg16-9.png", "templates/bg4-3.png"} {
-		p := filepath.Join(root, filepath.FromSlash(rel))
-		if _, err := os.Stat(p); err != nil {
-			return fmt.Errorf("root %s missing %s", root, rel)
-		}
+	if total == 0 {
+		return 0
 	}
-	cata, err := catalog.Load(filepath.Join(c.DataDir, "arcaea-catalog.json"), 1)
-	if err != nil {
-		return fmt.Errorf("catalog load failed: %w", err)
-	}
-	bg, err := resource.LoadBgManifest(filepath.Join(c.DataDir, "arcaea-backgrounds.json"))
-	if err != nil {
-		return fmt.Errorf("bg load failed: %w", err)
-	}
-	proj, err := loadProject(c.Project)
-	if err != nil {
-		return fmt.Errorf("project load failed: %w", err)
-	}
-
-	tl, err := tools.Resolve(tools.Detect(tools.Tools{}))
-	if err != nil {
-		return fmt.Errorf("tools resolve failed: %w", err)
-	}
-
-	var segs []string
-	for i, s := range proj.Songs {
-		if c.Limit > 0 && i >= c.Limit {
-			break
-		}
-		seg, err := renderOne(c, cata, bg, &tl, i+1, s, root)
-		if err != nil {
-			return fmt.Errorf("render song %d failed: %w", i+1, err)
-		}
-		segs = append(segs, seg)
-	}
-	tConcat := time.Now()
-	listFile := filepath.Join(c.WorkDir, "concat.txt")
-	if err := render.Concat(context.Background(), tl.FFmpeg, listFile, c.Output, segs); err != nil {
-		return err
-	}
-	reportPhases(time.Since(tConcat).Milliseconds())
-	return nil
-}
-func main() {
-	args, err := parseArgs()
-	if err != nil {
-		log.Fatal(err)
-	}
-	if err := run(args); err != nil {
-		log.Fatal(err)
-	}
-}
-
-// parseArgs 用于解析参数
-func parseArgs() (Config, error) {
-	flag.Parse()
-	if flag.NArg() >= 1 {
-		return Config{}, fmt.Errorf("unknown argument: %s", flag.Args())
-	}
-	return Config{
-		Project:  *project,
-		Output:   *out,
-		DataDir:  *dataDir,
-		WorkDir:  *workDir,
-		ClipsDir: *clips,
-		Force:    *force,
-		Limit:    *limit,
-	}, nil
-}
-
-// loadProject 用于解析project的JSON内容
-func loadProject(path string) (*Project, error) {
-	if path == "" {
-		return nil, fmt.Errorf("catalog: path required")
-	}
-	content, err := os.ReadFile(path)
-	if err != nil {
-		return nil, fmt.Errorf("catalog: project load failed: %w", err)
-	}
-	var proj Project
-	if err := json.Unmarshal(content, &proj); err != nil {
-		return nil, fmt.Errorf("catalog: project load failed: %w", err)
-	}
-	return &proj, nil
-}
-
-// renderOne 用于渲染单首歌片段
-func renderOne(c Config, cata *catalog.Catalog, bgm *resource.BgManifest, tl *tools.Tools, i int, s Song, root string) (string, error) {
-	//  工作目录
-	dir := filepath.Join(c.WorkDir, fmt.Sprintf("%03d-%s", i, s.SongID))
-	err := os.MkdirAll(dir, 0o755)
-	if err != nil {
-		return "", fmt.Errorf("catalog: project create directory failed: %w", err)
-	}
-	seg := filepath.Join(dir, fmt.Sprintf("seg_%03d.mp4", i))
-
-	// 计算路径
-	song, ok := cata.Song(s.SongID)
-	if !ok {
-		return "", fmt.Errorf("song %s not found", s.SongID)
-	}
-	chart, ok := cata.Chart(s.SongID, s.Difficulty.Name)
-	if chart == nil || chart.Video == nil || len(chart.Video.Sources) == 0 {
-		return "", fmt.Errorf("no video sources for song %s", s.SongID)
-	}
-	src := chart.Video.Sources[0]
-	jacket, err := cata.JacketPath(s.SongID, s.Difficulty.Name)
-	if err != nil {
-		return "", fmt.Errorf("parse jacket path failed: %w", err)
-	}
-	bg, err := bgm.BgPath(s.SongID, "960")
-	if err != nil {
-		return "", fmt.Errorf("parse bg path failed: %w", err)
-	}
-	clip, err := resource.ClipPath(c.ClipsDir, s.SongID, s.Difficulty.Name)
-	if err != nil {
-		return "", fmt.Errorf("parse clip failed: %w", err)
-	}
-	tpl := render.Templates[resource.TemplateFor(&src)]
-	tplPath := filepath.Join(root, tpl.Source)
-	val := valuesOf(song, chart, s)
-
-	// 幂等
-	in := SegInput{
-		Clip:     clip,
-		Bg:       bg,
-		Jacket:   jacket,
-		Template: tplPath,
-		Win:      tpl.Win,
-		Value:    val,
-	}
-	if !c.Force && reusable(dir, seg, in) {
-		log.Printf("skipping song %s", s.SongID)
-		return seg, nil
-	}
-
-	// 渲染
-	lapStart()
-	bgPng := filepath.Join(dir, "bg.png")
-	err = render.BuildBackground(context.Background(), tl.FFmpeg, filepath.Join(root, filepath.FromSlash(bg)), bgPng)
-	if err != nil {
-		return "", err
-	}
-	lap("background")
-
-	textPng := filepath.Join(dir, "text.png")
-	err = render.RenderText(context.Background(), valuesOf(song, chart, s), tl.Edge,
-		filepath.Join(root, "templates/text.html"),
-		filepath.Join(root, ".cache/edge-profile"),
-		textPng)
-	if err != nil {
-		return "", err
-	}
-	lap("text")
-
-	tmp := filepath.Join(dir, fmt.Sprintf("seg_%03d.part.mp4", i))
-	err = render.Composite(context.Background(), render.Layers{
-		Clip: clip, BG: bgPng,
-		Jacket:   filepath.Join(root, filepath.FromSlash(jacket)),
-		Template: filepath.Join(root, tpl.Source),
-		Text:     textPng, Win: tpl.Win,
-	}, tmp, tl.FFmpeg)
-	if err != nil {
-		os.Remove(tmp)
-		return "", err
-	}
-	lap("composite")
-
-	if err := os.Rename(tmp, seg); err != nil {
-		return "", err
-	}
-	if err := os.WriteFile(filepath.Join(dir, "input.json"), []byte(in.hash()), 0o644); err != nil {
-		return "", err
-	}
-	return seg, nil
-}
-
-// valuesOf 用于需要的字段值
-func valuesOf(song *catalog.Song, chart *catalog.Chart, s Song) map[string]string {
-	return map[string]string{
-		"ptt":       "+12.34",                         // test
-		"score":     formatScore(s.Score.Achievement), // test
-		"pure":      strconv.Itoa(s.Score.Pure),
-		"far":       strconv.Itoa(s.Score.Far),
-		"lost":      strconv.Itoa(s.Score.Lost),
-		"title":     song.TitleEn,
-		"author":    song.Artist,
-		"diff":      diffName(chart.Difficulty) + " " + formatConstant(chart.Constant),
-		"diffClass": strings.ToLower(chart.Difficulty),
-		"comment":   s.User.Comment,
-	}
-}
-
-// formatScore 用于格式化分数
-func formatScore(ach float64) string {
-	s := strconv.FormatInt(int64(math.Round(ach*100000)), 10)
-	var b strings.Builder
-	for i, ch := range s {
-		if i > 0 && (len(s)-i)%3 == 0 {
-			b.WriteByte(',')
-		}
-		b.WriteRune(ch)
-	}
-	return b.String()
-}
-
-// formatConstant
-func formatConstant(c *float64) string {
-	if c == nil {
-		return "?"
-	}
-	return strconv.FormatFloat(*c, 'f', -1, 64) // 12 → "12"   11.7 → "11.7"
-}
-
-// diffName 是难度和文字的映射
-func diffName(d string) string {
-	switch d {
-	case "PST":
-		return "Past"
-	case "PRS":
-		return "Present"
-	case "FTR":
-		return "Future"
-	case "BYD":
-		return "Beyond"
-	case "ETR":
-		return "Eternal"
-	}
-	return d
-}
-
-// isFile 判断传入的是不是文件
-func isFile(p string) bool {
-	fi, err := os.Stat(p)
-	return err == nil && fi.Mode().IsRegular()
-}
-
-// hash 用于幂等去重的证据
-func (in SegInput) hash() string {
-	b, err := json.Marshal(in)
-	if err != nil {
-		return ""
-	}
-	sum := sha256.Sum256(b)
-	return hex.EncodeToString(sum[:])
-}
-
-// reusable 用于去重
-func reusable(dir, seg string, in SegInput) bool {
-	if !isFile(seg) {
-		return false
-	}
-	b, err := os.ReadFile(filepath.Join(dir, "input.json"))
-	if err != nil {
-		return false
-	}
-	want := in.hash()
-	return want != "" && strings.TrimSpace(string(b)) == want
+	return float64(d) / float64(total) * 100
 }
