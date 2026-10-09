@@ -1,0 +1,34 @@
+{
+  "schema_version": 1,
+  "comment": "从 dist/b50-sample.jpg 手抄的前 10 行。字段严格照图上有的来：没有 song_id / 难度代号 / 物量 / 评级 —— 那些要么靠曲库反查，要么图上根本没有。数字已用表头自校验：Σ(前10名单曲ptt) = 123.7582，图上 BEST TOP10 AVG × 10 = 123.7583（差 0.0001 是各行 round4 的累计误差）。",
+  "source": {
+    "kind": "b50_image",
+    "image": "dist/b50-sample.jpg",
+    "generator": "Yurisaki",
+    "snapshot_at": "2026-09-13T23:43:00+08:00",
+    "layout": "5 列 × 10 行；分数用撇号分隔；每格四行：曲名+#rank / 分数 / 'Potential <定数> > <单曲ptt> <通关类型>' / 'P: n (+n) F: n L: n' + 距今天数"
+  },
+  "player": {
+    "name": "样例玩家",
+    "id": "00000000",
+    "rating": 12.104,
+    "rating_note": "头像角标，三位小数；原图玩家名/ID 已替换为占位"
+  },
+  "header": {
+    "best_top10_avg": 12.37583,
+    "best_top50_avg": 12.05013,
+    "checksum_note": "Σb10 = best_top10_avg × 10 = 123.7583；Σb50 = best_top50_avg × 50 = 602.5065；PTT = (Σb50 + Σb10) / 60 = 12.1044 ≈ 图上的 12.104"
+  },
+  "songs": [
+    { "index": 1,  "title": "Ego Eimi",           "score": 9968409, "constant": 10.5, "ptt": 12.5420, "clear_type": "HC", "pure": 1218, "shiny_perfect": 1116, "far": 2,  "lost": 3, "played_days_ago": 100 },
+    { "index": 2,  "title": "Axium Crisis",       "score": 9946140, "constant": 10.6, "ptt": 12.5307, "clear_type": "HC", "pure": 1085, "shiny_perfect": 985,  "far": 6,  "lost": 3, "played_days_ago": 94 },
+    { "index": 3,  "title": "多次元宇宙融合論",       "score": 9927429, "constant": 10.6, "ptt": 12.4371, "clear_type": "HC", "pure": 1407, "shiny_perfect": 1269, "far": 9,  "lost": 6, "played_days_ago": 98 },
+    { "index": 4,  "title": "MVURBD",             "score": 9924588, "constant": 10.6, "ptt": 12.4229, "clear_type": "HC", "pure": 1481, "shiny_perfect": 1409, "far": 9,  "lost": 7, "played_days_ago": 100 },
+    { "index": 5,  "title": "ouroboros -twin stroke of the end", "score": 9902615, "constant": 10.7, "ptt": 12.4131, "clear_type": "HC", "pure": 1351, "shiny_perfect": 1228, "far": 9, "lost": 9, "played_days_ago": 64 },
+    { "index": 6,  "title": "Singularity",        "score": 9928608, "constant": 10.5, "ptt": 12.3430, "clear_type": "HC", "pure": 1095, "shiny_perfect": 1007, "far": 4,  "lost": 6, "played_days_ago": 97 },
+    { "index": 7,  "title": "MIRINAE",            "score": 9934605, "constant": 10.4, "ptt": 12.2730, "clear_type": "HC", "pure": 1266, "shiny_perfect": 1168, "far": 6,  "lost": 6, "played_days_ago": 27 },
+    { "index": 8,  "title": "Wish Upon a Snow",   "score": 9913317, "constant": 10.5, "ptt": 12.2666, "clear_type": "HC", "pure": 1293, "shiny_perfect": 1171, "far": 9,  "lost": 7, "played_days_ago": 167 },
+    { "index": 9,  "title": "Cyaëgha",            "score": 9873260, "constant": 10.7, "ptt": 12.2663, "clear_type": "HC", "pure": 1341, "shiny_perfect": 1184, "far": 19, "lost": 8, "played_days_ago": 199 },
+    { "index": 10, "title": "PUPA",               "score": 9932698, "constant": 10.4, "ptt": 12.2635, "clear_type": "HC", "pure": 1087, "shiny_perfect": 942,  "far": 9,  "lost": 3, "played_days_ago": 200 }
+  ]
+}
