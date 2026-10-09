@@ -11,22 +11,20 @@ type Catalog struct {
 // Song 是某一首歌的具体信息
 type Song struct {
 	SongID string `json:"song_id"`
-	// 标题显示，和给内部看的键
-	TitleEn   string `json:"title_en"`
-	TitleJP   string `json:"title_jp"`
-	TitleNorm string `json:"title_norm"`
-	Artist    string `json:"artist"`
-	// 曲包显示，和给内部看的键
-	Set         string `json:"set"`
-	SetFriendly string `json:"set_friendly"`
-	// 歌曲版本
-	Version string `json:"version"`
-	// 歌曲时长
-	TimeSec *int     `json:"time_sec"`
-	Jacket  *Jacket  `json:"jacket"`
-	PHash   *PHash   `json:"phash"`
-	BG      string   `json:"bg"`
-	Charts  []*Chart `json:"charts"`
+
+	TitleEn     string   `json:"title_en"` // 标题显示，和给内部看的键
+	TitleJP     string   `json:"title_jp"`
+	TitleNorm   string   `json:"title_norm"`
+	Artist      string   `json:"artist"`
+	Set         string   `json:"set"` // 曲包显示，和给内部看的键
+	SetFriendly string   `json:"set_friendly"`
+	Version     string   `json:"version"`  // 歌曲版本
+	TimeSec     *int     `json:"time_sec"` // 歌曲时长
+	Jacket      *Jacket  `json:"jacket"`
+	PHash       *PHash   `json:"phash"`
+	BG          string   `json:"bg"`
+	Charts      []*Chart `json:"charts"`
+	MatchKeys   []string `json:"match_keys"`
 }
 
 // Jacket (应名为Cover, 这里是AI爬数据时命名错误, 懒得改了) 是某一首歌对应的曲绘信息
@@ -51,6 +49,7 @@ type Chart struct {
 	ConstantSource *string  `json:"constant_source"`
 	Video          *Video   `json:"video"`
 	Jacket         *Jacket  `json:"jacket"`
+	Notes          *int     `json:"notes"`
 }
 
 // Video 是歌曲对应的视频信息表，如果有多个视频来源会填入slice
