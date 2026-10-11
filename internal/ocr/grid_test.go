@@ -70,9 +70,6 @@ func TestJacketCropIdentifiesSong(t *testing.T) {
 		t.Skipf("没有样例图：%v", err)
 	}
 	titles := fixtureTitles(t)
-	if len(titles) != 50 {
-		t.Fatalf("夹具里 %d 首，期望 50", len(titles))
-	}
 	cata, err := catalog.Load(filepath.Join("..", "..", "data", "arcaea-catalog.json"), 1)
 	if err != nil {
 		t.Skipf("没有曲库：%v", err)
@@ -127,23 +124,44 @@ func TestJacketCropIdentifiesSong(t *testing.T) {
 	}
 }
 
-func fixtureTitles(t *testing.T) []string {
+// fixtureRow 是真值夹具里的一行，只取图上看得见的字段
+type fixtureRow struct {
+	Index     int     `json:"index"`
+	Title     string  `json:"title"`
+	Score     int     `json:"score"`
+	Constant  float64 `json:"constant"`
+	PTT       float64 `json:"ptt"`
+	ClearType string  `json:"clear_type"`
+	Pure      int     `json:"pure"`
+	Shiny     int     `json:"shiny_perfect"`
+	Far       int     `json:"far"`
+	Lost      int     `json:"lost"`
+	DaysAgo   int     `json:"played_days_ago"`
+}
+
+func fixtureRows(t *testing.T) []fixtureRow {
 	t.Helper()
 	b, err := os.ReadFile(fixturePath)
 	if err != nil {
 		t.Skipf("没有夹具：%v", err)
 	}
 	var f struct {
-		Songs []struct {
-			Title string `json:"title"`
-		} `json:"songs"`
+		Songs []fixtureRow `json:"songs"`
 	}
 	if err := json.Unmarshal(b, &f); err != nil {
 		t.Fatal(err)
 	}
-	out := make([]string, 0, len(f.Songs))
-	for _, s := range f.Songs {
-		out = append(out, s.Title)
+	if len(f.Songs) != Rows*Cols {
+		t.Fatalf("夹具里 %d 行，期望 %d", len(f.Songs), Rows*Cols)
+	}
+	return f.Songs
+}
+
+func fixtureTitles(t *testing.T) []string {
+	rows := fixtureRows(t)
+	out := make([]string, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, r.Title)
 	}
 	return out
 }
