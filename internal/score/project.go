@@ -3,6 +3,7 @@ package score
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"os"
 	"time"
 )
@@ -30,11 +31,13 @@ type DiffRef struct {
 	Constant float64 `json:"constant"`
 }
 type ScoreRef struct {
-	Achievement float64 `json:"achievement"`
-	Rank        string  `json:"rank"`
-	Pure        int     `json:"pure"`
-	Far         int     `json:"far"`
-	Lost        int     `json:"lost"`
+	Achievement float64  `json:"achievement"`
+	Rank        string   `json:"rank"`
+	ClearType   string   `json:"clear_type"`
+	PTT         *float64 `json:"ptt,omitempty"`
+	Pure        int      `json:"pure"`
+	Far         int      `json:"far"`
+	Lost        int      `json:"lost"`
 }
 type UserRef struct {
 	Comment string `json:"comment"`
@@ -58,18 +61,41 @@ type Project struct {
 	Songs         []Song    `json:"songs"`
 }
 
-// loadProject 用于解析project的JSON内容
+// Score 把达成率换回整数分
+func (s ScoreRef) Score() int {
+	return int(math.Round(s.Achievement * 100000))
+}
+
+// DecodeProject 用于解码，将传入的data转换为proj结构体
+func DecodeProject(data []byte, source string) (*Project, error) {
+	if source == "" {
+		source = "<json>"
+	}
+	var head struct {
+		SchemaVersion int `json:"schema_version"`
+	}
+	if err := json.Unmarshal(data, &head); err != nil {
+		return nil, decodeError(data, source, err)
+	}
+	if head.SchemaVersion != supportedSchema {
+		return nil, fmt.Errorf("%s: 不支持的数据版本 %d (预期 %d)",
+			source, head.SchemaVersion, supportedSchema)
+	}
+	var proj Project
+	if err := json.Unmarshal(data, &proj); err != nil {
+		return nil, decodeError(data, source, err)
+	}
+	return &proj, nil
+}
+
+// LoadProject 读取文件+解码
 func LoadProject(path string) (*Project, error) {
 	if path == "" {
-		return nil, fmt.Errorf("catalog: path required")
+		return nil, fmt.Errorf("score: 需要合法文件路径")
 	}
 	content, err := os.ReadFile(path)
 	if err != nil {
-		return nil, fmt.Errorf("catalog: project load failed: %w", err)
+		return nil, fmt.Errorf("score: 无法读取 %s: %w", path, err)
 	}
-	var proj Project
-	if err := json.Unmarshal(content, &proj); err != nil {
-		return nil, fmt.Errorf("catalog: project load failed: %w", err)
-	}
-	return &proj, nil
+	return DecodeProject(content, path)
 }

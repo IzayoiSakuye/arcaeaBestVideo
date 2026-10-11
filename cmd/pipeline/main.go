@@ -53,14 +53,14 @@ func main() {
 	j := job.NewJob(
 		job.Deps{Catalog: cata, Bg: bgm, Tools: tl},
 		job.Config{
-			Project:  *project,
-			Output:   *out,
-			Root:     *root,
-			DataDir:  *dataDir,
-			WorkDir:  *workDir,
-			ClipsDir: *clips,
-			Force:    *force,
-			Limit:    *limit,
+			ProjectPath: *project,
+			Output:      *out,
+			Root:        *root,
+			DataDir:     *dataDir,
+			WorkDir:     *workDir,
+			ClipsDir:    *clips,
+			Force:       *force,
+			Limit:       *limit,
 		},
 		func(ev job.Event) {
 			if ev.Status == job.StatusSkipped {

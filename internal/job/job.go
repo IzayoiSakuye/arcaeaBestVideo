@@ -66,8 +66,11 @@ func NewJob(deps Deps, cfg Config, emit func(Event)) *Job {
 // normalize 把所有路径绝对化
 func (j *Job) normalize() error {
 	for _, p := range []*string{
-		&j.cfg.Root, &j.cfg.DataDir, &j.cfg.WorkDir, &j.cfg.ClipsDir, &j.cfg.Project, &j.cfg.Output,
+		&j.cfg.Root, &j.cfg.DataDir, &j.cfg.WorkDir, &j.cfg.ClipsDir, &j.cfg.ProjectPath, &j.cfg.Output,
 	} {
+		if *p == "" {
+			continue
+		}
 		abs, err := filepath.Abs(*p)
 		if err != nil {
 			return fmt.Errorf("failed to parse filepath.Abs: %w", err)
@@ -97,7 +100,7 @@ func (j *Job) Run(ctx context.Context) (Result, error) {
 	if err := j.validate(); err != nil {
 		return res, err
 	}
-	proj, err := score.LoadProject(j.cfg.Project)
+	proj, err := j.project()
 	if err != nil {
 		return res, fmt.Errorf("project load failed: %w", err)
 	}
@@ -139,4 +142,21 @@ func (j *Job) Run(ctx context.Context) (Result, error) {
 	res.Concat = time.Since(t)
 	j.emit(Event{Stage: StageDone, Status: StatusDone})
 	return res, nil
+}
+
+// project 负责读取project分流
+func (j *Job) project() (*score.Project, error) {
+	proj := j.cfg.Project
+	if proj == nil {
+		var err error
+		if proj, err = score.LoadProject(j.cfg.ProjectPath); err != nil {
+			return nil, err
+		}
+	}
+	for i, s := range proj.Songs {
+		if s.SongID == "" || s.Difficulty.Name == "" {
+			return nil, fmt.Errorf("第 %d 首缺 song_id 或难度名称", i+1)
+		}
+	}
+	return proj, nil
 }
