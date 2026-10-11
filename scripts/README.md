@@ -717,6 +717,54 @@ node scripts/check-ptt-formula.ts --catalog data/arcaea-catalog.json --expect 13
 
 ---
 
+## check-normalize.ts
+
+归一化落差审计 —— **不产出数据，只做验证**。
+
+```bash
+node scripts/check-normalize.ts              # 默认期望落差 2 首
+node scripts/check-normalize.ts --expect 5   # 曲库变了就调这个数
+```
+
+**为什么需要它**：曲库里的 `title_norm` / `match_keys` 是构建期用 TS 归一化过的
+（`build-catalog.ts:244`：NFKC → NFD → 剥组合记号 → 引号/破折号 → 小写）。
+而**应用侧（Go）标准库没有 NFKC / NFD** —— 这是成绩导入「曲目定位」的真实缺口（`docs/05` §6.1）。
+
+脚本把 Go 能做到的部分实现一遍（**不做 NFKC 兼容分解**），对拍 catalog 自带的
+564 组 `(title_en, title_norm)`，报出落差：
+
+```
+曲目总数 564，title 含非 ASCII 的 32 首
+方案 B（不引 x/text）失配 2 首：
+  ii          raw=" ͟͝͞Ⅱ́̕ "       曲库="ii"           方案B="ⅱ"
+  incarnator  raw="INCARNATOR₀₀"  曲库="incarnator00"  方案B="incarnator₀₀"
+```
+
+**这个数字决定「引不引 `golang.org/x/text/unicode/norm`」**：
+
+- 落差 2 首 → 引依赖（`x/text` 已在 go.mod 里，只是 indirect→direct），或接受这 2 首走人工候选
+- 落差变大 → TS 侧新增了依赖 NFKC 的写法，需重新评估
+
+> ⚠️ **这个 2 是"下限"，不是"方案 B 的全部代价"。** 本脚本用 TS 实现方案 B，所以它**还有 NFD 可用**；
+> Go 手写连 NFD 都要自己仿 —— 实测第一次跑就另外漏了两类（`go test ./internal/catalog/...`）：
+>
+> ```
+> neokosmo    "nέο κόsmo" → 曲库 "nεο κοsmo"   希腊文 tonos（预组合，仍需分解）
+> sacrosanct  "⊥⊬"        → 曲库 "⊥⊢"          ⊬ 的规范分解 = ⊢ + 叠加斜线
+> ```
+>
+> **NFD 是全 Unicode 的分解表，手写必然漏。** 所以 2026-10 的结论是**走方案 A（引 `x/text`）**，
+> 最终由 `internal/catalog` 的 564 组对拍守住。本脚本留着，是为了记录"当初若不引依赖要付多少代价"。
+
+> ⚠️ **不要为了让它变绿而改 TS 侧归一化** —— 那会改掉 564 首既有的 `match_keys`，要重跑管线，
+> 且把"应用侧能力不足"伪装成"数据侧没问题"。落差要如实暴露。
+
+> ⭐ 更强的对拍在 Go 侧：`catalog` 的单测应遍历全部 564 首断言
+> `NormalizeKey(title_en) == title_norm`。那条测试测的是**真的实现**；
+> 本脚本只回答"值不值得引依赖"这个设计问题。
+
+---
+
 ## 索引重建频率
 
 合集是"活的"——UP 主可以随时增删改合集与分P。建议：

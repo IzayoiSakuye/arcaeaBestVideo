@@ -125,7 +125,7 @@ samples/                  sample-project.json（P1 的输入契约）
 frontend/                 React 19 + Vite 7（最小壳，只调 Version() 验证 bindings）
 templates/                ★ 成片模板：bg16-9.png / bg4-3.png / text.html / 字体
 build/                    Wails 打包资源（是源码，要提交）；build/bin/ 是产物，忽略
-docs/                     00-方案讨论.md / 01-开发流程.md / 02-P1实现规格.md / 03-G1门禁材料.md / 04-P2实现规格.md（**都不入库**）
+docs/                     00-方案讨论.md / 01-开发流程.md / 02-P1实现规格.md / 03-G1门禁材料.md / 04-P2实现规格.md / 05-validate规格.md（**都不入库**）
 scripts/                  构建期工具（TS，零依赖，不参与运行时）
   lib/types.ts            数据契约
   lib/anubis-fetch.ts     Anubis PoW 反爬客户端（三个必读的坑）
@@ -138,6 +138,7 @@ scripts/                  构建期工具（TS，零依赖，不参与运行时�
   report-arcaea-index.ts  ⑥ 质量报告
   pack-data.ts            ⑦ 打包发布
   check-ptt-formula.ts    § 潜力值公式自检（**不产数据**；Go 版公式的对拍 oracle）
+  check-normalize.ts      § 归一化落差审计（Go 复刻 TS 归一化会漏几首 → 决定引不引 x/text）
 data/                     ⚠️ 构建产物，不进版本库（例外：song-id-aliases.json）
   arcaea-catalog.json     ⭐ 应用唯一读取的目录（564 曲 / 1849 谱面）
   arcaea-backgrounds.json 曲目→背景映射（权威）
@@ -267,6 +268,7 @@ node scripts/build-backgrounds.ts --coverage   # 背景映射覆盖率（不下�
 node scripts/build-arcaea-index.ts --self-test # 解析器回归（改解析逻辑后必跑）
 node scripts/report-arcaea-index.ts            # 质量报告
 node scripts/check-ptt-formula.ts              # 潜力值公式自检（改公式 / 曲库刷新后必跑）
+node scripts/check-normalize.ts                # 归一化落差审计（改归一化规则后必跑）
 node scripts/pack-data.ts --emit-tree --base-url https://<域名>/arcaea
 ```
 
@@ -283,6 +285,7 @@ node scripts/pack-data.ts --emit-tree --base-url https://<域名>/arcaea
 | `docs/02-P1实现规格.md` | ★ **P1 实现规格**：阶段 0–6，含接口签名、锁定常量、golden test 方法、验收点 |
 | `docs/03-G1门禁材料.md` | ★ **G1 材料**：开场白、判定标准、耗时/覆盖度数据、**怎么问才不问坏** |
 | `docs/04-P2实现规格.md` | ★ **P2 实现规格**：成绩层契约、字段权威性、六条自检、编排搬迁、验收点（**§2 三个前提已裁决**） |
+| `docs/05-validate规格.md` | ★ **validate 规格**：阻断路径、Severity 四档、三级曲目定位、**归一化跨语言缺口**、夹具与验收点 |
 | `internal/render/testdata/README.md` | golden argv 怎么捕获、**两份 golden 的区别**、翻译时的坑 |
 | `scripts/README.md` | 脚本用法、Anubis 过盾、曲绘命名规律、数据分发策略 |
 | `docs/*-research.md` | 调研原始报告（部分结论已被主文档修正，**冲突时以主文档为准**） |
