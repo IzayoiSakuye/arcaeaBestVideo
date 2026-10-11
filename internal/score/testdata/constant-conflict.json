@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "game": "arcaea",
+  "songs": [
+    {
+      "index": 1,
+      "song_id": "egoeimi",
+      "difficulty": { "name": "FTR", "level": "10", "constant": 11.5 },
+      "score": { "achievement": 99.68409, "clear_type": "HC", "pure": 1218, "far": 2, "lost": 3 }
+    }
+  ]
+}

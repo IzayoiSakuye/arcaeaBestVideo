@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "game": "arcaea",
+  "songs": [
+    {
+      "index": 1,
+      "song_id": "cyagha",
+      "score": { "achievement": 98.7326, "clear_type": "HC" }
+    },
+    {
+      "index": 2,
+      "song_id": "egoeimi",
+      "difficulty": { "name": "FTR", "constant": 10.5 },
+      "score": { "achievement": 99.68409, "clear_type": "HC" }
+    },
+    {
+      "index": 3,
+      "song_id": "zzzzznotasong",
+      "score": { "achievement": 99.0, "clear_type": "HC" }
+    }
+  ]
+}

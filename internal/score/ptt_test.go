@@ -110,6 +110,9 @@ type b50Fixture struct {
 		BestTop10Avg float64 `json:"best_top10_avg"`
 		BestTop50Avg float64 `json:"best_top50_avg"`
 	} `json:"header"`
+	Player struct {
+		Rating float64 `json:"rating"`
+	} `json:"player"`
 	Songs []struct {
 		Index     int     `json:"index"`
 		Title     string  `json:"title"`
@@ -122,7 +125,7 @@ type b50Fixture struct {
 
 func loadB50Fixture(t *testing.T) b50Fixture {
 	t.Helper()
-	b, err := os.ReadFile(filepath.Join("testdata", "b50-from-image-10.json"))
+	b, err := os.ReadFile(filepath.Join("testdata", "b50-from-image.json"))
 	if err != nil {
 		t.Fatalf("读夹具失败：%v", err)
 	}
@@ -136,8 +139,12 @@ func loadB50Fixture(t *testing.T) b50Fixture {
 	return f
 }
 
-// 用公式重算图上那 10 行，必须逐行命中。这组比 A 组更有价值：
+// 用公式重算图上那 50 行，必须逐行严格相等。这组比 A 组更有价值：
 // A 组只证明"和 oracle 抄了同一份文档"，B 组证明公式能解释真实玩家数据。
+//
+// 实测 50/50 精确命中 —— 包括 #14 GLORY：ROAD 那种"精确值末位恰好 .5"的边界
+// （12.19965，图上是 12.1997）。Go 的浮点结合顺序恰好落在这一边，换一种写法可能就掉过去，
+// 所以 check.go 的 ① 留了 ±1 的防御性容差，而这里保持严格断言。
 func TestSinglePTTOnRealB50(t *testing.T) {
 	f := loadB50Fixture(t)
 	for _, s := range f.Songs {
@@ -169,28 +176,49 @@ func TestSinglePTTRangeCoversDisplayedPTT(t *testing.T) {
 }
 
 // ── C 组：夹具自证 ──────────────────────────────────────────────────────
-// 这条不测公式，测数据。图上的表头写着 BEST TOP10 AVG = 12.37583，
-// 所以 Σ(前 10 名单曲 ptt) 必须 = 123.7583 —— 将来补抄剩下 40 行时，抄错一位这条就红。
+// 这条不测公式，测数据。图上的表头同时给了三个数，抄错一位就有对不上的：
+//
+//	Σb50 = 602.5065 · Σb10 = 123.7583 · PTT = 12.104
+//
 // 能抓住：整行抄错 / 定数错 0.1 / 通关类型错（都是 ≥0.1 量级）
 // 抓不住：分数最后一位差 1（只影响 5e-6）
 func TestFixtureChecksumMatchesHeader(t *testing.T) {
 	f := loadB50Fixture(t)
+	if len(f.Songs) != 50 {
+		t.Fatalf("这个夹具该是整份 b50（50 行），实得 %d 行", len(f.Songs))
+	}
 
-	var sumDisplayed, sumComputed float64
-	for _, s := range f.Songs {
-		sumDisplayed += s.PTT
+	var disp50, disp10, calc50, calc10 float64
+	for i, s := range f.Songs {
+		disp50 += s.PTT
+		if i < 10 {
+			disp10 += s.PTT
+		}
 		if ptt, err := SinglePTT(s.Constant, s.Score, ClearType(s.ClearType)); err == nil {
-			sumComputed += ptt
+			calc50 += ptt
+			if i < 10 {
+				calc10 += ptt
+			}
 		}
 	}
 
-	// 表头平均值是 5 位小数，每行 round4 最多贡献 5e-5 → 取 1e-4/行 的容差
-	want := f.Header.BestTop10Avg * float64(len(f.Songs))
+	// 表头平均值是 5 位小数，每行 round4 最多贡献 5e-5 → 取 1e-4/行
 	tol := 1e-4 * float64(len(f.Songs))
-
-	for name, sum := range map[string]float64{"夹具字段": sumDisplayed, "公式重算": sumComputed} {
-		if math.Abs(sum-want) > tol {
-			t.Errorf("%s 的 Σ=%.4f，由表头推得 %.4f（容差 %.4f）", name, sum, want, tol)
+	checks := []struct {
+		name string
+		got  float64
+		want float64
+		tol  float64
+	}{
+		{"夹具字段 Σb50", disp50, f.Header.BestTop50Avg * 50, tol},
+		{"公式重算 Σb50", calc50, f.Header.BestTop50Avg * 50, tol},
+		{"夹具字段 Σb10", disp10, f.Header.BestTop10Avg * 10, tol},
+		// ⑥ 的口径在真实数据上：PTT = (Σb50 + Σb10) / 60
+		{"PTT", (calc50 + calc10) / 60, f.Player.Rating, 1e-3},
+	}
+	for _, c := range checks {
+		if math.Abs(c.got-c.want) > c.tol {
+			t.Errorf("%s = %.4f，图上给的 %.4f（容差 %.4f）", c.name, c.got, c.want, c.tol)
 		}
 	}
 }

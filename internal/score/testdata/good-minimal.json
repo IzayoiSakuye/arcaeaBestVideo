@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "game": "arcaea",
+  "player": { "name": "样例玩家", "rating": 12.104, "rating_label": "Potential" },
+  "songs": [
+    {
+      "index": 1,
+      "song_id": "egoeimi",
+      "difficulty": { "name": "FTR", "level": "10", "constant": 10.5 },
+      "score": { "achievement": 99.68409, "rank": "EX+", "clear_type": "HC", "pure": 1218, "far": 2, "lost": 3 },
+      "user": { "comment": "测试用" }
+    }
+  ]
+}
