@@ -1,5 +1,4 @@
-// Package ocr 把 Yurisaki 的 b50 成绩图解析成成绩数据。
-// 只支持这一种图源，所以坐标是量死的，不做版式识别。
+// Package ocr 把 Yurisaki 的 b50 成绩图解析成成绩数据
 package ocr
 
 import (
@@ -10,23 +9,42 @@ import (
 	"os"
 )
 
-// 版式常量，按亮度剖面量出来的。
+// 版式常量， 手量
 const (
 	Cols, Rows = 5, 10
-	ColPitch   = 376
-	RowPitch   = 125
-	CellX0     = 37
 	CellY0     = 440
+	RowPitch   = 125
 	CellW      = 340
 	CellH      = 100
-	JacketPad  = 3
-	JacketSize = 94
+	JacketPadX = 5
+	JacketPadY = 5
+	JacketSize = 90
+	TextX0     = 98
 )
 
-// Cell 是一个格子在原图里的位置。Index 从 1 到 50，先左到右再上到下。
+// colX 是 5 列的左边界
+var colX = [Cols]int{37, 413, 790, 1167, 1543}
+
+// Cell 是一个格子在原图里的位置, Index 从 1 到 50，先左到右再上到下。
 type Cell struct {
 	Index int
 	Box   image.Rectangle
+}
+
+// 格子内部四行文字的纵向范围
+var (
+	LineTitle     = [2]int{9, 26}  // 曲名 + #rank
+	LineScore     = [2]int{31, 53} // 分数（大字，约 21px 高）
+	LinePotential = [2]int{61, 74} // Potential <定数> > <单曲ptt> <通关类型>
+	LineJudgment  = [2]int{79, 93} // P: n (+n) F: n L: n
+)
+
+// LineBox 取某一行的区域
+func LineBox(c Cell, r [2]int) image.Rectangle {
+	return image.Rect(
+		c.Box.Min.X+TextX0, c.Box.Min.Y+r[0],
+		c.Box.Max.X, c.Box.Min.Y+r[1],
+	)
 }
 
 // Grid 返回 50 个格子的位置
@@ -34,7 +52,7 @@ func Grid() []Cell {
 	cells := make([]Cell, 0, Cols*Rows)
 	for r := 0; r < Rows; r++ {
 		for c := 0; c < Cols; c++ {
-			x, y := CellX0+c*ColPitch, CellY0+r*RowPitch
+			x, y := colX[c], CellY0+r*RowPitch
 			cells = append(cells, Cell{
 				Index: r*Cols + c + 1,
 				Box:   image.Rect(x, y, x+CellW, y+CellH),
@@ -44,9 +62,9 @@ func Grid() []Cell {
 	return cells
 }
 
-// JacketBox 是格子里的曲绘缩略图（左边那个方块），后面用它算指纹定曲目
+// JacketBox 是格子里的曲绘缩略图，后面用它算指纹定曲目
 func JacketBox(c Cell) image.Rectangle {
-	x, y := c.Box.Min.X+JacketPad, c.Box.Min.Y+JacketPad
+	x, y := c.Box.Min.X+JacketPadX, c.Box.Min.Y+JacketPadY
 	return image.Rect(x, y, x+JacketSize, y+JacketSize)
 }
 
