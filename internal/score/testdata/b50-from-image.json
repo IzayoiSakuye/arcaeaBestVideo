@@ -6,7 +6,7 @@
     "image": "dist/b50-sample.jpg",
     "generator": "Yurisaki",
     "snapshot_at": "2026-09-13T23:43:00+08:00",
-    "layout": "5 列 × 10 行；行距 127px；分数用撇号分隔；每格四行：曲名+#rank / 分数 / 'Potential <定数> > <单曲ptt> <通关类型>' / 'P: n (+shiny) F: n L: n' + 距今天数"
+    "layout": "5 列 × 10 行；行距 125px（早先记的 127 是量错的）；列左 37/413/790/1167/1543（列距 376.5）；分数是 8 位补零后每 3 位插一个撇号（共 10 个字形）；每格四行：曲名+#rank / 分数 / 'Potential <定数> > <单曲ptt> <通关类型>' / 'P: n (+shiny) F: n L: n' + 距今天数"
   },
   "player": {
     "name": "样例玩家",
