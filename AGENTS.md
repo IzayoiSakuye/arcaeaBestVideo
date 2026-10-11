@@ -31,7 +31,7 @@
 | 阶段 5 性能实测 | ✅ **50 段外推 6.3 分钟**（预算 ≤10） |
 | 阶段 6 收尾 | ✅ spike 已删（`b49a19c`）· 从零重跑通过 · G1 材料已写 |
 | **🚦 门禁 G1** | ✅ **已过**（2026-10，多数玩家说想要） |
-| **P2 成绩层** | ⬅ 下一步：骨架优先（导入 → 校对 → 出片），规格见 `docs/04-P2实现规格.md` |
+| **P2 成绩层** | 🔄 契约 / 校验 / 六条自检 / 编排注入 **已完成**（`score` + `job`）；下一步：**b50 图 → Project**（固定网格 + 曲绘 pHash + 字形模板），规格见 `docs/04`、`docs/05` |
 
 **验收已过的四条**：`go build/vet/test` 干净 · 每段 ffprobe 参数一致且 `concat -c copy` 成功 ·
 单段耗时 ×50 ≤10 分钟 · **运行时不写 `data/`** · 产物幂等（输入指纹 + `.part` 原子改名）。
@@ -56,8 +56,10 @@ concat      0.5s/次
 > ✅ **2026-10 已过**：多数玩家说想要。反馈里唯一的**具体短板是「成绩录入太麻烦 / 要能直接导入截图」**
 > —— 所以 P2 的顺序是**骨架优先**（导入 → 校对 → 出片），OCR 押后；
 > 且校对表要能在录入时**实时跑六条自检**，把"打错数字"当场暴露（见 `docs/04-P2实现规格.md` §0）。
-> ⚠️ 另有两条待办：**3–5 张真实成绩图**（G2 的测试集，已收集待归档）与
-> **wiki 的 Anubis 盾目前过不去**（`anubis-fetch.ts` 连续 3 次挑战失败，数据管线刷新可能已受影响）。
+> ✅ 成绩图已收到，并抄成 `internal/score/testdata/b50-from-image.json`（50 行，被图自带的
+> Σb50 / Σb10 / PTT 三个校验和验证过）—— G2 的标准答案有了。
+> ⚠️ 只剩一条待办：**wiki 的 Anubis 盾过不去**（`anubis-fetch.ts` 连续 3 次挑战失败，
+> 数据管线刷新可能已受影响）。
 
 ---
 
@@ -72,7 +74,7 @@ concat      0.5s/次
 | B站取流 | **`yt-dlp.exe` sidecar** | **不要自己写 B站 API 客户端**——见下 |
 | 持久化 | SQLite（`modernc.org/sqlite`） | ⚠️ **不要 `mattn/go-sqlite3`**（要 cgo） |
 | 构建脚本 | **Node ≥23.6 + TypeScript** | 无构建步骤，直接 `node xxx.ts` |
-| Go 依赖 | **只用标准库 + Wails** | 加第三方前先问「标准库能不能做」 |
+| Go 依赖 | **标准库 + Wails + `golang.org/x/text`** | 加第三方前先问「标准库能不能做」；x/text 是目前唯一的例外 —— 曲名归一化要 NFKC/NFD，标准库没有（见 `docs/05` §6.1） |
 
 ### B站取流：yt-dlp sidecar（2026-09 实测选定）
 
@@ -119,7 +121,9 @@ internal/                  Go 代码（用户手写）
   tools/                  定位 ffmpeg / ffprobe / Edge / yt-dlp
   render/                 调 ffmpeg + Edge 渲染
     testdata/             从真实运行捕获的 golden argv
-  score/ store/ job/      ⬜ 尚未实现（P2/P3）
+  score/                  成绩契约 / 校验 / 六条自检 / ptt 口径
+  job/                    渲染编排 + 依赖注入
+  store/                  ⬜ 尚未实现（P3 再上 SQLite）
 cmd/pipeline/             ★ 端到端 CLI（不参与 wails build）
 samples/                  sample-project.json（P1 的输入契约）
 frontend/                 React 19 + Vite 7（最小壳，只调 Version() 验证 bindings）
@@ -143,7 +147,7 @@ data/                     ⚠️ 构建产物，不进版本库（例外：song-
   arcaea-catalog.json     ⭐ 应用唯一读取的目录（564 曲 / 1849 谱面）
   arcaea-backgrounds.json 曲目→背景映射（权威）
   arcaea-songdb.json / arcaea-index.json / arcaea-jackets.json   原始层
-  jackets/256/*.jpg       625 张 256px 曲绘
+  jackets/256/*.jpg       620 张 256px 曲绘
   backgrounds/960/*.jpg   147 张 960×540 背景
 dist/                     发布包产物（不进版本库）
 .cache/                   管线 + 渲染缓存（不进版本库，可安全删除）
@@ -198,7 +202,7 @@ node scripts/pack-data.ts            # ⑦ 打包发布
 ## 🚨 铁律（违反会破坏项目）
 
 1. **绝不提交 `data/` 下除 `song-id-aliases.json` 外的任何文件。**
-   625 张二进制 + 15MB，刷新一次就在 git 历史里永久留下十几 MB。`.gitignore` 已配好，别改。
+   620 张二进制 + 15MB，刷新一次就在 git 历史里永久留下十几 MB。`.gitignore` 已配好，别改。
 
 2. **绝不手工编辑 `data/` 下的任何 JSON。** 全是构建产物。
    要改数据 → 改 `scripts/` 或 `song-id-aliases.json` → 重跑管线。
@@ -237,7 +241,7 @@ node scripts/pack-data.ts            # ⑦ 打包发布
   渲染完必须 `os.Stat` 产物，否则失败会静默到下游才炸成一句看不懂的错。
 - **传给外部进程的路径一律绝对化。** `filepath.Join` 会 Clean 掉 `.` 段，
   所以 flag 默认值 `"."` 出来仍是相对路径 —— Edge 拿相对路径会直接失败。
-- **构建脚本零第三方依赖**，只用 Node 标准库。**Go 侧也只用标准库 + Wails。**
+- **构建脚本零第三方依赖**，只用 Node 标准库。**Go 侧只用标准库 + Wails**（唯一例外 `golang.org/x/text`，理由见技术栈表）。
 - **脚本用 TypeScript，由 Node 直接跑**（原生类型擦除）。三条硬约束：
   只能写**可擦除语法**（无 `enum`/`namespace`/参数属性/装饰器）·
   相对 import **必须写 `.ts` 扩展名** · `tsc` 只是检查工具，不进运行链路。
@@ -245,8 +249,10 @@ node scripts/pack-data.ts            # ⑦ 打包发布
   npm 会因此跳过 devDependencies，报 "up to date" 却什么都不装。
   **agent 跑 npm 要加 `--include=dev`；用户自己终端里不受影响。**
 - 破坏性变更要同步更新 `scripts/README.md` 与相关 `--help`。
-- **后期后端**：agent 不要自己开始生成 Go 代码（除非显式指定），用户要手写来锻炼。
 - **不要 `git add` / `commit` / `push`** —— 用户手动验收。
+- 写注释**简单**一点，不要添加过多agent自身的思考文本、docs文本与后端细节，只要说清楚是干什么的就行
+- 遇到不确定的部分要询问用户，不要自作主张
+- 每次写完一部分以后，一定要说明改动文件，以及新增方法的思路、逻辑、为什么这样做以及怎么做的
 
 ---
 
@@ -310,6 +316,8 @@ node scripts/pack-data.ts --emit-tree --base-url https://<域名>/arcaea
 
 5. **OCR 是降级路径，不是主路径。** 头部游戏一次 API 就拿全 B50；Arcaea 无 API 才走 OCR，
    且必须「**曲绘 pHash 定曲目 + OCR 只读数字** + 六条一致性自检」。
+   已定形的做法（2026-10）：**只支持 Yurisaki 一种图源** → 坐标量死，不做版式识别；
+   **曲名不认**（pHash 定曲，曲名从曲库取）；数字用**字形模板**匹配，不引入 AI 模型。
 
 6. **数据与代码分离发布。** 应用发版与曲库更新是两条独立流水线 ——
    游戏加新曲时重跑数据管线 + 打包即可，**用户不用更新应用**。
