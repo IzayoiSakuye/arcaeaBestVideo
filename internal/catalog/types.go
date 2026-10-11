@@ -49,7 +49,8 @@ type Chart struct {
 	ConstantSource *string  `json:"constant_source"`
 	Video          *Video   `json:"video"`
 	Jacket         *Jacket  `json:"jacket"`
-	Notes          *int     `json:"note"` // 物量：数据里的键是单数 note，写成 notes 会永远解出 nil
+	Notes          *int     `json:"note"`  // 物量：数据里的键是单数 note，写成 notes 会永远解出 nil
+	PHash          *PHash   `json:"phash"` // 该难度专属曲绘的指纹，没有就是 null
 }
 
 // Video 是歌曲对应的视频信息表，如果有多个视频来源会填入slice

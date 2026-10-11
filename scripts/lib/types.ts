@@ -150,6 +150,12 @@ export interface CatalogChart {
    * 实测 47 个难度有专属曲绘。
    */
   jacket: CatalogJacket | null;
+  /**
+   * 该难度专属曲绘的指纹，没有专属曲绘就是 null。
+   * 为什么要它：图上用了 BYD 专属封面时，拿默认封面的指纹去比会对不上（实测差 29 位），
+   * 只有比过两种封面才能定住曲目。
+   */
+  phash?: { ahash: string; dhash?: string } | null;
 }
 
 export interface CatalogJacket {

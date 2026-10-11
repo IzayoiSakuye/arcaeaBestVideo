@@ -78,32 +78,76 @@ func DHash(ctx context.Context, ffmpeg, file string) (uint64, error) {
 // Hamming 两个指纹差几位，0 = 完全一样
 func Hamming(a, b uint64) int { return bits.OnesCount64(a ^ b) }
 
-// AHashBits 取曲库里存着的指纹（十六进制）
-func (s *Song) AHashBits() (uint64, bool) {
-	if s.PHash == nil || s.PHash.AHash == nil {
-		return 0, false
+// phashOf 解析一条曲绘记录的指纹。dhash 可能缺席（截断图场景），所以分开报。
+func phashOf(p *PHash) (a, d uint64, hasA, hasD bool) {
+	if p == nil || p.AHash == nil {
+		return 0, 0, false, false
 	}
-	v, err := strconv.ParseUint(*s.PHash.AHash, 16, 64)
-	return v, err == nil
+	av, err := strconv.ParseUint(*p.AHash, 16, 64)
+	if err != nil {
+		return 0, 0, false, false
+	}
+	if p.DHash == nil {
+		return av, 0, true, false
+	}
+	dv, err := strconv.ParseUint(*p.DHash, 16, 64)
+	if err != nil {
+		return av, 0, true, false
+	}
+	return av, dv, true, true
 }
+
+// SongHash 取歌曲默认封面的指纹
+func (s *Song) SongHash() (a, d uint64, hasA, hasD bool) { return phashOf(s.PHash) }
+
+// ChartHash 取该难度专属封面的指纹（目前只有 57 张 BYD 有）
+func (c *Chart) ChartHash() (a, d uint64, hasA, hasD bool) { return phashOf(c.PHash) }
 
 // JacketMatch 是按曲绘找出来的候选
 type JacketMatch struct {
 	Song *Song
-	Dist int
+	// 非空 = 命中该难度的专属封面，顺带说明这一行就是它
+	ChartDiff string
+	// 排序依据：dHash 比 aHash 稳（实测 48/50 vs 44/50）；对手没有 dhash 时给满分排到最后
+	DHashDist int
+	AHashDist int
 }
 
-// MatchJacket 按指纹找候选，距离升序
-func (c *Catalog) MatchJacket(h uint64, n int) []JacketMatch {
+// MatchJacket 拿裁出来的曲绘找候选。每首歌只在「默认封面 / 各难度专属封面」里
+// 取最近的那张参赛 —— 图上用了 BYD 专属封面时，默认封面根本对不上（实测差 29 位）。
+func (c *Catalog) MatchJacket(cropA, cropD uint64, n int) []JacketMatch {
+	const worst = 64
+
+	pick := func(s *Song) (JacketMatch, bool) {
+		best, ok := JacketMatch{}, false
+		consider := func(a, d uint64, hasA, hasD bool, diff string) {
+			if !hasA {
+				return
+			}
+			m := JacketMatch{Song: s, ChartDiff: diff, AHashDist: Hamming(cropA, a), DHashDist: worst}
+			if hasD {
+				m.DHashDist = Hamming(cropD, d)
+			}
+			if !ok || m.DHashDist < best.DHashDist {
+				best, ok = m, true
+			}
+		}
+		a, d, hasA, hasD := s.SongHash()
+		consider(a, d, hasA, hasD, "")
+		for _, ch := range s.Charts {
+			a, d, hasA, hasD := ch.ChartHash()
+			consider(a, d, hasA, hasD, ch.Difficulty)
+		}
+		return best, ok
+	}
+
 	var out []JacketMatch
 	for _, s := range c.Songs {
-		sh, ok := s.AHashBits()
-		if !ok {
-			continue
+		if m, ok := pick(s); ok {
+			out = append(out, m)
 		}
-		out = append(out, JacketMatch{Song: s, Dist: Hamming(h, sh)})
 	}
-	sort.SliceStable(out, func(i, j int) bool { return out[i].Dist < out[j].Dist })
+	sort.SliceStable(out, func(i, j int) bool { return out[i].DHashDist < out[j].DHashDist })
 	if len(out) > n {
 		out = out[:n]
 	}

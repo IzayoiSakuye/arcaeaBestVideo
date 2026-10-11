@@ -372,12 +372,12 @@ function resolveChartJacket(
   songId: string,
   chart: ChartEntry,
   jackets: JacketTable
-): JacketOut | null {
+): JacketEntry | null {
   const cands = [`${songId}_${chart.difficulty.toLowerCase()}`];
   if (chart.alt_title) cands.push(looseKey(chart.alt_title));
   for (const c of cands) {
     const j = jackets.byId.get(c);
-    if (j) return toJacketOut(j);
+    if (j) return j;
   }
   return null;
 }
@@ -394,7 +394,9 @@ function fillJacket(song: SongEntry, jackets: JacketTable | null): boolean {
   }
   if (jackets) {
     for (const chart of song.charts) {
-      chart.jacket = resolveChartJacket(song.song_id, chart, jackets);
+      const jc = resolveChartJacket(song.song_id, chart, jackets);
+      chart.jacket = jc ? toJacketOut(jc) : null;
+      chart.phash = jc?.ahash ? { ahash: jc.ahash, dhash: jc.dhash } : null;
     }
   }
   return !!j;
