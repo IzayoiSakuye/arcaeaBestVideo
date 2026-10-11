@@ -6,13 +6,13 @@ import (
 	"strings"
 )
 
-// 分段阈值：词间距 ≥5px，字间距 ≥2px（实测；'10.5' 里 '.' 两侧是 3px）
+// 分段阈值：词间距 ≥5px，字间距 ≥2px
 const (
 	WordGap = 5
 	CharGap = 2
 )
 
-// isInk 亮度低于 150 算墨。阈值是试出来的：再高会把 JPEG 灰边带进来
+// isInk 亮度低于 150 算墨
 func isInk(img image.Image, x, y int) bool {
 	r, g, b, _ := img.At(x, y).RGBA()
 	return (r*299+g*587+b*114)/1000/257 < 150
@@ -32,7 +32,7 @@ func InkColumns(img image.Image, r image.Rectangle) []bool {
 	return out
 }
 
-// InkRows 找一块区域里有墨的行范围（切掉上下空白），返回 [y0, y1)
+// InkRows 找一块区域里有墨的行范围，返回 [y0, y1)
 func InkRows(img image.Image, r image.Rectangle) (int, int) {
 	top, bottom := -1, -1
 	for y := r.Min.Y; y < r.Max.Y; y++ {
@@ -70,8 +70,8 @@ func InkBox(img image.Image, r image.Rectangle) image.Rectangle {
 	return image.Rect(r.Min.X+lo, r.Min.Y, r.Min.X+hi+1, r.Max.Y)
 }
 
-// Groups 把有墨的列按空隙切成若干段，返回每段的 x 范围（相对图），
-// 空隙小于 minGap 的算同一段。
+// Groups 把有墨的列按空隙切成若干段，返回每段的 x 范围（相对图）
+// 空隙小于 minGap 的算同一段
 func Groups(cols []bool, x0, minGap int) [][2]int {
 	var out [][2]int
 	start := -1
@@ -100,7 +100,7 @@ func Groups(cols []bool, x0, minGap int) [][2]int {
 	return out
 }
 
-// WordBox 取一行里第 i 个词的范围（i 从 0 起），取不到返回空矩形
+// WordBox 取一行里第 i 个词的范围，取不到返回空矩形
 func WordBox(img image.Image, line image.Rectangle, i int) image.Rectangle {
 	ws := Groups(InkColumns(img, line), line.Min.X, WordGap)
 	if i < 0 || i >= len(ws) {
@@ -122,8 +122,7 @@ func (g Glyph) ink(x, y int) bool {
 	return g.Bits[y*g.W+x]
 }
 
-// CutRow 把 [x0,x1) 这段字按列空隙硬切成字形。
-// 只在抽模板时用（相邻数字空隙小到 1px，硬切会并字）；认字走 Font.Decode。
+// CutRow 把 [x0,x1) 这段字按列空隙硬切成字形
 func CutRow(img image.Image, line image.Rectangle, x0, x1, minGap int) []Glyph {
 	r := image.Rect(x0, line.Min.Y, x1, line.Max.Y)
 	y0, y1 := InkRows(img, r)
@@ -144,8 +143,7 @@ func CutRow(img image.Image, line image.Rectangle, x0, x1, minGap int) []Glyph {
 	return out
 }
 
-// Diff 数两张字形差多少像素，允许 ±1 的平移。
-// 抗锯齿会让最左一列墨忽隐忽现，整体错一格时不该算成另一个字。
+// Diff 数两张字形差多少像素，允许 ±1 误差
 func Diff(a, b Glyph) int {
 	w, h := max(a.W, b.W)+1, max(a.H, b.H)
 	best := -1
@@ -167,13 +165,13 @@ func Diff(a, b Glyph) int {
 	return best
 }
 
-// Font 是一套「字符 → 字形」模板。字符按码位排序，保证同分时切法确定
+// Font  字体模板
 type Font struct {
 	chars []rune
 	arts  map[rune]Glyph
 }
 
-// NewFont 从 ASCII 图拼模板（只有 '#' 算墨）
+// NewFont 从 ASCII 图拼模板
 func NewFont(art map[rune]string) *Font {
 	f := &Font{arts: make(map[rune]Glyph, len(art))}
 	for ch, s := range art {
@@ -206,16 +204,11 @@ type Decoded struct {
 	Text    string
 	Diffs   []int    // 每个字的差异像素数，用来判可信度
 	Spans   [][2]int // 每个字占的列范围，和 Text 一一对应
-	OK      bool     // 一个「未识别」都没有才算 true
+	OK      bool     // 一个未识别都没有才算 true
 	Unknown int      // 走未识别通道盖掉的列数
 }
 
-// Decode 认一块区域里的字。
-// 按列空隙硬切不可靠（相邻数字只隔 1px，会并成一个字），所以用动态规划：
-// 每个字可以落在任意列，取整段总差异最小的切法；空白列免费跳过，
-// 认不出的列走「未识别」通道盖住 —— 代价是这列的墨点数，
-// 比硬套一个不像的模板（错 30+ 像素）便宜、比正确的模板（0-3 像素）贵，
-// 所以认不出来时宁可报 '?' 交给人工校对，也不猜。
+// Decode 解析一块区域里的字
 func (f *Font) Decode(img image.Image, r image.Rectangle) Decoded {
 	r = InkBox(img, r)
 	if r.Empty() {
@@ -267,9 +260,7 @@ func (f *Font) Decode(img image.Image, r image.Rectangle) Decoded {
 			if g.H != h {
 				continue
 			}
-			// 允许模板伸出右边界（越界部分按空白比）。
-			// 行末的字偶尔比模板窄 1-2 列，硬要求「正好装下」会把最后一个字
-			// 逼成更窄的字，再往前连锁带歪前一个字。
+			// 允许模板伸出右边界（越界部分按空白比）
 			next := min(i+g.W, w)
 			c := best[i] + windowDiff(g, bits, w, h, i)
 			if c < best[next] {
@@ -316,9 +307,7 @@ func (f *Font) Decode(img image.Image, r image.Rectangle) Decoded {
 	return out
 }
 
-// windowDiff 数模板落在第 i 列时差多少像素。
-// 允许横向 ±1：JPEG 会把最右边那条淡边压掉，行末的字偶尔比模板窄 1 列
-// （实测 100 个行末数字里有 2 个），差这一列不该算成另一个字。
+// windowDiff 数模板落在第 i 列时差多少像素
 func windowDiff(g Glyph, bits []bool, w, h, i int) int {
 	best := -1
 	for dx := -1; dx <= 1; dx++ {

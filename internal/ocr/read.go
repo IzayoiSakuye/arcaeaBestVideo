@@ -6,22 +6,20 @@ import (
 	"strings"
 )
 
-// Fields 是一格里「图上印着」的字段。曲目和难度图上没有，靠曲库反查补。
+// Fields 存放一首歌在b50里的信息
 type Fields struct {
 	Constant  float64
 	PTT       float64
 	Score     int
 	ClearType string
-	Problems  []string // 没读出来的字段，原样写原因，交给校对表
+	Problems  []string
 }
 
-// ReadFields 读一格里印出来的字段。
-// 读不出来不猜：字段留零值 + Problems 里记一笔，让人在校对表上看见。
+// ReadFields 读一格里印出来的字段
 func ReadFields(img image.Image, c Cell) Fields {
 	var f Fields
 	line := LineBox(c, LinePotential)
 
-	// 定数行固定五段：Potential / 定数 / > / 单曲ptt / 通关类型
 	f.Constant = readFloat(img, WordBox(img, line, 1), "定数", &f)
 	f.PTT = readFloat(img, WordBox(img, line, 3), "单曲ptt", &f)
 
@@ -50,7 +48,7 @@ func readFloat(img image.Image, box image.Rectangle, name string, f *Fields) flo
 	return v
 }
 
-// parseScore 分数是 8 位补零、每 3 位插一个撇号：09'968'409
+// parseScore 分数是 8 位补零、每 3 位插一个撇号
 func parseScore(s string) (int, bool) {
 	t := strings.ReplaceAll(s, "'", "")
 	if len(t) != 8 {
@@ -60,7 +58,7 @@ func parseScore(s string) (int, bool) {
 	return v, err == nil
 }
 
-// isClearType 通关类型是两个大写字母（图上见过 HC / FR / PM，别的写法同理）
+// isClearType 通关类型是两个大写字母
 func isClearType(s string) bool {
 	if len([]rune(s)) != 2 {
 		return false

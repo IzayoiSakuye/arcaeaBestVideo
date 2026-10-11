@@ -1,6 +1,4 @@
-// 代码生成，勿手改：OCR_GEN=1 go test ./internal/ocr -run TestHarvestFonts
-// 模板是从 dist/b50-sample.jpg 上量死的：图源固定成 Yurisaki 一种，
-// 字号和字形都不变，所以认字只要比字形，不用缩放也不用 AI 模型。
+// 代码生成，勿修改：OCR_GEN=1 go test ./internal/ocr -run TestHarvestFonts
 
 package ocr
 
