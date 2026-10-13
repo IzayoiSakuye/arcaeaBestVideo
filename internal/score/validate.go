@@ -281,15 +281,32 @@ func sortProblems(ps []Problem) {
 func decodeError(data []byte, source string, err error) error {
 	var typ *json.UnmarshalTypeError
 	if errors.As(err, &typ) {
-		return fmt.Errorf("%s: %s 类型错误 (得到 %s, 预期 %s)",
-			source, typ.Field, typ.Value, typ.Type)
+		return fmt.Errorf("%s: %s 类型错误 (得到 %s, 预期 %s)%s",
+			source, typ.Field, typ.Value, typ.Type, where(data, typ.Offset))
 	}
 	var syn *json.SyntaxError
 	if errors.As(err, &syn) {
-		line, col := lineCol(data, syn.Offset)
-		return fmt.Errorf("%s: JSON 语法错误（%d 行 %d 列）: %v", source, line, col, err)
+		return fmt.Errorf("%s: JSON 语法错误%s: %v", source, where(data, syn.Offset), err)
 	}
 	return fmt.Errorf("%s: 解码失败: %w", source, err)
+}
+
+// where 报出字节偏移值，按行列
+func where(data []byte, offset int64) string {
+	if offset <= 0 {
+		return ""
+	}
+	line, col := lineCol(data, offset)
+	return fmt.Sprintf(" （%d 行 %d 列）%s", line, col, lineText(data, line))
+}
+
+// lineText 取某一行的原文
+func lineText(data []byte, line int) string {
+	lines := strings.Split(string(data), "\n")
+	if line < 1 || line > len(lines) {
+		return ""
+	}
+	return strings.TrimSpace(lines[line-1])
 }
 
 // lineCol 把字节偏移换成行列
