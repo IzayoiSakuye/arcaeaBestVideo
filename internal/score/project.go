@@ -61,6 +61,9 @@ type Project struct {
 	Songs         []Song    `json:"songs"`
 }
 
+// SchemaVersion 是当前支持的契约版本
+const SchemaVersion = supportedSchema
+
 // Score 把达成率换回整数分
 func (s ScoreRef) Score() int {
 	return int(math.Round(s.Achievement * 100000))

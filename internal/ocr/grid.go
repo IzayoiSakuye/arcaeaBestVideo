@@ -25,6 +25,19 @@ const (
 // colX 是 5 列的左边界
 var colX = [Cols]int{37, 413, 790, 1167, 1543}
 
+const (
+	SheetW, SheetH = 1920, 1750
+)
+
+// CheckSheet 检查图是不是标准尺寸
+func CheckSheet(b image.Rectangle) error {
+	if b.Dx() != SheetW || b.Dy() != SheetH {
+		return fmt.Errorf("图的尺寸是 %d×%d，需要 %d×%d 尺寸的图，请重新生成一张",
+			b.Dx(), b.Dy(), SheetW, SheetH)
+	}
+	return nil
+}
+
 // Cell 是一个格子在原图里的位置, Index 从 1 到 50，先左到右再上到下。
 type Cell struct {
 	Index int
@@ -34,7 +47,7 @@ type Cell struct {
 // 格子内部四行文字的纵向范围
 var (
 	LineTitle     = [2]int{9, 26}  // 曲名 + #rank
-	LineScore     = [2]int{31, 53} // 分数（大字，约 21px 高）
+	LineScore     = [2]int{31, 53} // 分数
 	LinePotential = [2]int{61, 74} // Potential <定数> > <单曲ptt> <通关类型>
 	LineJudgment  = [2]int{79, 93} // P: n (+n) F: n L: n
 )

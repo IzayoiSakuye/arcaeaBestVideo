@@ -3,6 +3,7 @@ package ocr
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"image"
 	"image/color"
 	"image/draw"
@@ -60,6 +61,58 @@ func TestWriteOverlayForEyeball(t *testing.T) {
 	}
 	writePNG(t, out, rgba)
 	t.Logf("调试图：%s", out)
+}
+
+// 难度代号图上没有，靠 (song_id, 定数) 反查曲库。这条量的是图上这 50 行里
+// 定数够不够唯一 —— 不唯一的行只能靠判定和（P+F+L 撞物量）消歧，而判定行还没读。
+// 曲名用夹具的标题代替 pHash 的结果，所以这是"最好情况"下的上界。
+func TestConstantResolvesDifficulty(t *testing.T) {
+	rows := fixtureRows(t)
+	cata, err := catalog.Load(filepath.Join("..", "..", "data", "arcaea-catalog.json"), 1)
+	if err != nil {
+		t.Skipf("没有曲库：%v", err)
+	}
+
+	uniq, dup, miss := 0, 0, 0
+	for _, r := range rows {
+		song, _, ok := cata.Find(r.Title)
+		if !ok {
+			if cands := cata.Candidates(r.Title, 1); len(cands) > 0 {
+				song = cands[0].Song
+			} else {
+				miss++
+				t.Logf("#%d 标题 %q 查不到曲目", r.Index, r.Title)
+				continue
+			}
+		}
+		var hits []string
+		for _, c := range song.Charts {
+			if c.Constant != nil && *c.Constant == r.Constant {
+				hits = append(hits, fmt.Sprintf("%s(%s)", c.Difficulty, levelOf(c)))
+			}
+		}
+		switch len(hits) {
+		case 1:
+			uniq++
+		case 0:
+			miss++
+			t.Logf("#%d %s 定数 %v 在曲库里一个都对不上", r.Index, song.SongID, r.Constant)
+		default:
+			dup++
+			t.Logf("#%d %s 定数 %v 命中多个难度：%v", r.Index, song.SongID, r.Constant, hits)
+		}
+	}
+	t.Logf("(曲目, 定数) 唯一定位难度：%d/50（多义 %d，对不上 %d）", uniq, dup, miss)
+	if uniq < 45 {
+		t.Errorf("只有 %d/50 能唯一定位，判定行不读的话这些行会直接 fatal", uniq)
+	}
+}
+
+func levelOf(c *catalog.Chart) string {
+	if c.Level == nil {
+		return "-"
+	}
+	return *c.Level
 }
 
 // 真值来自夹具：图上那 50 首是抄录并验证过的。
