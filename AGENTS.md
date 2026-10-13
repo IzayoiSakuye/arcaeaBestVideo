@@ -31,7 +31,7 @@
 | 阶段 5 性能实测 | ✅ **50 段外推 6.3 分钟**（预算 ≤10） |
 | 阶段 6 收尾 | ✅ spike 已删（`b49a19c`）· 从零重跑通过 · G1 材料已写 |
 | **🚦 门禁 G1** | ✅ **已过**（2026-10，多数玩家说想要） |
-| **P2 成绩层** | 🔄 契约 / 校验 / 六条自检 / 编排注入 **已完成**（`score` + `job`）；b50 图识别：网格 + 曲绘 pHash **49/50**、**一格里定数/单曲ptt/分数/通关类型 50/50 全对**（`ocr`）；下一步：判定行（另一套更小字体）→ 「图 → Project」适配层，规格见 `docs/04`、`docs/05` |
+| **P2 成绩层** | 🔄 契约 / 校验 / 六条自检 / 编排注入 **已完成**（`score` + `job`）；**「b50 图 → Project」已跑通**（`ocr` + `importer`：曲目 49/50、逐字段 50/50、Σptt 对上表头校验和、耗时 3.0s）；下一步：表头 OCR + `ManualJSONProvider` + 校对表 UI，规格见 `docs/04`、`docs/05` |
 
 **验收已过的四条**：`go build/vet/test` 干净 · 每段 ffprobe 参数一致且 `concat -c copy` 成功 ·
 单段耗时 ×50 ≤10 分钟 · **运行时不写 `data/`** · 产物幂等（输入指纹 + `.part` 原子改名）。
@@ -123,6 +123,7 @@ internal/                  Go 代码（用户手写）
     testdata/             从真实运行捕获的 golden argv
   score/                  成绩契约 / 校验 / 六条自检 / ptt 口径
   ocr/                    b50 成绩图识别（网格 / 曲绘 pHash 定曲 / 字形模板认数字与通关类型）
+  importer/               成绩图 → score.Project（实现 score.Provider）
   job/                    渲染编排 + 依赖注入
   store/                  ⬜ 尚未实现（P3 再上 SQLite）
 cmd/pipeline/             ★ 端到端 CLI（不参与 wails build）
