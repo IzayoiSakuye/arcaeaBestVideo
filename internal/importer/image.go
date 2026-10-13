@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"image"
 	"image/png"
+	"math"
 	"os"
 	"sync"
 	"time"
@@ -20,6 +21,9 @@ const jacketWorkers = 4
 
 // JacketMarginOK 第一名比第二名近多少位才算认准。
 const JacketMarginOK = 3
+
+// checksumTolerance 校验预期内误差
+const checksumTolerance = 0.003
 
 // ImageProvider 把生成的 b50 读成 Project
 type ImageProvider struct {
@@ -57,15 +61,18 @@ func (p *ImageProvider) Import(ctx context.Context, in score.Input) (*score.Draf
 		return nil, err
 	}
 
+	header := ocr.ReadHeader(img)
 	proj := &score.Project{
 		SchemaVersion: score.SchemaVersion,
 		Game:          "arcaea",
 		Region:        "intl",
+		Player:        playerOf(header),
 		SnapshotAt:    time.Now(),
 		Source:        score.Source{Type: score.KindImage, Provider: "yurisaki-ocr"},
 		Songs:         make([]score.Song, len(cells)),
 	}
 	draft := &score.Draft{Project: proj}
+	draft.Notes = append(draft.Notes, header.Problems...) // 表头没读出来的字段
 
 	confident := 0
 	for i, cell := range cells {
@@ -100,9 +107,48 @@ func (p *ImageProvider) Import(ctx context.Context, in score.Input) (*score.Draf
 		confident++
 	}
 	proj.Source.Confidence = float64(confident) / float64(len(cells))
-	draft.Notes = append(draft.Notes,
-		"表头还没做 OCR：玩家名与总 PTT 留空，自检里的「总 PTT」这条会跳过")
+	draft.Notes = append(draft.Notes, checksums(proj.Songs, header)...)
 	return draft, nil
+}
+
+// playerOf 取玩家 PTT。图上印 5 位小数、游戏里印 3 位，所以取 3 位
+func playerOf(h ocr.Header) score.Player {
+	return score.Player{
+		Rating:      math.Round(h.MaxPotential*1000) / 1000,
+		RatingLabel: "Potential",
+	}
+}
+
+// checksums 拿表头印的平均值反验 50 行 ptt
+func checksums(songs []score.Song, h ocr.Header) []string {
+	// 图上按 ptt 降序排，前 10 行就是 b10
+	sum50, sum10 := 0.0, 0.0
+	for i, s := range songs {
+		if s.Score.PTT == nil {
+			continue
+		}
+		sum50 += *s.Score.PTT
+		if i < 10 {
+			sum10 += *s.Score.PTT
+		}
+	}
+
+	var notes []string
+	if h.Top50Avg > 0 {
+		if d := sum50 - h.Top50Avg*float64(len(songs)); math.Abs(d) > checksumTolerance {
+			notes = append(notes, fmt.Sprintf(
+				"表头校验和有误：%d 行 ptt 之和 %.4f，图上 TOP50 平均 ×%d = %.4f（差 %+.4f）",
+				len(songs), sum50, len(songs), h.Top50Avg*float64(len(songs)), d))
+		}
+	}
+	if h.Top10Avg > 0 && len(songs) >= 10 {
+		if d := sum10 - h.Top10Avg*10; math.Abs(d) > checksumTolerance {
+			notes = append(notes, fmt.Sprintf(
+				"表头校验和有误：前 10 行 ptt 之和 %.4f，图上 TOP10 平均 ×10 = %.4f（差 %+.4f）",
+				sum10, h.Top10Avg*10, d))
+		}
+	}
+	return notes
 }
 
 // matchJackets 逐格裁出曲绘算指纹，并调用ffmpeg。

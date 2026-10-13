@@ -20,29 +20,29 @@ func ReadFields(img image.Image, c Cell) Fields {
 	var f Fields
 	line := LineBox(c, LinePotential)
 
-	f.Constant = readFloat(img, WordBox(img, line, 1), "定数", &f)
-	f.PTT = readFloat(img, WordBox(img, line, 3), "单曲ptt", &f)
+	f.Constant = readNum(img, WordBox(img, line, 1), smallFont, "定数", &f.Problems)
+	f.PTT = readNum(img, WordBox(img, line, 3), smallFont, "单曲ptt", &f.Problems)
 
 	if d := smallFont.Decode(img, WordBox(img, line, 4)); isClearType(d.Text) && d.OK {
 		f.ClearType = d.Text
 	} else {
-		f.Problems = append(f.Problems, "通关类型读成 "+quote(d.Text)+"（可能是还没建模板的字母）")
+		f.Problems = append(f.Problems, "错误的通关类型 "+quote(d.Text))
 	}
 
 	d := bigFont.Decode(img, LineBox(c, LineScore))
 	if v, ok := parseScore(d.Text); ok && d.OK {
 		f.Score = v
 	} else {
-		f.Problems = append(f.Problems, "分数读成 "+quote(d.Text))
+		f.Problems = append(f.Problems, "错误的分数格式 "+quote(d.Text))
 	}
 	return f
 }
 
-func readFloat(img image.Image, box image.Rectangle, name string, f *Fields) float64 {
-	d := smallFont.Decode(img, box)
+func readNum(img image.Image, box image.Rectangle, f *Font, name string, problems *[]string) float64 {
+	d := f.Decode(img, box)
 	v, err := strconv.ParseFloat(d.Text, 64)
 	if err != nil || !d.OK {
-		f.Problems = append(f.Problems, name+"读成 "+quote(d.Text))
+		*problems = append(*problems, name+"读成 "+quote(d.Text))
 		return 0
 	}
 	return v
