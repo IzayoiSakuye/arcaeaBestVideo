@@ -14,6 +14,7 @@ import (
 	"testing"
 
 	"rhythm-game-bvideo/internal/catalog"
+	"rhythm-game-bvideo/internal/ocr"
 	"rhythm-game-bvideo/internal/score"
 	"rhythm-game-bvideo/internal/tools"
 )
@@ -183,11 +184,15 @@ func TestImageProviderReadsSampleSheet(t *testing.T) {
 	}
 	t.Logf("反查出难度 %d/50（曲目认错的那行查不到，属预期）", filled)
 
-	// 认准的行：第一名比第二名近 9 位以上；#27 那个撞车的是 0 位
+	// 认准的行：第一名比第二名近 9 位以上；#27 那个撞车的是 0 位。
+	// 表头校验和也要来一遍 —— 它跟逐行读出来的数不是一个来路
 	close := map[int]bool{}
 	for _, note := range draft.Notes {
-		if strings.Contains(note, "曲绘认不准") {
+		if strings.Contains(note, "曲绘无法准确识别") {
 			close[noteIndex(t, note)] = true
+		}
+		if strings.Contains(note, "校验和") {
+			t.Errorf("表头校验和对不上：%s", note)
 		}
 	}
 	if !close[27] {
@@ -198,6 +203,12 @@ func TestImageProviderReadsSampleSheet(t *testing.T) {
 			t.Errorf("#%d 被标成认不准，但这一行本该认得准", idx)
 		}
 	}
+
+	// 表头：玩家 PTT 取图上 MAX POTENTIAL 的 3 位
+	if got := draft.Project.Player.Rating; got != 12.104 {
+		t.Errorf("玩家 PTT %v，图上 MAX POTENTIAL 12.10442 取 3 位该是 12.104", got)
+	}
+	t.Logf("玩家 PTT %v（表头印的 MAX POTENTIAL 是 12.10442）", draft.Project.Player.Rating)
 
 	// 顺手把导入结果落一份，用眼睛看看整条流水线吐出来的东西
 	dump := filepath.Join("..", "..", ".cache", "imported-project.json")
@@ -218,6 +229,31 @@ func noteIndex(t *testing.T, note string) int {
 		t.Fatalf("看不懂的 Note：%q", note)
 	}
 	return idx
+}
+
+// 校验和得真能抓住错：故意改一行就得报出来
+func TestChecksumCatchesWrongPTT(t *testing.T) {
+	h := ocr.Header{Top10Avg: 12.37583, Top50Avg: 12.05013}
+	ptr := func(v float64) *float64 { return &v }
+
+	songs := make([]score.Song, 50)
+	for i := range songs {
+		v := 12.37583 // 前 10 行
+		if i >= 10 {
+			v = (12.05013*50 - 12.37583*10) / 40
+		}
+		songs[i].Score.PTT = ptr(v)
+	}
+	if notes := checksums(songs, h); len(notes) != 0 {
+		t.Fatalf("造的数据本来就对得上，却报了：%v", notes)
+	}
+
+	songs[7].Score.PTT = ptr(12.37583 + 0.05)
+	notes := checksums(songs, h)
+	if len(notes) == 0 {
+		t.Fatal("改了一行的 ptt，校验和应该报出来")
+	}
+	t.Logf("报出：%s", notes[0])
 }
 
 // 尺寸不对必须直接报错：坐标是按 1920×1750 量死的，硬套只会切出一堆看不懂的东西

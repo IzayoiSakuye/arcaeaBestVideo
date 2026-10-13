@@ -6,6 +6,7 @@ import (
 	"image"
 	"os"
 	"sort"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -27,6 +28,7 @@ func TestHarvestFonts(t *testing.T) {
 
 	rows := fixtureRows(t)
 	small, big := map[rune][]Glyph{}, map[rune][]Glyph{}
+	h := fixtureHeaderOf(t)
 	for _, r := range rows {
 		c := Grid()[r.Index-1]
 
@@ -63,6 +65,29 @@ func TestHarvestFonts(t *testing.T) {
 		}
 	}
 
+	// 表头那套 19px 的字：三个平均数 + 左下角时间戳。
+	// 表头自己缺 6 和 9，时间戳正好补上。
+	head := map[rune][]Glyph{}
+	inv := lightOnDark(img)
+	for _, item := range []struct {
+		box  image.Rectangle
+		text string
+	}{
+		{headerTop10, fmtNum(h.Top10Avg)},
+		{headerMax, fmtNum(h.MaxPotential)},
+		{headerTop50, fmtNum(h.Top50Avg)},
+	} {
+		collect(t, 0, '头', item.text, CutRow(inv, item.box, item.box.Min.X, item.box.Max.X, CharGap), head)
+	}
+	// 时间戳是两个词（日期 + 时分），分开切
+	if words := Groups(InkColumns(inv, footerStamp), footerStamp.Min.X, 8); len(words) == len(strings.Fields(h.Stamp)) {
+		for i, w := range words {
+			collect(t, 0, '时', strings.Fields(h.Stamp)[i], CutRow(inv, footerStamp, w[0], w[1], CharGap), head)
+		}
+	} else {
+		t.Errorf("时间戳切成 %d 词，真值 %q", len(words), h.Stamp)
+	}
+
 	if t.Failed() {
 		t.Fatal("有字切错了，模板不可信")
 	}
@@ -83,6 +108,7 @@ func TestHarvestFonts(t *testing.T) {
 	b.WriteString("package ocr\n\n")
 	writeArt(&b, "smallGlyphArt", "定数/单曲ptt 行的小字", small)
 	writeArt(&b, "bigGlyphArt", "分数行的大字", big)
+	writeArt(&b, "headerGlyphArt", "表头和时间戳的字", head)
 
 	src, err := format.Source([]byte(b.String()))
 	if err != nil {
@@ -91,8 +117,11 @@ func TestHarvestFonts(t *testing.T) {
 	if err := os.WriteFile("glyphs_gen.go", src, 0o644); err != nil {
 		t.Fatal(err)
 	}
-	t.Logf("小字 %d 个模板，大字 %d 个模板 → glyphs_gen.go", len(small), len(big))
+	t.Logf("小字 %d / 大字 %d / 表头 %d 个模板 → glyphs_gen.go", len(small), len(big), len(head))
 }
+
+// fmtNum 数字按图上那样写：小数末尾不留零
+func fmtNum(v float64) string { return strconv.FormatFloat(v, 'f', -1, 64) }
 
 // splitColon 把粘在一起的 "P:" 拆开：逐个试切点，要求左半像 'P'、右半像冒号
 func splitColon(g, p Glyph) (left, colon Glyph, ok bool) {
@@ -202,6 +231,24 @@ func medoid(samples []Glyph) Glyph {
 	return samples[best]
 }
 
+// template 先挑最宽的那批样本再取中位数：
+// 抗锯齿会让同一个字的宽度抖 1 列，模板取窄的，图上的宽字就会多出一列没处放
+func template(samples []Glyph) Glyph {
+	w := 0
+	for _, g := range samples {
+		if g.W > w {
+			w = g.W
+		}
+	}
+	wide := make([]Glyph, 0, len(samples))
+	for _, g := range samples {
+		if g.W == w {
+			wide = append(wide, g)
+		}
+	}
+	return medoid(wide)
+}
+
 func writeArt(b *strings.Builder, name, doc string, m map[rune][]Glyph) {
 	fmt.Fprintf(b, "// %s 是%s\nvar %s = map[rune]string{\n", name, doc, name)
 	chars := make([]rune, 0, len(m))
@@ -210,7 +257,7 @@ func writeArt(b *strings.Builder, name, doc string, m map[rune][]Glyph) {
 	}
 	sort.Slice(chars, func(i, j int) bool { return chars[i] < chars[j] })
 	for _, ch := range chars {
-		g := medoid(m[ch])
+		g := template(m[ch])
 		fmt.Fprintf(b, "\t%q: `%s`,\n", ch, artText(g))
 	}
 	b.WriteString("}\n\n")
