@@ -27,7 +27,7 @@ function singlePtt(constant: number, score: number, clear: Clear): number {
   return Math.max(0, v);
 }
 
-// ── 参考节点（docs/00 §13.5 抄来，wiki「潜力值」页的数值）────────────────
+// ── 参考节点（docs/设计文档.md §6.3 抄来，wiki「潜力值」页的数值）────────────────
 const NODES: { score: number; tl: number; tc: number }[] = [
   { score: 10_000_000, tl: 2.0, tc: 2.2 },
   { score: 9_900_000, tl: 1.5, tc: 1.7 },

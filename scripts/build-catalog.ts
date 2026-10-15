@@ -720,7 +720,7 @@ async function main(): Promise<void> {
       'match_keys 已预计算好（曲名/日文名/song_id/别名），应用侧做一次 Map 查找即可完成 OCR 纠错。',
       'constant_candidates 保留全部来源的定数值，constant 是按 constant_priority 选出的推荐值。',
       'song_id_source=derived 表示该曲不在上游曲库中，song_id 由曲名推导，需与游戏真实 ID 核对。',
-      'jacket/phash 尚未填充，需后续的曲绘构建步骤（见 docs/00-方案讨论.md §13.7）。',
+      'jacket/phash 尚未填充，需后续的曲绘构建步骤（见 docs/设计文档.md §4）。',
       '上游曲库停留在 2023 年，定数可能未反映后续调整。',
     ],
     provenance: {

@@ -258,7 +258,7 @@ MediaWiki 能按任意宽度实时生成：
 | `dhash` | 缩到 9×8，比较水平相邻像素 | 16 位十六进制（64 位） |
 
 **用途**：OCR 管线里**用曲绘指纹识别曲目**，比识别花体曲名可靠得多
-（见 `docs/00-方案讨论.md` §13.4 层 2）。
+（见 `docs/设计文档.md` §7）。
 
 > 💡 **哈希只有 16 字节/张，620 张合计约 10KB —— 可以放心内置；高清曲绘不行。**
 
@@ -405,7 +405,7 @@ wiki 上有 **26 个 JSON 内容模型页面**（`contentmodel: json`），实�
 
 `Cataclysm Cry` / `DREAD AREA` / `Riven Pilgrimage` / `Liar` / `Tic! Tac! Toe!` …
 —— 大多是 v7.0 新曲与 CHUNITHM / DJMAX / 音击 / Muse Dash 联动曲。
-**这是 catalog 停留在 2023 年的独立佐证**（见 `docs/00-方案讨论.md` §13.3）。
+**这是 catalog 停留在 2023 年的独立佐证**（见 `docs/设计文档.md` §4）。
 
 ---
 
@@ -541,7 +541,7 @@ node scripts/build-song-db.ts --refresh
 | [`chart-constant`](https://github.com/zh-arc-wiki-re-wg/chart-constant) `ChartConstant.json` | 定数（用于交叉校验） | 318 首 | ⚠️ 2023-05 |
 
 > 🔴 **两份上游数据都停留在 2023 年**，不含 v5.4 定数大调整后的变动，也不含 2024–2026 新曲。
-> 运行时会打印告警。补充方式见 `docs/00-方案讨论.md` §13.3。
+> 运行时会打印告警。补充方式见 `docs/设计文档.md` §4。
 
 > ⚠️ **`difficulties[].difficulty` 不是难度类别，而是「等级 × 2」**
 > （Aegleseeker = 10/18/22 → 等级 5/9/11；19/21 → `9+`/`10+`）。
@@ -618,7 +618,7 @@ node scripts/build-arcaea-index.ts --no-song-db       # 不做 song_id 关联
   存的是**显示尺寸**（`rotate` 为 90/270 时交换宽高），渲染层不用再判断。
 - **署名（`owner_name` / `owner_mid`）**：同样来自 `view` 接口的响应（`data.owner`），**零额外请求**。
   为什么必须有：铁律 8 要求片尾/简介列出「**原作者** + BV号 + 链接」——
-  只给 BV 号不说作者是谁，那是**引用**不是**署名**（§13.6 把产品定位成「二创署名器」，
+  只给 BV 号不说作者是谁，那是**引用**不是**署名**（`docs/设计文档.md` 把产品定位成「二创署名器」，
   署名是核心卖点而不是免责声明）。
   > 这一项**曾经被漏采**：`getVideoPages()` 只取了 `bvid/title/videos/duration`，
   > `owner` 就在同一个响应里却丢掉了，导致下游只有 `source.mid`（441390256）没有名字。
@@ -728,7 +728,7 @@ node scripts/check-normalize.ts --expect 5   # 曲库变了就调这个数
 
 **为什么需要它**：曲库里的 `title_norm` / `match_keys` 是构建期用 TS 归一化过的
 （`build-catalog.ts:244`：NFKC → NFD → 剥组合记号 → 引号/破折号 → 小写）。
-而**应用侧（Go）标准库没有 NFKC / NFD** —— 这是成绩导入「曲目定位」的真实缺口（`docs/05` §6.1）。
+而**应用侧（Go）标准库没有 NFKC / NFD** —— 这是成绩导入「曲目定位」的真实缺口（`docs/设计文档.md` §3）。
 
 脚本把 Go 能做到的部分实现一遍（**不做 NFKC 兼容分解**），对拍 catalog 自带的
 564 组 `(title_en, title_norm)`，报出落差：

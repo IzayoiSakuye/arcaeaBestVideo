@@ -2,7 +2,7 @@
 //
 // 背景：曲库里的 match_keys / title_norm 是构建期用 TS 归一化过的
 //（scripts/build-catalog.ts:244 —— NFKC → NFD → 剥组合记号 → 引号/破折号 → 小写）。
-// 而 **Go 标准库没有 NFKC / NFD** —— 这是成绩导入「曲目定位」的真实缺口（docs/05 §6.1）。
+// 而 **Go 标准库没有 NFKC / NFD** —— 这是成绩导入「曲目定位」的真实缺口（docs/设计文档.md §3）。
 //
 // 本脚本把 Go 能做到的部分（全角→半角 + 剥组合记号 + 引号/破折号 + 小写，**不做 NFKC 兼容分解**）
 // 实现一遍，对拍 catalog 自带的 564 组 (title_en, title_norm)，报出落差。
@@ -73,7 +73,7 @@ console.log(
 );
 
 if (misses.length !== expect) {
-  console.error(`\n❌ 落差 ${misses.length} 首，与预期 ${expect} 首不符 —— 归一化规则或曲库变了，需重新评估（docs/05 §6.1）`);
+  console.error(`\n❌ 落差 ${misses.length} 首，与预期 ${expect} 首不符 —— 归一化规则或曲库变了，需重新评估（docs/设计文档.md §3）`);
   process.exit(1);
 }
 console.log(`\n✅ 落差 ${misses.length} 首，与预期一致`);

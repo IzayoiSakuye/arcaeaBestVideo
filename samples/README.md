@@ -4,7 +4,7 @@
 
 ## `sample-project.json`
 
-ScoreRecord（`docs/00-方案讨论.md` §10.1）的**子集**：只保留 P1 渲染真正要用的字段。
+ScoreRecord（`docs/设计文档.md` §6.1）的**子集**：只保留 P1 渲染真正要用的字段。
 
 ### ⚠️ 用之前要替换的东西
 
@@ -49,7 +49,7 @@ clip.credit.video_url     ← 来自 catalog 的 sources[].url
 
 ### 一条有用的自检
 
-`pure + far + lost == note`（物量守恒）是 §13.5 六条自检之一。
+`pure + far + lost == note`（物量守恒）是 `docs/设计文档.md` §6.4 的自检之一。
 
 本文件里的三首都满足：
 

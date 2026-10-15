@@ -29,7 +29,7 @@
   来覆盖 `video: null` 与「有视频」两条路径 —— 这是 schema 内的正当用法。
 - 「`sparse` 里的 `jacket` 有 `bundled: false` 但**没有 `local_256` 键**」
   和「`full_url` 是 `null`」**是两种不同的缺失**，Go 里都解成 `nil`，
-  但你要知道产物里两种都会出现（见 `docs/02-P1实现规格.md` 的字段说明）。
+  但你要知道产物里两种都会出现（见 `docs/设计文档.md` §4）。
 - **改 `data/arcaea-catalog.json` 的 schema 时同步改这里**，否则测试会假装通过。
 
 ## 这份夹具覆盖不到的

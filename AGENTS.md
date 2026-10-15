@@ -1,6 +1,6 @@
 # AGENTS.md
 
-> 注入给每个 agent 的工作区上下文。**先读它，再读 `docs/00-方案讨论.md`。**
+> 注入给每个 agent 的工作区上下文。**先读它，再读 `docs/设计文档.md`。**
 > 详细论证在 `docs/`，这里只放「必须知道的结论」与「不可违反的规则」。
 
 ---
@@ -24,14 +24,14 @@
 
 | 阶段 | 状态 |
 |---|---|
-| 方案设计 | ✅ `docs/00-方案讨论.md`（§0–§13 + 附录） |
+| 方案设计 | ✅ `docs/设计文档.md`（唯一设计文档） |
 | 数据层（曲库/索引/曲绘/背景/合并 + 打包） | ✅ `scripts/` → `data/` |
 | P0 地基 | ✅ |
 | 阶段 1–4：`catalog` / `tools` / `render` / `resource` + `cmd/pipeline` | ✅ **端到端跑通** |
 | 阶段 5 性能实测 | ✅ **50 段外推 6.3 分钟**（预算 ≤10） |
 | 阶段 6 收尾 | ✅ spike 已删（`b49a19c`）· 从零重跑通过 · G1 材料已写 |
 | **🚦 门禁 G1** | ✅ **已过**（2026-10，多数玩家说想要） |
-| **P2 成绩层** | 🔄 契约 / 校验 / 六条自检 / 编排注入 **已完成**（`score` + `job`）；**「b50 图 → Project」已跑通**（`ocr` + `importer`：曲目 49/50、逐字段 50/50、表头三个数与校验和对上、约 4s）；下一步：`ManualJSONProvider` + 校对表 UI，规格见 `docs/04`、`docs/05` |
+| **P2 成绩层** | 🔄 契约 / 校验 / 自检①–⑦ / 编排注入 **已完成**（`score` + `job`）；**b50 图 → Project 已跑通**（`ocr` + `importer`：曲目 49/50、逐字段 50/50、表头三个数与校验和对上、约 4 s）；**手抄 JSON 导入已完成**（报错带行列与原文）；**前端与 `internal/app` 已回退**，界面待重做；下一步：前端设计 → 校对表 → 出片实测，规格见 `docs/设计文档.md` |
 
 **验收已过的四条**：`go build/vet/test` 干净 · 每段 ffprobe 参数一致且 `concat -c copy` 成功 ·
 单段耗时 ×50 ≤10 分钟 · **运行时不写 `data/`** · 产物幂等（输入指纹 + `.part` 原子改名）。
@@ -50,12 +50,12 @@ concat      0.5s/次
 > 之后回落到 0.96s/段。两个数都在预算内，但报数时要说清是冷还是热。
 > 真超预算时第一个该动的是 `-preset`（`medium` → `veryfast`，快 2–3 倍、文件大 10–20%）。
 
-**G1 门禁**（`docs/01-开发流程.md` §3.7）：把成品给 **5–10 个 Arcaea 玩家**看，
+**G1 门禁**（`docs/设计文档.md` §9）：把成品给 **5–10 个 Arcaea 玩家**看，
 问「你会想要一个吗？」**多数人说想要 → 进 P2；反应平淡 → 停下来重新想产品形态。**
 
 > ✅ **2026-10 已过**：多数玩家说想要。反馈里唯一的**具体短板是「成绩录入太麻烦 / 要能直接导入截图」**
 > —— 所以 P2 的顺序是**骨架优先**（导入 → 校对 → 出片），OCR 押后；
-> 且校对表要能在录入时**实时跑六条自检**，把"打错数字"当场暴露（见 `docs/04-P2实现规格.md` §0）。
+> 且校对表要能在录入时**实时跑自检**，把"打错数字"当场暴露（见 `docs/设计文档.md` §8）。
 > ✅ 成绩图已收到，并抄成 `internal/score/testdata/b50-from-image.json`（50 行，被图自带的
 > Σb50 / Σb10 / PTT 三个校验和验证过）—— G2 的标准答案有了。
 > ⚠️ 只剩一条待办：**wiki 的 Anubis 盾过不去**（`anubis-fetch.ts` 连续 3 次挑战失败，
@@ -74,7 +74,7 @@ concat      0.5s/次
 | B站取流 | **`yt-dlp.exe` sidecar** | **不要自己写 B站 API 客户端**——见下 |
 | 持久化 | SQLite（`modernc.org/sqlite`） | ⚠️ **不要 `mattn/go-sqlite3`**（要 cgo） |
 | 构建脚本 | **Node ≥23.6 + TypeScript** | 无构建步骤，直接 `node xxx.ts` |
-| Go 依赖 | **标准库 + Wails + `golang.org/x/text`** | 加第三方前先问「标准库能不能做」；x/text 是目前唯一的例外 —— 曲名归一化要 NFKC/NFD，标准库没有（见 `docs/05` §6.1） |
+| Go 依赖 | **标准库 + Wails + `golang.org/x/text`** | 加第三方前先问「标准库能不能做」；x/text 是目前唯一的例外 —— 曲名归一化要 NFKC/NFD，标准库没有（见 `docs/设计文档.md` §3） |
 
 ### B站取流：yt-dlp sidecar（2026-09 实测选定）
 
@@ -94,7 +94,7 @@ yt-dlp 自己做 WBI 签名才拿得到 1080p30。而 `x/space/wbi/arc/search` *
 
 1. **本地缓存**：缓存键 `hash(song_id + difficulty + bvid + p + 起止时间)`，下过就不再下
 2. **失败降级**：`video.sources[]` 多来源（871 条 / 220 个谱面多来源），主源失效换下一个
-3. **手动兜底**：必须保留「手动粘 BV 号 / 选本地文件」的入口（§13.6 风险 1：索引来自单个 UP 主）
+3. **手动兜底**：必须保留「手动粘 BV 号 / 选本地文件」的入口（见 `docs/设计文档.md` §4：索引来自单个 UP 主）
 4. **如实署名**：UI 与片尾必须列出 UP 主 + BV 号 + 链接（铁律 8）
 
 > **只开这一个口子。** 曲库、定数、曲绘、OCR 模型、ffmpeg、yt-dlp 本体一律离线化或自托管。
@@ -121,17 +121,17 @@ internal/                  Go 代码（用户手写）
   tools/                  定位 ffmpeg / ffprobe / Edge / yt-dlp
   render/                 调 ffmpeg + Edge 渲染
     testdata/             从真实运行捕获的 golden argv
-  score/                  成绩契约 / 校验 / 六条自检 / ptt 口径
-  ocr/                    b50 成绩图识别（网格 / 曲绘 pHash 定曲 / 字形模板认数字与通关类型）
-  importer/               成绩图 → score.Project（实现 score.Provider）
+  score/                  成绩契约 / 校验 / 自检①–⑦ / ptt 口径
+  ocr/                    b50 成绩图识别（网格 / 曲绘 pHash 定曲 / 字形模板认字 / 表头）
+  importer/               成绩图与手抄 JSON → score.Project（实现 score.Provider）
   job/                    渲染编排 + 依赖注入
   store/                  ⬜ 尚未实现（P3 再上 SQLite）
 cmd/pipeline/             ★ 端到端 CLI（不参与 wails build）
 samples/                  sample-project.json（P1 的输入契约）
-frontend/                 React 19 + Vite 7（最小壳，只调 Version() 验证 bindings）
+frontend/                 React 19 + Vite 7（已回退成模板壳，界面待重做）
 templates/                ★ 成片模板：bg16-9.png / bg4-3.png / text.html / 字体
 build/                    Wails 打包资源（是源码，要提交）；build/bin/ 是产物，忽略
-docs/                     00-方案讨论.md / 01-开发流程.md / 02-P1实现规格.md / 03-G1门禁材料.md / 04-P2实现规格.md / 05-validate规格.md（**都不入库**）
+docs/                     设计文档.md + *-research.md / 音游成绩数据获取方式调研.md（**都不入库**）
 scripts/                  构建期工具（TS，零依赖，不参与运行时）
   lib/types.ts            数据契约
   lib/anubis-fetch.ts     Anubis PoW 反爬客户端（三个必读的坑）
@@ -256,6 +256,7 @@ node scripts/pack-data.ts            # ⑦ 打包发布
 - 写注释**简单**一点，不要添加过多agent自身的思考文本、docs文本与后端细节，只要说清楚是干什么的就行
 - 遇到不确定的部分要询问用户，不要自作主张
 - 每次写完一部分以后，一定要说明改动文件，以及新增方法的思路、逻辑、为什么这样做以及怎么做的
+- **当且仅当你的身份（Skills）是pm-master**：你可以在用户决定开始编码时调用subagent并为其发送提示词进行编码等操作，但所有agent都要遵循该文档
 
 ---
 
@@ -289,18 +290,13 @@ node scripts/pack-data.ts --emit-tree --base-url https://<域名>/arcaea
 
 | 文档 | 内容 |
 |---|---|
-| `docs/00-方案讨论.md` | ★ **主文档**：设计评审、可行性、架构与流水线、性能预算、数据契约、界面结构、Arcaea 专项、竞品逆向 |
-| `docs/01-开发流程.md` | ★ **路线图**：P0–P6 阶段、**门禁**、风险回退、分工 |
-| `docs/02-P1实现规格.md` | ★ **P1 实现规格**：阶段 0–6，含接口签名、锁定常量、golden test 方法、验收点 |
-| `docs/03-G1门禁材料.md` | ★ **G1 材料**：开场白、判定标准、耗时/覆盖度数据、**怎么问才不问坏** |
-| `docs/04-P2实现规格.md` | ★ **P2 实现规格**：成绩层契约、字段权威性、六条自检、编排搬迁、验收点（**§2 三个前提已裁决**） |
-| `docs/05-validate规格.md` | ★ **validate 规格**：阻断路径、Severity 四档、三级曲目定位、**归一化跨语言缺口**、夹具与验收点 |
+| `docs/设计文档.md` | ★★ **唯一设计文档**：产品定义、架构决策、数据层、渲染管线、成绩层契约与自检、OCR、界面、门禁与验收 |
 | `internal/render/testdata/README.md` | golden argv 怎么捕获、**两份 golden 的区别**、翻译时的坑 |
 | `scripts/README.md` | 脚本用法、Anubis 过盾、曲绘命名规律、数据分发策略 |
-| `docs/*-research.md` | 调研原始报告（部分结论已被主文档修正，**冲突时以主文档为准**） |
+| `docs/*-research.md` | 调研原始报告（结论以 `设计文档.md` 为准） |
 
 > ⚠️ **`docs/` 与 `_research/` 不入库是「有意为之」**，不是漏配。
-> 后果：克隆这个仓库**拿不到任何设计文档**，本文里「见 §13.6」之类的引用在仓库内无法跳转。
+> 后果：克隆这个仓库**拿不到任何设计文档**。
 
 ---
 
@@ -318,7 +314,7 @@ node scripts/pack-data.ts --emit-tree --base-url https://<域名>/arcaea
 4. **时长锚点**：标准版 10s/首 ≈ 9 分钟；另有精华版 ≈ 90 秒。
 
 5. **OCR 是降级路径，不是主路径。** 头部游戏一次 API 就拿全 B50；Arcaea 无 API 才走 OCR，
-   且必须「**曲绘 pHash 定曲目 + OCR 只读数字** + 六条一致性自检」。
+   且必须「**曲绘 pHash 定曲目 + OCR 只读数字** + 自检①–⑦」。
    已定形的做法（2026-10）：**只支持 Yurisaki 一种图源** → 坐标量死，不做版式识别；
    **曲名不认**（pHash 定曲，曲名从曲库取）；数字用**字形模板**匹配，不引入 AI 模型。
 

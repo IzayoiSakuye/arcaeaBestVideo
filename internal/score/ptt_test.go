@@ -14,7 +14,7 @@ func x10000(v float64) int64 { return int64(math.Round(v * 10000)) }
 
 // ── A 组：对拍独立 oracle ────────────────────────────────────────────────
 // 期望值来自 scripts/check-ptt-formula.ts（wiki 潜力值页的 7 个分数节点）。
-// 12 项里 TL 取 0 奖励、FR 取 +0.2 —— 实测 HC 也 +0.2（docs/04 §4.3），所以只区分"有没有奖励"。
+// 12 项里 TL 取 0 奖励、FR 取 +0.2 —— 实测 HC 也 +0.2（docs/设计文档.md §6.5），所以只区分"有没有奖励"。
 func TestSinglePTTMatchesOracleNodes(t *testing.T) {
 	const c = 11.0 // 只看相对定数的偏移，和 oracle 取同一个定数
 
@@ -61,7 +61,7 @@ func TestSinglePTTClampsAtZero(t *testing.T) {
 
 // ── 通关奖励 ────────────────────────────────────────────────────────────
 func TestClearBonus(t *testing.T) {
-	// TL 是唯一的 0，其余一律 +0.2 —— 实测 HC 也拿 +0.2（docs/04 §4.3）。
+	// TL 是唯一的 0，其余一律 +0.2 —— 实测 HC 也拿 +0.2（docs/设计文档.md §6.5）。
 	// 写成"列举 PM/FR 才 +0.2"的白名单会让 HC 漏成 0，于是每一行都被判成错的。
 	if b, err := ClearBonus(TL); err != nil || b != 0 {
 		t.Errorf("TL：得 (%v, %v)，期望 (0, nil)", b, err)
@@ -160,7 +160,7 @@ func TestSinglePTTOnRealB50(t *testing.T) {
 	}
 }
 
-// clear_type 缺失时的区间必须罩住图上值（docs/04 §2 的 ⑥ 裁决）。
+// clear_type 缺失时的区间必须罩住图上值（docs/设计文档.md §6.4 的 ⑥）。
 func TestSinglePTTRangeCoversDisplayedPTT(t *testing.T) {
 	f := loadB50Fixture(t)
 	for _, s := range f.Songs {
@@ -230,7 +230,7 @@ func TestFixtureChecksumMatchesHeader(t *testing.T) {
 //	通关类型 = TL / NC / EC / HC / FR / PM（另一根轴，影响 ptt 奖励）
 //
 // PM 属于通关类型那一族 —— 打出 PM 时，评级栏显示的是 EX+。
-// b50 图上不印评级（docs/04 §4.2），所以这张阈值表至今没有独立来源验证过；
+// b50 图上不印评级（docs/设计文档.md §6.5），所以这张阈值表至今没有独立来源验证过；
 // 本测试只锁定当前实现、防止无意改动。
 func TestRankBoundaries(t *testing.T) {
 	cases := []struct {
