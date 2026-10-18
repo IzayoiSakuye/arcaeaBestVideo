@@ -31,7 +31,7 @@
 | 阶段 5 性能实测 | ✅ **50 段外推 6.3 分钟**（预算 ≤10） |
 | 阶段 6 收尾 | ✅ spike 已删（`b49a19c`）· 从零重跑通过 · G1 材料已写 |
 | **🚦 门禁 G1** | ✅ **已过**（2026-10，多数玩家说想要） |
-| **P2 成绩层** | 🔄 契约 / 校验 / 自检①–⑦ / 编排注入 **已完成**（`score` + `job`）；**b50 图 → Project 已跑通**（`ocr` + `importer`：曲目 49/50、逐字段 50/50、表头三个数与校验和对上、约 4 s）；**手抄 JSON 导入已完成**（报错带行列与原文）；**前端与 `internal/app` 已回退**，界面待重做；下一步：前端设计 → 校对表 → 出片实测，规格见 `docs/设计文档.md` |
+| **P2 成绩层** | 🔄 契约 / 校验 / 自检①–⑦ / 编排注入 **已完成**（`score` + `job`）；**b50 图 → Project 已跑通**（`ocr` + `importer`：曲目 49/50、逐字段 50/50、表头三个数与校验和对上、约 4 s）；**手抄 JSON 导入已完成**（报错带行列与原文）；`internal/app` 的工具检测、导入、校对、生成任务接口已实现，前端仍是模板壳；三首本地录像已通过 CLI 出片，完整 B50 还需 P3 素材层；下一步：按 `docs/设计文档.md` §8 实现七页界面与校对验收 |
 
 **验收已过的四条**：`go build/vet/test` 干净 · 每段 ffprobe 参数一致且 `concat -c copy` 成功 ·
 单段耗时 ×50 ≤10 分钟 · **运行时不写 `data/`** · 产物幂等（输入指纹 + `.part` 原子改名）。
@@ -113,8 +113,9 @@ Wails 不是 C/S —— Go 进程就是后端，前端通过**自动生成的 Bi
 ## 目录结构
 
 ```
-AGENTS.md / .gitignore / app.go / main.go / wails.json / go.mod
+AGENTS.md / .gitignore / main.go / wails.json / go.mod
 internal/                  Go 代码（用户手写）
+  app/                    Wails bindings：工具、导入、校对、生成任务
   catalog/                曲目元数据只读查询 + JacketPath
     testdata/             单测夹具（专撞 nullable 边界）
   resource/               按 catalog 取素材（背景清单 / 画幅判定 / 录像缓存）
@@ -128,7 +129,7 @@ internal/                  Go 代码（用户手写）
   store/                  ⬜ 尚未实现（P3 再上 SQLite）
 cmd/pipeline/             ★ 端到端 CLI（不参与 wails build）
 samples/                  sample-project.json（P1 的输入契约）
-frontend/                 React 19 + Vite 7（已回退成模板壳，界面待重做）
+frontend/                 React 19 + Vite 7（当前为模板壳，界面待实现）
 templates/                ★ 成片模板：bg16-9.png / bg4-3.png / text.html / 字体
 build/                    Wails 打包资源（是源码，要提交）；build/bin/ 是产物，忽略
 docs/                     设计文档.md + *-research.md / 音游成绩数据获取方式调研.md（**都不入库**）
@@ -291,6 +292,7 @@ node scripts/pack-data.ts --emit-tree --base-url https://<域名>/arcaea
 | 文档 | 内容 |
 |---|---|
 | `docs/设计文档.md` | ★★ **唯一设计文档**：产品定义、架构决策、数据层、渲染管线、成绩层契约与自检、OCR、界面、门禁与验收 |
+| `docs/ui设计.md` / `docs/设计图/` | 七页界面细则与视觉参考；与设计文档冲突时以设计文档 §8 为准 |
 | `internal/render/testdata/README.md` | golden argv 怎么捕获、**两份 golden 的区别**、翻译时的坑 |
 | `scripts/README.md` | 脚本用法、Anubis 过盾、曲绘命名规律、数据分发策略 |
 | `docs/*-research.md` | 调研原始报告（结论以 `设计文档.md` 为准） |
