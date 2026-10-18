@@ -1,5 +1,5 @@
 import { type SetStateAction, useState} from 'react';
-import {Version} from "../wailsjs/go/main/App";
+import {Version} from "../wailsjs/go/app/App";
 
 function App() {
     const [resultText, setResultText] = useState("Please enter your name below 👇");
