@@ -10,14 +10,22 @@ import (
 )
 
 // valuesOf 用于需要的字段值
-func valuesOf(song *catalog.Song, chart *catalog.Chart, s score.Song) map[string]string {
+func valuesOf(song *catalog.Song, chart *catalog.Chart, s score.Song, songRating float64) map[string]string {
+	pure, far, lost := "—", "—", "—"
+	if s.Score.Pure+s.Score.Far+s.Score.Lost != 0 {
+		pure, far, lost = strconv.Itoa(s.Score.Pure), strconv.Itoa(s.Score.Far), strconv.Itoa(s.Score.Lost)
+	}
+	title := song.TitleEn
+	if title == "" {
+		title = song.TitleJP
+	}
 	return map[string]string{
-		"ptt":       "+12.34", // test
+		"ptt":       "+" + strconv.FormatFloat(songRating, 'f', 3, 64),
 		"score":     formatScore(s.Score.Achievement),
-		"pure":      strconv.Itoa(s.Score.Pure),
-		"far":       strconv.Itoa(s.Score.Far),
-		"lost":      strconv.Itoa(s.Score.Lost),
-		"title":     song.TitleEn,
+		"pure":      pure,
+		"far":       far,
+		"lost":      lost,
+		"title":     title,
 		"author":    song.Artist,
 		"diff":      score.DiffName(chart.Difficulty) + " " + formatConstant(chart.Constant),
 		"diffClass": strings.ToLower(chart.Difficulty),

@@ -135,9 +135,8 @@ func CompositeArgs(l Layers, dest string) []string {
 }
 
 // Concat 用于将多个视频片段拼接起来
-func Concat(ctx context.Context, ffmpeg, listFile, outFile string, segs []string) error {
+func Concat(ctx context.Context, ffmpeg, ffprobe, listFile, outFile string, segs []string) error {
 	// 校验规格
-	ffprobe := filepath.Join(filepath.Dir(ffmpeg), "ffprobe.exe")
 	var baseInfo StreamInfo
 	var baseSeg string
 	for i, seg := range segs {

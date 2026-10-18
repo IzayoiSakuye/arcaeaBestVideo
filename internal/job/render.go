@@ -13,7 +13,7 @@ import (
 )
 
 // renderOne 渲染单首歌片段
-func (j *Job) renderOne(ctx context.Context, i int, s score.Song) (string, RenderPhaseDuration, bool, error) {
+func (j *Job) renderOne(ctx context.Context, i int, s score.Song, songRating float64) (string, RenderPhaseDuration, bool, error) {
 	var d RenderPhaseDuration
 	root := j.cfg.Root
 
@@ -45,7 +45,7 @@ func (j *Job) renderOne(ctx context.Context, i int, s score.Song) (string, Rende
 		return "", d, false, fmt.Errorf("parse clip failed: %w", err)
 	}
 	tpl := render.Templates[resource.TemplateFor(&src)]
-	val := valuesOf(song, chart, s)
+	val := valuesOf(song, chart, s, songRating)
 
 	in := SegInput{
 		Clip:     clip,
