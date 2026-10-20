@@ -8,12 +8,15 @@ import (
 	"os/exec"
 	"sort"
 	"strconv"
+
+	"rhythm-game-bvideo/internal/tools"
 )
 
-// grayPixels 调 ffmpeg 把图缩到指定尺寸的灰度裸数据。
+// grayPixels 调 ffmpeg 把图缩到指定尺寸的灰度裸数据
 func grayPixels(ctx context.Context, ffmpeg, file, filter string, need int) ([]byte, error) {
 	cmd := exec.CommandContext(ctx, ffmpeg, "-v", "error", "-y", "-i", file,
 		"-vf", filter, "-f", "rawvideo", "-pix_fmt", "gray", "-")
+	tools.HideWindow(cmd)
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	out, err := cmd.Output()
@@ -78,7 +81,7 @@ func DHash(ctx context.Context, ffmpeg, file string) (uint64, error) {
 // Hamming 两个指纹差几位，0 = 完全一样
 func Hamming(a, b uint64) int { return bits.OnesCount64(a ^ b) }
 
-// phashOf 解析一条曲绘记录的指纹。dhash 可能缺席（截断图场景），所以分开报。
+// phashOf 解析一条曲绘记录的指纹
 func phashOf(p *PHash) (a, d uint64, hasA, hasD bool) {
 	if p == nil || p.AHash == nil {
 		return 0, 0, false, false
@@ -105,16 +108,13 @@ func (c *Chart) ChartHash() (a, d uint64, hasA, hasD bool) { return phashOf(c.PH
 
 // JacketMatch 是按曲绘找出来的候选
 type JacketMatch struct {
-	Song *Song
-	// 非空 = 命中该难度的专属封面，顺带说明这一行就是它
+	Song      *Song
 	ChartDiff string
-	// 排序依据：dHash 比 aHash 稳（实测 48/50 vs 44/50）；对手没有 dhash 时给满分排到最后
 	DHashDist int
 	AHashDist int
 }
 
-// MatchJacket 拿裁出来的曲绘找候选。每首歌只在「默认封面 / 各难度专属封面」里
-// 取最近的那张参赛 —— 图上用了 BYD 专属封面时，默认封面根本对不上（实测差 29 位）。
+// MatchJacket 拿裁出来的曲绘找候选
 func (c *Catalog) MatchJacket(cropA, cropD uint64, n int) []JacketMatch {
 	const worst = 64
 

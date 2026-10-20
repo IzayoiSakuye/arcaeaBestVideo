@@ -26,6 +26,7 @@ func Check(name, path string) (string, error) {
 		shot := filepath.Join(dir, "check.png")
 		cmd := exec.CommandContext(ctx, path, "--headless=new", "--disable-gpu", "--no-first-run",
 			"--user-data-dir="+filepath.Join(dir, "profile"), "--screenshot="+shot, "--window-size=16,16", "about:blank")
+		HideWindow(cmd)
 		out, err := cmd.CombinedOutput()
 		if err != nil {
 			return "", fmt.Errorf("Edge 截图测试失败：%w：%s", err, strings.TrimSpace(string(out)))
@@ -44,7 +45,9 @@ func Check(name, path string) (string, error) {
 	default:
 		return "", fmt.Errorf("未知工具：%s", name)
 	}
-	out, err := exec.CommandContext(ctx, path, flag).CombinedOutput()
+	cmd := exec.CommandContext(ctx, path, flag)
+	HideWindow(cmd)
+	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return "", fmt.Errorf("%s 测试失败：%w：%s", name, err, strings.TrimSpace(string(out)))
 	}
