@@ -27,7 +27,7 @@
     { "index": 4,  "title": "MVURBD",                          "score": 9924588,  "constant": 10.6, "ptt": 12.4229, "clear_type": "HC", "pure": 1481, "shiny_perfect": 1409, "far": 9,  "lost": 7,  "played_days_ago": 100 },
     { "index": 5,  "title": "ouroboros -twin stroke of the end", "score": 9902615, "constant": 10.7, "ptt": 12.4131, "clear_type": "HC", "pure": 1351, "shiny_perfect": 1228, "far": 9,  "lost": 9,  "played_days_ago": 64 },
     { "index": 6,  "title": "Singularity",                     "score": 9928608,  "constant": 10.5, "ptt": 12.3430, "clear_type": "HC", "pure": 1095, "shiny_perfect": 1007, "far": 4,  "lost": 6,  "played_days_ago": 97 },
-    { "index": 7,  "title": "MIRINAE",                         "score": 9934605,  "constant": 10.4, "ptt": 12.2730, "clear_type": "HC", "pure": 1266, "shiny_perfect": 1168, "far": 6,  "lost": 6,  "played_days_ago": 27 },
+    { "index": 7,  "title": "MIRINAE",                         "score": 9934605,  "constant": 10.4, "ptt": 12.2730, "clear_type": "HC", "pure": 1266, "shiny_perfect": 1168, "far": 5,  "lost": 6,  "played_days_ago": 27 },
     { "index": 8,  "title": "Wish Upon a Snow",                "score": 9913317,  "constant": 10.5, "ptt": 12.2666, "clear_type": "HC", "pure": 1293, "shiny_perfect": 1171, "far": 9,  "lost": 7,  "played_days_ago": 167 },
     { "index": 9,  "title": "Cyaëgha",                         "score": 9873260,  "constant": 10.7, "ptt": 12.2663, "clear_type": "HC", "pure": 1341, "shiny_perfect": 1184, "far": 19, "lost": 8,  "played_days_ago": 199 },
     { "index": 10, "title": "PUPA",                            "score": 9932698,  "constant": 10.4, "ptt": 12.2635, "clear_type": "HC", "pure": 1087, "shiny_perfect": 942,  "far": 9,  "lost": 3,  "played_days_ago": 200 },
@@ -35,13 +35,13 @@
     { "index": 11, "title": "Ether Strike",                    "score": 9949775,  "constant": 10.3, "ptt": 12.2489, "clear_type": "HC", "pure": 1160, "shiny_perfect": 1058, "far": 8,  "lost": 2,  "played_days_ago": 58 },
     { "index": 12, "title": "Halcyon",                         "score": 9907396,  "constant": 10.5, "ptt": 12.2370, "clear_type": "HC", "pure": 1214, "shiny_perfect": 1121, "far": 3,  "lost": 10, "played_days_ago": 97 },
     { "index": 13, "title": "Qovat",                           "score": 9924185,  "constant": 10.4, "ptt": 12.2209, "clear_type": "HC", "pure": 1284, "shiny_perfect": 1168, "far": 10, "lost": 5,  "played_days_ago": 167 },
-    { "index": 14, "title": "GLORY：ROAD",                      "score": 9899930,  "constant": 10.5, "ptt": 12.1997, "clear_type": "HC", "pure": 1458, "shiny_perfect": 1360, "far": 12, "lost": 9,  "played_days_ago": 100 },
+    { "index": 14, "title": "GLORY：ROAD",                      "score": 9899930,  "constant": 10.5, "ptt": 12.1997, "clear_type": "HC", "pure": 1458, "shiny_perfect": 1350, "far": 12, "lost": 9,  "played_days_ago": 100 },
     { "index": 15, "title": "Sheriruth",                       "score": 9996743,  "constant": 10.0, "ptt": 12.1837, "clear_type": "FR", "pure": 1150, "shiny_perfect": 1088, "far": 1,  "lost": 0,  "played_days_ago": 97 },
-    { "index": 16, "title": "怒槌",                              "score": 9930665,  "constant": 10.3, "ptt": 12.1533, "clear_type": "HC", "pure": 1335, "shiny_perfect": 1193, "far": 6,  "lost": 7,  "played_days_ago": 300 },
+    { "index": 16, "title": "怒槌",                              "score": 9930665,  "constant": 10.3, "ptt": 12.1533, "clear_type": "HC", "pure": 1335, "shiny_perfect": 1193, "far": 5,  "lost": 7,  "played_days_ago": 300 },
     { "index": 17, "title": "Nirv lucE",                       "score": 9949881,  "constant": 10.2, "ptt": 12.1494, "clear_type": "HC", "pure": 972,  "shiny_perfect": 902,  "far": 6,  "lost": 2,  "played_days_ago": 244 },
     { "index": 18, "title": "conflict",                        "score": 9948868,  "constant": 10.2, "ptt": 12.1443, "clear_type": "HC", "pure": 1047, "shiny_perfect": 952,  "far": 7,  "lost": 2,  "played_days_ago": 297 },
     { "index": 19, "title": "Arcana Eden",                     "score": 9884389,  "constant": 10.5, "ptt": 12.1219, "clear_type": "HC", "pure": 1759, "shiny_perfect": 1577, "far": 24, "lost": 9,  "played_days_ago": 27 },
-    { "index": 20, "title": "To the Milky Way",                "score": 9900680,  "constant": 10.4, "ptt": 12.1034, "clear_type": "HC", "pure": 1373, "shiny_perfect": 1256, "far": 10, "lost": 9,  "played_days_ago": 199 },
+    { "index": 20, "title": "To the Milky Way",                "score": 9900680,  "constant": 10.4, "ptt": 12.1034, "clear_type": "HC", "pure": 1373, "shiny_perfect": 1255, "far": 10, "lost": 9,  "played_days_ago": 199 },
     { "index": 21, "title": "Alexandrite",                     "score": 9976935,  "constant": 10.0, "ptt": 12.0847, "clear_type": "HC", "pure": 1036, "shiny_perfect": 974,  "far": 3,  "lost": 1,  "played_days_ago": 185 },
     { "index": 22, "title": "Valhalla:0",                      "score": 9928603,  "constant": 10.2, "ptt": 12.0430, "clear_type": "HC", "pure": 1160, "shiny_perfect": 1067, "far": 9,  "lost": 4,  "played_days_ago": 199 },
     { "index": 23, "title": "Ringed Genesis",                  "score": 9800252,  "constant": 10.8, "ptt": 12.0013, "clear_type": "HC", "pure": 1111, "shiny_perfect": 951,  "far": 24, "lost": 11, "played_days_ago": 199 },
@@ -71,6 +71,6 @@
     { "index": 47, "title": "彼方の夢へと",                        "score": 9964755,  "constant": 9.8,  "ptt": 11.8238, "clear_type": "HC", "pure": 1097, "shiny_perfect": 1053, "far": 2,  "lost": 3,  "played_days_ago": 436 },
     { "index": 48, "title": "ヨミビトシラズ",                      "score": 9963771,  "constant": 9.8,  "ptt": 11.8189, "clear_type": "FR", "pure": 1067, "shiny_perfect": 981,  "far": 8,  "lost": 0,  "played_days_ago": 254 },
     { "index": 49, "title": "ヒュブリスの頂に聳えるもの",             "score": 9963507,  "constant": 9.8,  "ptt": 11.8175, "clear_type": "HC", "pure": 1190, "shiny_perfect": 1133, "far": 3,  "lost": 3,  "played_days_ago": 310 },
-    { "index": 50, "title": "Chronicle",                       "score": 9823113,  "constant": 10.5, "ptt": 11.8156, "clear_type": "HC", "pure": 1229, "shiny_perfect": 1120, "far": 26, "lost": 10, "played_days_ago": 27 }
+    { "index": 50, "title": "Chronicle",                       "score": 9823113,  "constant": 10.5, "ptt": 11.8156, "clear_type": "HC", "pure": 1229, "shiny_perfect": 1120, "far": 25, "lost": 10, "played_days_ago": 27 }
   ]
 }
