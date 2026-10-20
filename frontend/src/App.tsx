@@ -13,7 +13,7 @@ import {
   StartRender,
   Status,
 } from '../wailsjs/go/app/App';
-import { EventsOn } from '../wailsjs/runtime/runtime';
+import { EventsOn } from '../wailsjs/runtime';
 import type { app, score } from '../wailsjs/go/models';
 import { eventText, nameOf, scoreText, type Event } from './format';
 import { noteSongIndex, pendingSongIndexes } from './issues';

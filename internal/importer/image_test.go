@@ -206,21 +206,19 @@ func TestImageProviderReadsSampleSheet(t *testing.T) {
 	}
 	t.Logf("反查出难度 %d/50（曲目认错的那行查不到，属预期）", filled)
 
-	// 认准的行：第一名比第二名近 9 位以上；#27 那个撞车的是 0 位。
-	// 表头校验和也要来一遍 —— 它跟逐行读出来的数不是一个来路
-	close := map[int]bool{}
+	closed := map[int]bool{}
 	for _, note := range draft.Notes {
 		if strings.Contains(note, "曲绘无法准确识别") {
-			close[noteIndex(t, note)] = true
+			closed[noteIndex(t, note)] = true
 		}
 		if strings.Contains(note, "校验和") {
 			t.Errorf("表头校验和对不上：%s", note)
 		}
 	}
-	if !close[27] {
-		t.Errorf("#27 的撞车应该进 Notes，现在 Notes 里的认不准行是 %v", close)
+	if !closed[27] {
+		t.Errorf("#27 的撞车应该进 Notes，现在 Notes 里的认不准行是 %v", closed)
 	}
-	for idx := range close {
+	for idx := range closed {
 		if idx != 27 {
 			t.Errorf("#%d 被标成认不准，但这一行本该认得准", idx)
 		}
