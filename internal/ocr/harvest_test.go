@@ -12,9 +12,6 @@ import (
 )
 
 // 从样例图里抽字形模板，生成 glyphs_gen.go。
-// 标签来自真值夹具 —— 抽模板这件事本身也被校验：切出来的字数对不上就不生成。
-// 只有定数和分数这两行的字切得干净（定数 4 字、分数 10 字），模板就从这两处自举；
-// 单曲ptt 那行相邻数字常挨在一起，改用生成好的模板 + DP 去认。
 //
 //	OCR_GEN=1 go test ./internal/ocr -run TestHarvestFonts
 func TestHarvestFonts(t *testing.T) {
@@ -27,7 +24,7 @@ func TestHarvestFonts(t *testing.T) {
 	}
 
 	rows := fixtureRows(t)
-	small, big := map[rune][]Glyph{}, map[rune][]Glyph{}
+	small, big, judgment := map[rune][]Glyph{}, map[rune][]Glyph{}, map[rune][]Glyph{}
 	h := fixtureHeaderOf(t)
 	for _, r := range rows {
 		c := Grid()[r.Index-1]
@@ -41,10 +38,19 @@ func TestHarvestFonts(t *testing.T) {
 
 		// 通关类型的两个字母：真值就在图上（HC / FR / PM），不需要额外锚点
 		collect(t, r.Index, '通', r.ClearType, cutWord(img, line, 4), small)
+		jl := LineBox(c, LineJudgment)
+		for _, item := range []struct{ value, x0, x1 int }{{r.Far, 224, 241}, {r.Lost, 268, 286}} {
+			if item.value >= 10 {
+				continue
+			}
+			gs := CutRow(img, jl, c.Box.Min.X+item.x0, c.Box.Min.X+item.x1, CharGap)
+			if len(gs) == 1 && gs[0].H == 11 {
+				judgment[rune('0'+item.value)] = append(judgment[rune('0'+item.value)], gs[0])
+			}
+		}
 	}
 
 	// ':' 只在判定行里。第一段固定是 "P:"，但两者常常只隔 1 列、切不开，
-	// 所以先从合并的字形里试切：左半要像已经抽到的 'P'，右半要像冒号。
 	if len(small['P']) > 0 {
 		p := medoid(small['P'])
 		for _, r := range rows {
@@ -66,7 +72,6 @@ func TestHarvestFonts(t *testing.T) {
 	}
 
 	// 表头那套 19px 的字：三个平均数 + 左下角时间戳。
-	// 表头自己缺 6 和 9，时间戳正好补上。
 	head := map[rune][]Glyph{}
 	inv := lightOnDark(img)
 	for _, item := range []struct {
@@ -79,7 +84,7 @@ func TestHarvestFonts(t *testing.T) {
 	} {
 		collect(t, 0, '头', item.text, CutRow(inv, item.box, item.box.Min.X, item.box.Max.X, CharGap), head)
 	}
-	// 时间戳是两个词（日期 + 时分），分开切
+	// 时间戳是两个词（日期 + 时分）
 	if words := Groups(InkColumns(inv, footerStamp), footerStamp.Min.X, 8); len(words) == len(strings.Fields(h.Stamp)) {
 		for i, w := range words {
 			collect(t, 0, '时', strings.Fields(h.Stamp)[i], CutRow(inv, footerStamp, w[0], w[1], CharGap), head)
@@ -103,12 +108,11 @@ func TestHarvestFonts(t *testing.T) {
 
 	var b strings.Builder
 	b.WriteString("// 代码生成，勿手改：OCR_GEN=1 go test ./internal/ocr -run TestHarvestFonts\n")
-	b.WriteString("// 模板是从 dist/b50-sample.jpg 上量死的：图源固定成 Yurisaki 一种，\n")
-	b.WriteString("// 字号和字形都不变，所以认字只要比字形，不用缩放也不用 AI 模型。\n\n")
 	b.WriteString("package ocr\n\n")
 	writeArt(&b, "smallGlyphArt", "定数/单曲ptt 行的小字", small)
 	writeArt(&b, "bigGlyphArt", "分数行的大字", big)
 	writeArt(&b, "headerGlyphArt", "表头和时间戳的字", head)
+	writeArt(&b, "judgmentGlyphArt", "判定行的数字", judgment)
 
 	src, err := format.Source([]byte(b.String()))
 	if err != nil {
@@ -232,7 +236,6 @@ func medoid(samples []Glyph) Glyph {
 }
 
 // template 先挑最宽的那批样本再取中位数：
-// 抗锯齿会让同一个字的宽度抖 1 列，模板取窄的，图上的宽字就会多出一列没处放
 func template(samples []Glyph) Glyph {
 	w := 0
 	for _, g := range samples {

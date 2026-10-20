@@ -82,7 +82,7 @@ func checkNoteSum(res *Resolved) []Problem {
 			continue
 		}
 		sum := row.Input.Score.Pure + row.Input.Score.Far + row.Input.Score.Lost
-		if sum == 0 {
+		if sum == 0 || len(row.Input.Score.UnreadJudgments) > 0 {
 			skipped++
 			continue
 		}

@@ -112,7 +112,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 .search-results button:hover{background:#f2edf8}
 .search-results small{color:#8a7c96}
 .readout{min-height:39px;border:1px solid #ebe5f0;background:#f6f3f9;padding:10px 11px;color:#63576e}
-.judgment-row{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.judgment-row{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
 .right-stack{display:flex;flex-direction:column;gap:16px}
 .problem-list{max-height:300px;overflow:auto}
 .problem{display:flex;gap:9px;padding:9px 0;border-bottom:1px solid #f0eaf3;font-size:12px;line-height:1.5}

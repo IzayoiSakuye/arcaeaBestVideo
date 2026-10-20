@@ -142,8 +142,11 @@ func resolveRow(i int, s *Song, cata *catalog.Catalog) (Row, []Problem) {
 	row.Rank = Rank(s.Score.Score())
 
 	inputConstant := s.Difficulty.Constant
-	chart, ok := findChart(song, s.Difficulty.Name, inputConstant,
-		s.Score.Pure+s.Score.Far+s.Score.Lost)
+	noteSum := s.Score.Pure + s.Score.Far + s.Score.Lost
+	if len(s.Score.UnreadJudgments) > 0 {
+		noteSum = 0
+	}
+	chart, ok := findChart(song, s.Difficulty.Name, inputConstant, noteSum)
 	if !ok {
 		return row, []Problem{{
 			SongIndex: i + 1,

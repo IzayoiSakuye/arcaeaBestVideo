@@ -31,13 +31,15 @@ type DiffRef struct {
 	Constant float64 `json:"constant"`
 }
 type ScoreRef struct {
-	Achievement float64  `json:"achievement"`
-	Rank        string   `json:"rank"`
-	ClearType   string   `json:"clear_type"`
-	PTT         *float64 `json:"ptt,omitempty"`
-	Pure        int      `json:"pure"`
-	Far         int      `json:"far"`
-	Lost        int      `json:"lost"`
+	Achievement     float64  `json:"achievement"`
+	Rank            string   `json:"rank"`
+	ClearType       string   `json:"clear_type"`
+	PTT             *float64 `json:"ptt,omitempty"`
+	Pure            int      `json:"pure"`
+	ShinyPerfect    *int     `json:"shiny_perfect,omitempty"`
+	Far             int      `json:"far"`
+	Lost            int      `json:"lost"`
+	UnreadJudgments []string `json:"unread_judgments,omitempty"`
 }
 type UserRef struct {
 	Comment string `json:"comment"`

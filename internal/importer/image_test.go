@@ -10,6 +10,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -33,6 +34,10 @@ type truthRow struct {
 	Constant  float64 `json:"constant"`
 	PTT       float64 `json:"ptt"`
 	ClearType string  `json:"clear_type"`
+	Pure      int     `json:"pure"`
+	Shiny     int     `json:"shiny_perfect"`
+	Far       int     `json:"far"`
+	Lost      int     `json:"lost"`
 }
 
 func loadTruth(t *testing.T) []truthRow {
@@ -113,6 +118,23 @@ func TestImageProviderReadsSampleSheet(t *testing.T) {
 		if got.Score.PTT != nil {
 			sum += *got.Score.PTT
 		}
+		for _, item := range []struct {
+			name            string
+			value, expected int
+		}{{"pure", got.Score.Pure, r.Pure}, {"far", got.Score.Far, r.Far}, {"lost", got.Score.Lost, r.Lost}} {
+			if slices.Contains(got.Score.UnreadJudgments, item.name) {
+				continue
+			}
+			if item.value != item.expected {
+				t.Errorf("#%d %s 判定数 %d，真值 %d", r.Index, item.name, item.value, item.expected)
+			}
+		}
+		if got.Score.ShinyPerfect == nil || *got.Score.ShinyPerfect != r.Shiny {
+			t.Errorf("#%d 大 P 数 %v，真值 %d", r.Index, got.Score.ShinyPerfect, r.Shiny)
+		}
+		if len(got.Score.UnreadJudgments) > 0 {
+			t.Errorf("#%d 样例图判定数应全部读取：%v", r.Index, got.Score.UnreadJudgments)
+		}
 	}
 	t.Logf("曲绘定曲目 %d/50，逐字段错 %d 处", songHit, bad)
 	if bad > 0 {
@@ -152,7 +174,7 @@ func TestImageProviderReadsSampleSheet(t *testing.T) {
 		}
 		t.Logf("自检 %s %s：%s", pr.Severity, pr.Rule, pr.Message)
 	}
-	// 只允许 #27 那一行出问题（曲绘形似撞车）；别的行有问题就是回归
+	// #27 的曲绘指纹撞车，其余行的判定和应与曲库一致。
 	for idx := range noted {
 		if idx != 27 {
 			t.Errorf("第 %d 行有自检问题，但这一行本该是好的", idx)

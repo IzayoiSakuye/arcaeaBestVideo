@@ -83,8 +83,13 @@ func (p *ImageProvider) Import(ctx context.Context, in score.Input) (*score.Draf
 			Index:  cell.Index,
 			SongID: hit.Song.SongID,
 			Score: score.ScoreRef{
-				Achievement: float64(f.Score) / 100000,
-				ClearType:   f.ClearType,
+				Achievement:     float64(f.Score) / 100000,
+				ClearType:       f.ClearType,
+				Pure:            f.Pure,
+				ShinyPerfect:    f.ShinyPerfect,
+				Far:             f.Far,
+				Lost:            f.Lost,
+				UnreadJudgments: f.UnreadJudgments,
 			},
 		}
 		// 难度代号图上没有，留空让 Validate 按定数反查

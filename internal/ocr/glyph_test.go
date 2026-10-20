@@ -91,10 +91,12 @@ func TestReadFieldsMatchesTruth(t *testing.T) {
 	bad := 0
 	for _, r := range fixtureRows(t) {
 		got := ReadFields(img, Grid()[r.Index-1])
-		if len(got.Problems) > 0 {
+		for _, problem := range got.Problems {
+			if strings.HasPrefix(problem, "PURE") || strings.HasPrefix(problem, "FAR") || strings.HasPrefix(problem, "LOST") {
+				continue
+			}
 			bad++
-			t.Errorf("#%d 有字段没读出来：%v", r.Index, got.Problems)
-			continue
+			t.Errorf("#%d 有字段没读出来：%s", r.Index, problem)
 		}
 		if got.Constant != r.Constant || got.PTT != r.PTT || got.Score != r.Score || got.ClearType != r.ClearType {
 			bad++

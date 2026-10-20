@@ -36,6 +36,22 @@ func findProblem(ps []Problem, rule string) (Problem, bool) {
 	return Problem{}, false
 }
 
+func TestPartialJudgmentsDoNotChooseChart(t *testing.T) {
+	constant, notesA, notesB := 10.0, 100, 200
+	cata := &catalog.Catalog{Songs: []*catalog.Song{{SongID: "sample", Charts: []*catalog.Chart{
+		{Difficulty: "FTR", Constant: &constant, Notes: &notesA},
+		{Difficulty: "BYD", Constant: &constant, Notes: &notesB},
+	}}}}
+	song := Song{SongID: "sample", Difficulty: DiffRef{Constant: constant}, Score: ScoreRef{Achievement: 99, Pure: 100, UnreadJudgments: []string{"far"}}}
+	row, problems := resolveRow(0, &song, cata)
+	if row.Chart != nil {
+		t.Fatal("部分判定和不能用于消歧谱面")
+	}
+	if _, ok := findProblem(problems, "chart-not-found"); !ok {
+		t.Errorf("应提示谱面仍有歧义：%v", problems)
+	}
+}
+
 // 整份文件级失败：这些走 error，不进 Problems
 func TestValidateFileLevelFailures(t *testing.T) {
 	cata := loadCatalog(t)

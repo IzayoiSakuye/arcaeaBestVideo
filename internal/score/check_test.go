@@ -165,6 +165,18 @@ func TestCheckSkipsAreRecorded(t *testing.T) {
 	}
 }
 
+func TestNoteSumSkipsPartiallyReadJudgments(t *testing.T) {
+	cata := loadCatalog(t)
+	proj := synthB50(t, cata)
+	proj.Songs[7].Score.Far = 0
+	proj.Songs[7].Score.UnreadJudgments = []string{"far"}
+	for _, problem := range runCheck(t, proj, cata) {
+		if problem.Rule == "note-sum" && problem.SongIndex == 8 && problem.Severity == SeverityWarn {
+			t.Fatal("FAR 未读取时不能拿不完整的判定和比较物量")
+		}
+	}
+}
+
 func TestCheckTotalPTTSkipsWrongSongCount(t *testing.T) {
 	cata := loadCatalog(t)
 	proj := synthB50(t, cata)
