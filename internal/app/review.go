@@ -10,20 +10,21 @@ import (
 )
 
 type ReviewRow struct {
-	Index      int      `json:"index"`
-	SongID     string   `json:"song_id"`
-	Title      string   `json:"title"`
-	Artist     string   `json:"artist"`
-	Difficulty string   `json:"difficulty"`
-	Constant   *float64 `json:"constant,omitempty"`
-	Score      int      `json:"score"`
-	Rank       string   `json:"rank"`
-	PTT        *float64 `json:"ptt,omitempty"`
-	ClearType  string   `json:"clear_type"`
-	Pure       int      `json:"pure"`
-	Far        int      `json:"far"`
-	Lost       int      `json:"lost"`
-	Comment    string   `json:"comment"`
+	Index        int      `json:"index"`
+	SongID       string   `json:"song_id"`
+	Title        string   `json:"title"`
+	Artist       string   `json:"artist"`
+	Difficulty   string   `json:"difficulty"`
+	Difficulties []string `json:"difficulties"`
+	Constant     *float64 `json:"constant,omitempty"`
+	Score        int      `json:"score"`
+	Rank         string   `json:"rank"`
+	PTT          *float64 `json:"ptt,omitempty"`
+	ClearType    string   `json:"clear_type"`
+	Pure         int      `json:"pure"`
+	Far          int      `json:"far"`
+	Lost         int      `json:"lost"`
+	Comment      string   `json:"comment"`
 }
 
 type ReviewResult struct {
@@ -71,6 +72,9 @@ func (a *App) Review(project *score.Project) (*ReviewResult, error) {
 			r.Title, r.Artist = row.Catalog.TitleEn, row.Catalog.Artist
 			if r.Title == "" {
 				r.Title = row.Catalog.TitleJP
+			}
+			for _, chart := range row.Catalog.Charts {
+				r.Difficulties = append(r.Difficulties, chart.Difficulty)
 			}
 		}
 		if row.Chart != nil {

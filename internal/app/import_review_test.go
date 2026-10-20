@@ -47,6 +47,9 @@ func TestP2ImportReviewSearch(t *testing.T) {
 	if review.Rows[0].PTT == nil {
 		t.Fatal("单曲 PTT 未计算")
 	}
+	if len(review.Rows[0].Difficulties) != 1 || review.Rows[0].Difficulties[0] != "FTR" {
+		t.Fatalf("难度候选与曲库不一致：%v", review.Rows[0].Difficulties)
+	}
 	choices, err := a.SearchSongs("complete", 5)
 	if err != nil || len(choices) != 1 || choices[0].SongID != "complete" {
 		t.Fatalf("搜曲结果：%+v, %v", choices, err)

@@ -76,8 +76,8 @@ func Load(path string, supportedSchema int) (*Catalog, error) {
 
 // JacketPath 用于快速获取歌曲封面的本地路径
 func (c *Catalog) JacketPath(SongID, diff string) (string, error) {
-	if SongID == "" || diff == "" {
-		return "", fmt.Errorf("catalog: invalid song id or difficulty")
+	if SongID == "" {
+		return "", fmt.Errorf("catalog: invalid song id")
 	}
 	song, ok := c.Song(SongID)
 	if !ok {

@@ -25,6 +25,10 @@ func loadRealForJacket(t *testing.T) *Catalog {
 // ⭐ 难度专属曲绘优先：tempestissimo 的 BYD 有自己的图（实测存在）
 func TestJacketPathPrefersChartOverride(t *testing.T) {
 	c := loadRealForJacket(t)
+	defaultArt, err := c.JacketPath("tempestissimo", "")
+	if err != nil || !strings.Contains(defaultArt, "tempestissimo.jpg") {
+		t.Fatalf("未确定难度时应显示歌曲默认曲绘：%q, %v", defaultArt, err)
+	}
 
 	got, err := c.JacketPath("tempestissimo", "BYD")
 	if err != nil {

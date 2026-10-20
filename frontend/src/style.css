@@ -83,8 +83,6 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 .field input:focus,.field select:focus,.field textarea:focus{border-color:#7656aa}
 .file-box+.field{margin-top:18px}
 .action-line{display:flex;justify-content:flex-end;gap:10px;margin-top:18px}
-.note-list{padding-left:18px;color:#6e657a;font-size:12px;line-height:1.6;max-height:330px;overflow:auto;overflow-wrap:anywhere}
-.note-list li{margin-bottom:9px}
 .empty-aside{padding:30px;text-align:center}
 .placeholder{text-align:center;min-height:400px;display:flex;align-items:center;justify-content:center;flex-direction:column}
 .placeholder h2{display:block;margin:0 0 5px;font-size:22px}
@@ -93,6 +91,8 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 .placeholder-symbol{font-size:48px;color:#b4a0ca;margin-bottom:12px}
 .placeholder .button{margin-top:12px}
 .review-toolbar{display:flex;gap:10px;align-items:center;margin-bottom:13px}
+.pending-summary{margin-bottom:13px;border-color:#c8b5df;background:#faf7ff}
+.pending-summary h2{margin-bottom:12px}
 .review-toolbar .compact{flex-direction:row;align-items:center;white-space:nowrap}
 .review-toolbar input[type=number]{width:66px;text-align:center}
 .checkline{display:flex;align-items:center;gap:5px;color:#655973;font-size:12px}
@@ -107,7 +107,6 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:15px 16px}
 .inline-field{display:flex;gap:9px;align-items:center}
 .inline-field input{flex:1;min-width:0}
-.current-id{font-size:11px;color:#877b92;white-space:nowrap}
 .search-results{border:1px solid #d8cee5;max-height:200px;overflow:auto;background:white}
 .search-results button{display:flex;flex-direction:column;gap:3px;width:100%;padding:9px 11px;text-align:left;border:0;border-bottom:1px solid #eee8f2;background:white;color:#30283f}
 .search-results button:hover{background:#f2edf8}
@@ -117,15 +116,16 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 .right-stack{display:flex;flex-direction:column;gap:16px}
 .problem-list{max-height:300px;overflow:auto}
 .problem{display:flex;gap:9px;padding:9px 0;border-bottom:1px solid #f0eaf3;font-size:12px;line-height:1.5}
+.problem span{min-width:0;flex:1;overflow-wrap:anywhere}
+.problem .button{min-height:0;margin-left:auto;padding:2px 4px;font-size:11px}
+.problem.done{opacity:.55}
 .problem b{flex:none;font-size:10px;color:#8f6580}
 .problem.fatal b,.problem.error b{color:#b4495a}
 .problem.warn b{color:#98621f}
 .problem.info b{color:#6e657a}
-.future-tile{display:flex;justify-content:space-between;border:1px dashed #d8cee5;background:#faf8fc;color:#8b7e97;padding:14px;margin-top:10px;font-size:12px}
-.future-tile span{font-weight:700;color:#a089b8}
-.problem-overview{margin-top:16px}
 .problem-chips{display:flex;gap:8px;flex-wrap:wrap}
 .problem-chips button{border:1px solid #d8cee5;background:#f7f3fb;padding:7px 11px;color:#6a5290}
+.problem-chips button.selected{border-color:#7656aa;background:#eee7f6;font-weight:700}
 .output-picker{display:flex;align-items:center;gap:16px;border:1px solid #ded5e8;background:#fbf9fd;padding:14px}
 .output-picker div{min-width:0;flex:1}
 .output-picker span,.output-picker strong,.output-picker small{display:block}
