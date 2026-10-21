@@ -110,6 +110,28 @@ func TestReadFieldsMatchesTruth(t *testing.T) {
 	}
 }
 
+func TestReadClearTypesFromSecondImage(t *testing.T) {
+	img, err := Load("../../dist/b50-sample2.jpg")
+	if err != nil {
+		t.Skipf("没有第二张样例图：%v", err)
+	}
+	nc := map[int]bool{}
+	for _, i := range []int{4, 5, 8, 10, 11, 13, 14, 16, 18, 19, 20, 24, 26, 27, 28, 29, 31, 32, 33, 34, 35, 36, 37, 38, 40, 41, 43, 44, 45, 49, 50} {
+		nc[i] = true
+	}
+	for _, c := range Grid() {
+		want := "HC"
+		if c.Index == 2 {
+			want = "FR"
+		} else if nc[c.Index] {
+			want = "NC"
+		}
+		if got := ReadFields(img, c).ClearType; got != want {
+			t.Errorf("#%d 通关类型识别成 %q，期望 %q", c.Index, got, want)
+		}
+	}
+}
+
 // 图上数字的排法：定数 1 位小数、单曲ptt 4 位小数、分数补足 8 位后每 3 位插一个撇号
 func constantText(v float64) string { return strconv.FormatFloat(v, 'f', 1, 64) }
 func pttText(v float64) string      { return strconv.FormatFloat(v, 'f', 4, 64) }

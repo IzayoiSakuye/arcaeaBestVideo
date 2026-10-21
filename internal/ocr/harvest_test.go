@@ -50,6 +50,12 @@ func TestHarvestFonts(t *testing.T) {
 		}
 	}
 
+	img2, err := Load("../../dist/b50-sample2.jpg")
+	if err != nil {
+		t.Fatal(err)
+	}
+	collect(t, 4, '通', "NC", cutWord(img2, LineBox(Grid()[3], LinePotential), 4), small)
+
 	// ':' 只在判定行里。第一段固定是 "P:"，但两者常常只隔 1 列、切不开，
 	if len(small['P']) > 0 {
 		p := medoid(small['P'])
