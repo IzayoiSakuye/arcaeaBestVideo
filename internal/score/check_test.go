@@ -165,6 +165,24 @@ func TestCheckSkipsAreRecorded(t *testing.T) {
 	}
 }
 
+func TestImageOmitsMissingRankInfoAndCountsUnknownPTT(t *testing.T) {
+	cata := loadCatalog(t)
+	proj := synthB50(t, cata)
+	proj.Source.Type = KindImage
+	for i := range proj.Songs {
+		proj.Songs[i].Score.Rank = ""
+	}
+	proj.Songs[46].Score.ClearType = ""
+	ps := runCheck(t, proj, cata)
+	if p, ok := findProblem(ps, "rank-mismatch"); ok {
+		t.Errorf("图片没有原始评级，不应显示评级跳过提示：%+v", p)
+	}
+	p, ok := findProblem(ps, "total-ptt-mismatch")
+	if !ok || p.Severity != SeverityInfo || p.Message != "总 PTT 校验未执行：1/50 首算不出单曲 PTT" {
+		t.Errorf("总 PTT 跳过数量错误：%+v", p)
+	}
+}
+
 func TestNoteSumSkipsPartiallyReadJudgments(t *testing.T) {
 	cata := loadCatalog(t)
 	proj := synthB50(t, cata)

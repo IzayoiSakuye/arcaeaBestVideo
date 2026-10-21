@@ -39,8 +39,7 @@ func checkSinglePTT(res *Resolved) []Problem {
 			skipped++
 			continue
 		}
-		// 容差 ±1（×10000 尺度）：末位恰好 .5 时 float64 会落到哪一边说不准。
-		// 实测 #14 GLORY：ROAD 精确值 12.19965，图上 12.1997，浮点算出来 12.1996。
+
 		if d := FormatPtt(row.PTT) - FormatPtt(*row.Input.Score.PTT); d > 1 || d < -1 {
 			ps = append(ps, Problem{SongIndex: i + 1, Rule: rule, Severity: SeverityError,
 				Field:   fieldPath(i, "score.ptt"),
@@ -125,11 +124,9 @@ func isScaledInteger(v, scale float64) bool {
 func checkRank(res *Resolved) []Problem {
 	const rule = "rank-mismatch"
 	var ps []Problem
-	skipped := 0
 	for i, row := range res.Rows {
 		got := row.Input.Score.Rank
 		if got == "" || row.Rank == "" {
-			skipped++
 			continue
 		}
 		if !strings.EqualFold(got, row.Rank) {
@@ -138,14 +135,10 @@ func checkRank(res *Resolved) []Problem {
 				Message: fmt.Sprintf("评级 %q 与分数不符（应为 %s）", got, row.Rank)})
 		}
 	}
-	if skipped > 0 {
-		ps = append(ps, skipInfo(rule, len(res.Rows), skipped, "输入没填评级"))
-	}
 	return ps
 }
 
-// checkPerfectMemory 满分与 PM 互为充要。实测 Sulfur：10'000'972 = 10'000'000 + 972 个 shiny ——
-// 满分能超过 1000 万，超出部分恰好是 shiny 数，所以边界是 >= 而不是 ==。
+// checkPerfectMemory 检查PM可能性
 func checkPerfectMemory(res *Resolved) []Problem {
 	const rule = "pm-score"
 	var ps []Problem
@@ -188,10 +181,13 @@ func checkTotalPTT(res *Resolved) []Problem {
 	}
 	ptts := make([]float64, 0, n)
 	for _, row := range res.Rows {
-		if !row.PTTKnown {
-			return []Problem{skipInfo(rule, n, n, "有行算不出单曲 ptt")}
+		if row.PTTKnown {
+			ptts = append(ptts, row.PTT)
 		}
-		ptts = append(ptts, row.PTT)
+	}
+	if missing := n - len(ptts); missing > 0 {
+		return []Problem{{Rule: rule, Severity: SeverityInfo,
+			Message: fmt.Sprintf("总 PTT 校验未执行：%d/%d 首算不出单曲 PTT", missing, n)}}
 	}
 	slices.Sort(ptts)
 	var sum50, sum10 float64
