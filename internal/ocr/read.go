@@ -20,6 +20,11 @@ type Fields struct {
 	Problems        []string
 }
 
+// ReadFieldsAtThreshold 用指定墨色阈值重读整格，供判定数复核使用。
+func ReadFieldsAtThreshold(img image.Image, c Cell, limit uint8) Fields {
+	return ReadFields(thresholdImage{Image: img, limit: limit}, c)
+}
+
 // ReadFields 读一格里印出来的字段
 func ReadFields(img image.Image, c Cell) Fields {
 	var f Fields
@@ -46,20 +51,18 @@ func ReadFields(img image.Image, c Cell) Fields {
 		x0, x1         int
 		max, minDigits int
 	}{
-		{"PURE", 117, 145, 2000, 3}, {"FAR", 224, 241, 999, 1}, {"LOST", 268, 286, 999, 1},
+		{"PURE", 117, 145, 9999, 3}, {"FAR", 224, 241, 999, 1}, {"LOST", 268, 286, 999, 1},
 	} {
 		box := image.Rect(c.Box.Min.X+item.x0, j.Min.Y+1, c.Box.Min.X+item.x1, j.Min.Y+12)
-		v, valid := judgmentNumber(img, box, item.max, item.minDigits)
-		if !valid && i == 0 {
-			// 三位 PURE 的末尾容易连上括号，括号向下多出两行。
+		if i == 0 {
 			for x := c.Box.Min.X + 140; x < c.Box.Min.X+160; x++ {
 				if isInk(img, x, j.Min.Y+12) || isInk(img, x, j.Min.Y+13) {
-					box.Max.X = x
-					v, valid = judgmentNumber(img, box, item.max, item.minDigits)
+					box.Max.X = x - 2
 					break
 				}
 			}
 		}
+		v, valid := judgmentNumber(img, box, item.max, item.minDigits)
 		if !valid {
 			f.Problems = append(f.Problems, item.name+"未能识别")
 			f.UnreadJudgments = append(f.UnreadJudgments, strings.ToLower(item.name))
@@ -106,15 +109,15 @@ func shinyNumber(img image.Image, c Cell, line image.Rectangle) (int, bool) {
 func judgmentNumber(img image.Image, box image.Rectangle, maxValue, minDigits int) (int, bool) {
 	d := judgmentFont.Decode(img, box)
 	for i, ch := range d.Text {
-		if maxValue == 2000 && ch == '?' && d.Spans[i][1]-d.Spans[i][0] > 2 {
+		if maxValue > 999 && ch == '?' && d.Spans[i][1]-d.Spans[i][0] > 2 {
 			return 0, false
 		}
 	}
 	value := strings.ReplaceAll(d.Text, "?", "")
-	if maxValue == 2000 && (len(value) < minDigits || len(value) > 4) {
+	if maxValue > 999 && (len(value) < minDigits || len(value) > 4) {
 		return 0, false
 	}
-	if maxValue != 2000 && (len(value) < 1 || len(value) > 2 || (strings.Contains(d.Text, "?") && !strings.HasSuffix(d.Text, "?"))) {
+	if maxValue <= 999 && (len(value) < 1 || len(value) > 2 || (strings.Contains(d.Text, "?") && !strings.HasSuffix(d.Text, "?"))) {
 		// 小数字的抗锯齿会让窄体 1 消失；按单字字形再比一次。
 		parts := CutRow(img, box, box.Min.X, box.Max.X, CharGap)
 		if len(parts) == 0 || len(parts) > 2 {
@@ -142,7 +145,7 @@ func judgmentNumber(img image.Image, box image.Rectangle, maxValue, minDigits in
 	if err != nil || v > maxValue {
 		return 0, false
 	}
-	if maxValue != 2000 {
+	if maxValue <= 999 {
 		if d.Text == value && len(d.Spans) == len(value) {
 			digits := []byte(value)
 			r := InkBox(img, box)

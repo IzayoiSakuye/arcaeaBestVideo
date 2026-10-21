@@ -241,6 +241,44 @@ func TestImageProviderReadsSampleSheet(t *testing.T) {
 	}
 }
 
+func TestImageProviderJudgmentsFromSecondSheet(t *testing.T) {
+	const sheet = "../../dist/b50-sample2.jpg"
+	if _, err := os.Stat(sheet); err != nil {
+		t.Skipf("没有第二张样例图：%v", err)
+	}
+	cata, err := catalog.Load(filepath.Join("..", "..", "data", "arcaea-catalog.json"), 1)
+	if err != nil {
+		t.Skipf("没有曲库：%v", err)
+	}
+	ff := tools.Detect(tools.Tools{}).Tools.FFmpeg
+	if ff == "" {
+		t.Skip("没找到 ffmpeg")
+	}
+	draft, err := (&ImageProvider{Cata: cata, FFmpeg: ff}).Import(context.Background(), score.Input{Kind: score.KindImage, Path: sheet})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []struct{ index, pure, far, lost int }{
+		{5, 2042, 57, 35}, {7, 1384, 22, 6}, {15, 1409, 18, 6},
+		{23, 1353, 6, 8}, {36, 1347, 29, 9}, {39, 1232, 14, 5}, {46, 1749, 32, 11},
+	} {
+		got := draft.Project.Songs[want.index-1].Score
+		if got.Pure != want.pure || got.Far != want.far || got.Lost != want.lost || len(got.UnreadJudgments) != 0 {
+			t.Errorf("#%d 判定数 P%d F%d L%d 未读=%v，期望 P%d F%d L%d", want.index,
+				got.Pure, got.Far, got.Lost, got.UnreadJudgments, want.pure, want.far, want.lost)
+		}
+	}
+}
+
+func TestReconcileJudgmentsRejectsAmbiguousSum(t *testing.T) {
+	base := ocr.Fields{Pure: 10, Far: 1, Lost: 1}
+	alt := ocr.Fields{Pure: 11, Far: 0, Lost: 1}
+	got, ok := reconcileJudgments(base, alt, 12)
+	if ok || got.Pure != base.Pure || got.Far != base.Far {
+		t.Fatalf("多种组合都满足物量时不应自动修正：%+v, ok=%v", got, ok)
+	}
+}
+
 // noteIndex 从 "「#27 ...」" 里取出序号
 func noteIndex(t *testing.T, note string) int {
 	t.Helper()

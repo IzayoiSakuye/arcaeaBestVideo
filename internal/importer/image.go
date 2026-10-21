@@ -8,6 +8,7 @@ import (
 	"image/png"
 	"math"
 	"os"
+	"slices"
 	"sync"
 	"time"
 
@@ -59,6 +60,17 @@ func (p *ImageProvider) Import(ctx context.Context, in score.Input) (*score.Draf
 	hits, err := p.matchJackets(ctx, img, cells)
 	if err != nil {
 		return nil, err
+	}
+	for i, hit := range hits {
+		// 只在曲绘匹配可靠且物量明确时，用复读结果修正判定数。
+		if margin(hit) <= JacketMarginOK {
+			continue
+		}
+		notes, ok := chartNotes(hit[0].Song, fields[i].Constant)
+		if !ok || (len(fields[i].UnreadJudgments) == 0 && fields[i].Pure+fields[i].Far+fields[i].Lost == notes) {
+			continue
+		}
+		fields[i], _ = reconcileJudgments(fields[i], ocr.ReadFieldsAtThreshold(img, cells[i], 160), notes)
 	}
 
 	header := ocr.ReadHeader(img)
@@ -114,6 +126,59 @@ func (p *ImageProvider) Import(ctx context.Context, in score.Input) (*score.Draf
 	proj.Source.Confidence = float64(confident) / float64(len(cells))
 	draft.Notes = append(draft.Notes, checksums(proj.Songs, header)...)
 	return draft, nil
+}
+
+// chartNotes 用于根据识别的判定数查询曲库物量
+func chartNotes(song *catalog.Song, constant float64) (int, bool) {
+	notes := 0
+	for _, chart := range song.Charts {
+		if chart.Constant == nil || *chart.Constant != constant || chart.Notes == nil {
+			continue
+		}
+		if notes != 0 && notes != *chart.Notes {
+			return 0, false
+		}
+		notes = *chart.Notes
+	}
+	return notes, notes > 0
+}
+
+// reconcileJudgements 把原始 OCR 和较高墨色阈值复读得到的 PURE/FAR/LOST 分别作为候选，选择完整等于物量的那个
+func reconcileJudgments(base, alt ocr.Fields, notes int) (ocr.Fields, bool) {
+	values := func(name string, before, after int) []int {
+		var out []int
+		if !slices.Contains(base.UnreadJudgments, name) {
+			out = append(out, before)
+		}
+		if !slices.Contains(alt.UnreadJudgments, name) && !slices.Contains(out, after) {
+			out = append(out, after)
+		}
+		return out
+	}
+	pure := values("pure", base.Pure, alt.Pure)
+	far := values("far", base.Far, alt.Far)
+	lost := values("lost", base.Lost, alt.Lost)
+	var found ocr.Fields
+	matches := 0
+	for _, p := range pure {
+		for _, f := range far {
+			for _, l := range lost {
+				if p+f+l == notes {
+					found.Pure, found.Far, found.Lost = p, f, l
+					matches++
+				}
+			}
+		}
+	}
+	if matches != 1 {
+		return base, false
+	}
+	base.Pure, base.Far, base.Lost = found.Pure, found.Far, found.Lost
+	base.UnreadJudgments = nil
+	base.Problems = slices.DeleteFunc(base.Problems, func(s string) bool {
+		return s == "PURE未能识别" || s == "FAR未能识别" || s == "LOST未能识别"
+	})
+	return base, true
 }
 
 // playerOf 取玩家 PTT。图上印 5 位小数、游戏里印 3 位，所以取 3 位

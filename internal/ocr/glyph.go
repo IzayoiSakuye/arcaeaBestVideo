@@ -2,9 +2,23 @@ package ocr
 
 import (
 	"image"
+	"image/color"
 	"sort"
 	"strings"
 )
+
+type thresholdImage struct {
+	image.Image
+	limit uint8
+}
+
+func (v thresholdImage) At(x, y int) color.Color {
+	r, g, b, _ := v.Image.At(x, y).RGBA()
+	if (r*299+g*587+b*114)/1000/257 < uint32(v.limit) {
+		return color.Black
+	}
+	return color.White
+}
 
 // 分段阈值：词间距 ≥5px，字间距 ≥2px
 const (
