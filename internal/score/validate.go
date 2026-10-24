@@ -148,6 +148,15 @@ func resolveRow(i int, s *Song, cata *catalog.Catalog) (Row, []Problem) {
 	}
 	chart, ok := findChart(song, s.Difficulty.Name, inputConstant, noteSum)
 	if !ok {
+		if s.Difficulty.Name == "" {
+			return row, []Problem{{
+				SongIndex: i + 1,
+				Rule:      "difficulty-not-selected",
+				Severity:  SeverityFatal,
+				Field:     field("difficulty.name"),
+				Message:   "未选择难度，请选择谱面",
+			}}
+		}
 		return row, []Problem{{
 			SongIndex: i + 1,
 			Rule:      "chart-not-found",

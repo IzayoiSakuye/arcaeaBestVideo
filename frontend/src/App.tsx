@@ -849,10 +849,17 @@ function App() {
                       <div className="problem-list">
                         {ownProblems.map((problem, index) => (
                           <div
-                            className={'problem ' + problem.severity}
+                            className={
+                              'problem ' +
+                              (problem.rule === 'difficulty-not-selected' ? 'warn' : problem.severity)
+                            }
                             key={problem.rule + '-' + index}
                           >
-                            <b>{problem.severity.toUpperCase()}</b>
+                            <b>
+                              {problem.rule === 'difficulty-not-selected'
+                                ? '警告'
+                                : problem.severity.toUpperCase()}
+                            </b>
                             <span>{problem.message}</span>
                           </div>
                         ))}

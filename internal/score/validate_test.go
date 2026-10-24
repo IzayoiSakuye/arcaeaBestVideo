@@ -47,8 +47,24 @@ func TestPartialJudgmentsDoNotChooseChart(t *testing.T) {
 	if row.Chart != nil {
 		t.Fatal("部分判定和不能用于消歧谱面")
 	}
-	if _, ok := findProblem(problems, "chart-not-found"); !ok {
+	if _, ok := findProblem(problems, "difficulty-not-selected"); !ok {
 		t.Errorf("应提示谱面仍有歧义：%v", problems)
+	}
+}
+
+func TestUnselectedDifficultyBlocksRender(t *testing.T) {
+	cata := &catalog.Catalog{Songs: []*catalog.Song{{SongID: "egoeimi", Charts: []*catalog.Chart{{Difficulty: "FTR"}}}}}
+	song := Song{SongID: "egoeimi", Score: ScoreRef{Achievement: 99}}
+	row, problems := resolveRow(0, &song, cata)
+	if row.Chart != nil {
+		t.Fatal("未选择难度时不应定位到谱面")
+	}
+	p, ok := findProblem(problems, "difficulty-not-selected")
+	if !ok || p.Message != "未选择难度，请选择谱面" || p.Field != "songs[0].difficulty.name" || p.Severity != SeverityFatal {
+		t.Fatalf("未选择难度的提示不正确：%+v", problems)
+	}
+	if (&Resolved{Problems: problems}).Renderable() {
+		t.Fatal("未选择难度时不应允许生成")
 	}
 }
 
