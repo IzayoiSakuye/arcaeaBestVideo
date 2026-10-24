@@ -1,0 +1,5 @@
+numpy==2.3.5
+onnxruntime==1.23.2
+Pillow==13.0.0
+PyYAML==6.0.2
+pyinstaller==6.16.0

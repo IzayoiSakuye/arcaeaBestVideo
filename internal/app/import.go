@@ -31,7 +31,7 @@ func (a *App) Import(kind, path, body string) (*score.Draft, error) {
 		if err != nil {
 			return nil, err
 		}
-		provider = &importer.ImageProvider{Cata: cata, FFmpeg: tools.Detect(overrides).Tools.FFmpeg}
+		provider = &importer.ImageProvider{Cata: cata, FFmpeg: tools.Detect(overrides).Tools.FFmpeg, OCRRoot: a.root}
 	default:
 		return nil, fmt.Errorf("不支持的导入类型：%s", kind)
 	}

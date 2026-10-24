@@ -11,7 +11,6 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
-	"time"
 
 	"rhythm-game-bvideo/internal/catalog"
 	"rhythm-game-bvideo/internal/tools"
@@ -178,19 +177,11 @@ func TestJacketCropIdentifiesSong(t *testing.T) {
 	}
 }
 
-// fixtureRow 是真值夹具里的一行，只取图上看得见的字段
+// fixtureRow 只取曲绘匹配和定数反查所需的真值。
 type fixtureRow struct {
-	Index     int     `json:"index"`
-	Title     string  `json:"title"`
-	Score     int     `json:"score"`
-	Constant  float64 `json:"constant"`
-	PTT       float64 `json:"ptt"`
-	ClearType string  `json:"clear_type"`
-	Pure      int     `json:"pure"`
-	Shiny     int     `json:"shiny_perfect"`
-	Far       int     `json:"far"`
-	Lost      int     `json:"lost"`
-	DaysAgo   int     `json:"played_days_ago"`
+	Index    int     `json:"index"`
+	Title    string  `json:"title"`
+	Constant float64 `json:"constant"`
 }
 
 func fixtureRows(t *testing.T) []fixtureRow {
@@ -218,45 +209,6 @@ func fixtureTitles(t *testing.T) []string {
 		out = append(out, r.Title)
 	}
 	return out
-}
-
-// fixtureHeader 是表头那几个数 + 时间戳在图上写成的样子
-type fixtureHeader struct {
-	Top10Avg     float64
-	MaxPotential float64
-	Top50Avg     float64
-	Stamp        string
-}
-
-func fixtureHeaderOf(t *testing.T) fixtureHeader {
-	t.Helper()
-	b, err := os.ReadFile(fixturePath)
-	if err != nil {
-		t.Skipf("没有夹具：%v", err)
-	}
-	var f struct {
-		Source struct {
-			SnapshotAt string `json:"snapshot_at"`
-		} `json:"source"`
-		Header struct {
-			Top10        float64 `json:"best_top10_avg"`
-			MaxPotential float64 `json:"max_potential"`
-			Top50        float64 `json:"best_top50_avg"`
-		} `json:"header"`
-	}
-	if err := json.Unmarshal(b, &f); err != nil {
-		t.Fatal(err)
-	}
-	st, err := time.Parse(time.RFC3339, f.Source.SnapshotAt)
-	if err != nil {
-		t.Fatalf("snapshot_at 解不开：%v", err)
-	}
-	return fixtureHeader{
-		Top10Avg:     f.Header.Top10,
-		MaxPotential: f.Header.MaxPotential,
-		Top50Avg:     f.Header.Top50,
-		Stamp:        st.Format("2006-01-02 15:04"),
-	}
 }
 
 func stroke(dst *image.RGBA, r image.Rectangle, c color.RGBA, w int) {

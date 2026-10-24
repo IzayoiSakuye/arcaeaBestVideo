@@ -8,7 +8,6 @@ import (
 	"image/png"
 	"math"
 	"os"
-	"slices"
 	"sync"
 	"time"
 
@@ -28,8 +27,9 @@ const checksumTolerance = 0.003
 
 // ImageProvider 把生成的 b50 读成 Project
 type ImageProvider struct {
-	Cata   *catalog.Catalog
-	FFmpeg string
+	Cata    *catalog.Catalog
+	FFmpeg  string
+	OCRRoot string
 }
 
 func (p *ImageProvider) Name() string { return "b50 成绩图" }
@@ -53,27 +53,19 @@ func (p *ImageProvider) Import(ctx context.Context, in score.Input) (*score.Draf
 	}
 
 	cells := ocr.Grid()
-	fields := make([]ocr.Fields, len(cells))
-	for i, cell := range cells {
-		fields[i] = ocr.ReadFields(img, cell)
+	reader, err := ocr.FindSheetReader(p.OCRRoot)
+	if err != nil {
+		return nil, fmt.Errorf("importer: %w", err)
+	}
+	text, err := reader.ReadSheet(ctx, in.Path, cells)
+	if err != nil {
+		return nil, fmt.Errorf("importer: %w", err)
 	}
 	hits, err := p.matchJackets(ctx, img, cells)
 	if err != nil {
 		return nil, err
 	}
-	for i, hit := range hits {
-		// 只在曲绘匹配可靠且物量明确时，用复读结果修正判定数。
-		if margin(hit) <= JacketMarginOK {
-			continue
-		}
-		notes, ok := chartNotes(hit[0].Song, fields[i].Constant)
-		if !ok || (len(fields[i].UnreadJudgments) == 0 && fields[i].Pure+fields[i].Far+fields[i].Lost == notes) {
-			continue
-		}
-		fields[i], _ = reconcileJudgments(fields[i], ocr.ReadFieldsAtThreshold(img, cells[i], 160), notes)
-	}
-
-	header := ocr.ReadHeader(img)
+	header := text.Header
 	proj := &score.Project{
 		SchemaVersion: score.SchemaVersion,
 		Game:          "arcaea",
@@ -88,12 +80,19 @@ func (p *ImageProvider) Import(ctx context.Context, in score.Input) (*score.Draf
 
 	confident := 0
 	for i, cell := range cells {
-		f, hits := fields[i], hits[i]
-		hit := hits[0]
+		f := text.Fields[i]
+		hit, note, ok := pickSong(p.Cata, hits[i], text.Titles[i])
+		if note != "" {
+			draft.Notes = append(draft.Notes, fmt.Sprintf("#%d %s", cell.Index, note))
+		}
+		songID := ""
+		if hit != nil {
+			songID = hit.SongID
+		}
 
 		s := score.Song{
 			Index:  cell.Index,
-			SongID: hit.Song.SongID,
+			SongID: songID,
 			Score: score.ScoreRef{
 				Achievement:     float64(f.Score) / 100000,
 				ClearType:       f.ClearType,
@@ -115,70 +114,54 @@ func (p *ImageProvider) Import(ctx context.Context, in score.Input) (*score.Draf
 		for _, problem := range f.Problems {
 			draft.Notes = append(draft.Notes, fmt.Sprintf("#%d %s", cell.Index, problem))
 		}
-		if m := margin(hits); m <= JacketMarginOK {
-			draft.Notes = append(draft.Notes, fmt.Sprintf(
-				"#%d 曲绘无法准确识别：%s 和 %s 的指纹几乎一样近（都差 %d 位）",
-				cell.Index, hit.Song.SongID, hits[1].Song.SongID, hit.DHashDist))
-			continue
+		if ok {
+			confident++
 		}
-		confident++
 	}
 	proj.Source.Confidence = float64(confident) / float64(len(cells))
 	draft.Notes = append(draft.Notes, checksums(proj.Songs, header)...)
 	return draft, nil
 }
 
-// chartNotes 用于根据识别的判定数查询曲库物量
-func chartNotes(song *catalog.Song, constant float64) (int, bool) {
-	notes := 0
-	for _, chart := range song.Charts {
-		if chart.Constant == nil || *chart.Constant != constant || chart.Notes == nil {
-			continue
-		}
-		if notes != 0 && notes != *chart.Notes {
-			return 0, false
-		}
-		notes = *chart.Notes
-	}
-	return notes, notes > 0
-}
-
-// reconcileJudgements 把原始 OCR 和较高墨色阈值复读得到的 PURE/FAR/LOST 分别作为候选，选择完整等于物量的那个
-func reconcileJudgments(base, alt ocr.Fields, notes int) (ocr.Fields, bool) {
-	values := func(name string, before, after int) []int {
-		var out []int
-		if !slices.Contains(base.UnreadJudgments, name) {
-			out = append(out, before)
-		}
-		if !slices.Contains(alt.UnreadJudgments, name) && !slices.Contains(out, after) {
-			out = append(out, after)
-		}
-		return out
-	}
-	pure := values("pure", base.Pure, alt.Pure)
-	far := values("far", base.Far, alt.Far)
-	lost := values("lost", base.Lost, alt.Lost)
-	var found ocr.Fields
-	matches := 0
-	for _, p := range pure {
-		for _, f := range far {
-			for _, l := range lost {
-				if p+f+l == notes {
-					found.Pure, found.Far, found.Lost = p, f, l
-					matches++
+// pickSong 在曲绘不确定时用唯一匹配的 OCR 曲名纠正
+func pickSong(cata *catalog.Catalog, hits []catalog.JacketMatch, title string) (*catalog.Song, string, bool) {
+	var titleSong *catalog.Song
+	titleMatches := 0
+	key := catalog.NormalizeKey(title)
+	if key != "" {
+		for _, song := range cata.Songs {
+			for _, candidate := range song.MatchKeys {
+				if candidate == key {
+					titleMatches++
+					titleSong = song
+					break
 				}
 			}
 		}
 	}
-	if matches != 1 {
-		return base, false
+	if titleMatches != 1 {
+		titleSong = nil
 	}
-	base.Pure, base.Far, base.Lost = found.Pure, found.Far, found.Lost
-	base.UnreadJudgments = nil
-	base.Problems = slices.DeleteFunc(base.Problems, func(s string) bool {
-		return s == "PURE未能识别" || s == "FAR未能识别" || s == "LOST未能识别"
-	})
-	return base, true
+	if len(hits) == 0 {
+		if titleSong != nil {
+			return titleSong, "曲绘未匹配，已按图中文字匹配曲目，请校对", false
+		}
+		return nil, "曲绘和图中文字均未匹配曲目，请手动选择", false
+	}
+	if margin(hits) <= JacketMarginOK {
+		if titleSong != nil {
+			for _, candidate := range hits {
+				if candidate.Song.SongID == titleSong.SongID {
+					return titleSong, "曲绘候选接近，已按图中文字匹配曲目，请校对", false
+				}
+			}
+		}
+		return hits[0].Song, fmt.Sprintf("曲绘无法准确识别：%s 和 %s 的指纹接近；图中文字为「%s」，请校对", hits[0].Song.SongID, hits[1].Song.SongID, title), false
+	}
+	if titleSong != nil && titleSong.SongID != hits[0].Song.SongID {
+		return hits[0].Song, fmt.Sprintf("曲绘匹配 %s，图中文字匹配 %s，请校对曲目", hits[0].Song.SongID, titleSong.SongID), false
+	}
+	return hits[0].Song, "", true
 }
 
 // playerOf 取玩家 PTT。图上印 5 位小数、游戏里印 3 位，所以取 3 位
@@ -281,8 +264,5 @@ func (p *ImageProvider) matchJacket(ctx context.Context, img image.Image, cell o
 		return nil, err
 	}
 	top := p.Cata.MatchJacket(a, d, 2)
-	if len(top) == 0 {
-		return nil, fmt.Errorf("曲库里缺少曲绘指纹")
-	}
 	return top, nil
 }

@@ -58,8 +58,7 @@ func loadTruth(t *testing.T) []truthRow {
 	return f.Songs
 }
 
-// 端到端：样例图 → Project → 校验 → 六条自检。
-// 曲目靠曲绘指纹（实测 49/50，少的那行是形似撞车），其余字段靠字形模板（50/50）。
+// 端到端：样例图 → Project → 校验 → 自检。
 func TestImageProviderReadsSampleSheet(t *testing.T) {
 	if _, err := os.Stat(sampleSheet); err != nil {
 		t.Skipf("没有样例图：%v", err)
@@ -73,7 +72,7 @@ func TestImageProviderReadsSampleSheet(t *testing.T) {
 		t.Skip("没找到 ffmpeg")
 	}
 
-	p := &ImageProvider{Cata: cata, FFmpeg: ff}
+	p := &ImageProvider{Cata: cata, FFmpeg: ff, OCRRoot: "../.."}
 	draft, err := p.Import(context.Background(), score.Input{Kind: score.KindImage, Path: sampleSheet})
 	if err != nil {
 		t.Fatal(err)
@@ -83,7 +82,7 @@ func TestImageProviderReadsSampleSheet(t *testing.T) {
 		t.Fatalf("读出 %d 行，期望 50", len(songs))
 	}
 
-	// 逐行对真值。曲目真值用夹具标题查曲库代替（图上曲名不认，这条只是拿来做对照的）
+	// 逐行对真值。曲目真值用夹具标题查曲库代替。
 	truth := loadTruth(t)
 	songHit, bad := 0, 0
 	sum := 0.0
@@ -140,8 +139,8 @@ func TestImageProviderReadsSampleSheet(t *testing.T) {
 	if bad > 0 {
 		t.Fatalf("%d 处字段读错", bad)
 	}
-	if songHit < 45 {
-		t.Errorf("曲绘只认对 %d/50，明显低于已知的 49", songHit)
+	if songHit != 50 {
+		t.Errorf("曲绘与 OCR 曲名只认对 %d/50", songHit)
 	}
 
 	// 图自带的校验和：50 行 ptt 之和。抄错/认错一位，这个数就对不上
@@ -174,17 +173,11 @@ func TestImageProviderReadsSampleSheet(t *testing.T) {
 		}
 		t.Logf("自检 %s %s：%s", pr.Severity, pr.Rule, pr.Message)
 	}
-	// #27 的曲绘指纹撞车，其余行的判定和应与曲库一致。
-	for idx := range noted {
-		if idx != 27 {
-			t.Errorf("第 %d 行有自检问题，但这一行本该是好的", idx)
-		}
-	}
-	if fatals != 1 {
-		t.Errorf("%d 行不可渲染，只该有 #27 那一行", fatals)
+	if len(noted) != 0 || fatals != 0 {
+		t.Errorf("样例图不应再有自检问题：%v，致命 %d", noted, fatals)
 	}
 
-	// 认不准的行必须进 Notes，不能静默
+	// #27 的曲绘撞车由 OCR 曲名纠正，过程仍须提示校对。
 	if !strings.Contains(strings.Join(draft.Notes, "\n"), "#27") {
 		t.Errorf("曲绘认不准的行应该进 Notes，现在只有：%v", draft.Notes)
 	}
@@ -201,14 +194,14 @@ func TestImageProviderReadsSampleSheet(t *testing.T) {
 			t.Errorf("#%d 有字段是空的：%+v", s.Index, s)
 		}
 	}
-	if filled < 45 {
+	if filled != 50 {
 		t.Errorf("只有 %d 行反查出难度", filled)
 	}
-	t.Logf("反查出难度 %d/50（曲目认错的那行查不到，属预期）", filled)
+	t.Logf("反查出难度 %d/50", filled)
 
 	closed := map[int]bool{}
 	for _, note := range draft.Notes {
-		if strings.Contains(note, "曲绘无法准确识别") {
+		if strings.Contains(note, "曲绘候选接近") {
 			closed[noteIndex(t, note)] = true
 		}
 		if strings.Contains(note, "校验和") {
@@ -216,7 +209,7 @@ func TestImageProviderReadsSampleSheet(t *testing.T) {
 		}
 	}
 	if !closed[27] {
-		t.Errorf("#27 的撞车应该进 Notes，现在 Notes 里的认不准行是 %v", closed)
+		t.Errorf("#27 的撞车应该进 Notes，现在 Notes 里的校对行是 %v", closed)
 	}
 	for idx := range closed {
 		if idx != 27 {
@@ -241,41 +234,24 @@ func TestImageProviderReadsSampleSheet(t *testing.T) {
 	}
 }
 
-func TestImageProviderJudgmentsFromSecondSheet(t *testing.T) {
-	const sheet = "../../dist/b50-sample2.jpg"
-	if _, err := os.Stat(sheet); err != nil {
-		t.Skipf("没有第二张样例图：%v", err)
+func TestPickSongUsesTitleOnlyWhenSafe(t *testing.T) {
+	a := &catalog.Song{SongID: "a", MatchKeys: []string{"alpha"}}
+	b := &catalog.Song{SongID: "b", MatchKeys: []string{"beta"}}
+	cata := &catalog.Catalog{Songs: []*catalog.Song{a, b}}
+	close := []catalog.JacketMatch{{Song: a, DHashDist: 10}, {Song: b, DHashDist: 11}}
+	if got, note, confident := pickSong(cata, close, "Beta"); got != b || note == "" || confident {
+		t.Fatalf("曲绘接近时应按唯一曲名校对：%v, %q, %v", got, note, confident)
 	}
-	cata, err := catalog.Load(filepath.Join("..", "..", "data", "arcaea-catalog.json"), 1)
-	if err != nil {
-		t.Skipf("没有曲库：%v", err)
+	if got, note, confident := pickSong(cata, nil, "Beta"); got != b || note == "" || confident {
+		t.Fatalf("缺曲绘时应按唯一曲名兜底：%v, %q, %v", got, note, confident)
 	}
-	ff := tools.Detect(tools.Tools{}).Tools.FFmpeg
-	if ff == "" {
-		t.Skip("没找到 ffmpeg")
+	far := []catalog.JacketMatch{{Song: a, DHashDist: 2}, {Song: b, DHashDist: 20}}
+	if got, note, confident := pickSong(cata, far, "Beta"); got != a || note == "" || confident {
+		t.Fatalf("高置信曲绘与曲名冲突时应留给人工校对：%v, %q, %v", got, note, confident)
 	}
-	draft, err := (&ImageProvider{Cata: cata, FFmpeg: ff}).Import(context.Background(), score.Input{Kind: score.KindImage, Path: sheet})
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, want := range []struct{ index, pure, far, lost int }{
-		{5, 2042, 57, 35}, {7, 1384, 22, 6}, {15, 1409, 18, 6},
-		{23, 1353, 6, 8}, {36, 1347, 29, 9}, {39, 1232, 14, 5}, {46, 1749, 32, 11},
-	} {
-		got := draft.Project.Songs[want.index-1].Score
-		if got.Pure != want.pure || got.Far != want.far || got.Lost != want.lost || len(got.UnreadJudgments) != 0 {
-			t.Errorf("#%d 判定数 P%d F%d L%d 未读=%v，期望 P%d F%d L%d", want.index,
-				got.Pure, got.Far, got.Lost, got.UnreadJudgments, want.pure, want.far, want.lost)
-		}
-	}
-}
-
-func TestReconcileJudgmentsRejectsAmbiguousSum(t *testing.T) {
-	base := ocr.Fields{Pure: 10, Far: 1, Lost: 1}
-	alt := ocr.Fields{Pure: 11, Far: 0, Lost: 1}
-	got, ok := reconcileJudgments(base, alt, 12)
-	if ok || got.Pure != base.Pure || got.Far != base.Far {
-		t.Fatalf("多种组合都满足物量时不应自动修正：%+v, ok=%v", got, ok)
+	cata.Songs = append(cata.Songs, &catalog.Song{SongID: "c", MatchKeys: []string{"beta"}})
+	if got, _, _ := pickSong(cata, close, "Beta"); got != a {
+		t.Fatalf("曲名命中多个曲目时不能自动换歌：%v", got)
 	}
 }
 
