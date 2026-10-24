@@ -152,6 +152,40 @@ func TestCheckCatchesEachMutation(t *testing.T) {
 	}
 }
 
+func TestWrongPTTDoesNotMarkNextSong(t *testing.T) {
+	cata := loadCatalog(t)
+	for _, tc := range []struct {
+		name   string
+		mutate func(*Project)
+	}{
+		{"分数算出的 PTT 偏低", func(p *Project) {
+			p.Songs[20].Score.Achievement -= 1
+		}},
+		{"图上 PTT 抄低", func(p *Project) {
+			v := *p.Songs[20].Score.PTT - 1
+			p.Songs[20].Score.PTT = &v
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			proj := synthB50(t, cata)
+			tc.mutate(proj)
+			ps := runCheck(t, proj, cata)
+			found := false
+			for _, p := range ps {
+				if p.Rule == "ptt-mismatch" && p.SongIndex == 21 {
+					found = true
+				}
+				if p.Rule == "monotonic" && p.SongIndex == 22 {
+					t.Fatalf("第 21 首 PTT 有误，不应把第 22 首标成排序错误：%+v", ps)
+				}
+			}
+			if !found {
+				t.Fatalf("第 21 首应报告 PTT 不一致：%+v", ps)
+			}
+		})
+	}
+}
+
 func TestCheckSkipsAreRecorded(t *testing.T) {
 	cata := loadCatalog(t)
 	proj := synthB50(t, cata)

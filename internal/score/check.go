@@ -29,6 +29,14 @@ func skipInfo(rule string, total, skipped int, why string) Problem {
 		Message: fmt.Sprintf("跳过 %d/%d 行：%s", skipped, total, why)}
 }
 
+func pttMismatch(row Row) bool {
+	if row.Input.Score.PTT == nil || !row.PTTKnown {
+		return false
+	}
+	d := FormatPtt(row.PTT) - FormatPtt(*row.Input.Score.PTT)
+	return d > 1 || d < -1
+}
+
 // checkSinglePTT 用曲库定数算单曲 ptt，与图上写的比
 func checkSinglePTT(res *Resolved) []Problem {
 	const rule = "ptt-mismatch"
@@ -40,7 +48,7 @@ func checkSinglePTT(res *Resolved) []Problem {
 			continue
 		}
 
-		if d := FormatPtt(row.PTT) - FormatPtt(*row.Input.Score.PTT); d > 1 || d < -1 {
+		if pttMismatch(row) {
 			ps = append(ps, Problem{SongIndex: i + 1, Rule: rule, Severity: SeverityError,
 				Field:   fieldPath(i, "score.ptt"),
 				Message: fmt.Sprintf("计算结果 %.4f，实际输入 %.4f", row.PTT, *row.Input.Score.PTT)})
@@ -59,6 +67,10 @@ func checkMonotonic(res *Resolved) []Problem {
 	prev := math.NaN()
 	for i, row := range res.Rows {
 		if !row.PTTKnown {
+			continue
+		}
+		if pttMismatch(row) {
+			prev = math.NaN()
 			continue
 		}
 		if !math.IsNaN(prev) && row.PTT > prev+1e-9 {
