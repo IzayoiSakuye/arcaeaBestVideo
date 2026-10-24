@@ -1,5 +1,14 @@
 # Build Directory
 
+## 成绩图文字 OCR（Windows）
+
+构建机需要 Python 3.12 和 Node 26。执行 `wails build` 后运行
+`node scripts/build-ocr.ts`：脚本安装隔离依赖，从
+[PaddlePaddle 官方模型仓库](https://huggingface.co/PaddlePaddle/PP-OCRv6_small_rec_onnx)
+下载 PP-OCRv6 small ONNX 模型，校验 SHA256，并生成 `build/bin/ocr/`。
+分发时将 `build/bin/ocr/` 与应用 exe 放在同一目录；用户无需安装 Python 或下载模型。
+模型仓库标注的许可证为 Apache-2.0。构建缓存位于 `.cache/`，不入库。
+
 The build directory is used to house all the build files and assets for your application. 
 
 The structure is:

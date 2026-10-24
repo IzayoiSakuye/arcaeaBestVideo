@@ -6,6 +6,7 @@ docs/
 dist/
 build/bin
 .cache/
+sidecar/ocr/__pycache__/
 
 # 曲绘原图（可选下载，默认只留 256px）
 data/jackets/full/
