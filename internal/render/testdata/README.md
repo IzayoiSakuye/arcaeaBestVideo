@@ -107,6 +107,8 @@ const chart = song.charts.find(c => pickSource(c) && c.constant != null && c.not
 | `golden-commands.json` | `--songs testify,tempestissimo` | **spike 的历史行为**（自己挑到 FTR / PRS） | 早期翻译期的基线，覆盖 4:3+16:9 两套模板 |
 | **`golden-commands-project.json`** | `--project samples/sample-project.json` | ⭐ **应用的真实行为**（按契约选曲） | **`internal/render` 应该对齐这个** |
 
+`golden-commands-project.json` 的合成参数已随 2026-10 色值范围修复更新；原始捕获时间与来源仍记录在文件头，历史文件 `golden-commands.json` 不改。
+
 **两份并存是有意的**：argv 对不上时，能一眼区分「翻译错了」还是「行为有意改了」。
 
 ### `golden-commands-project.json` 多覆盖了什么
