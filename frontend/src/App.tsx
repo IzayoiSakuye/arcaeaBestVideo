@@ -60,6 +60,7 @@ function App() {
   const [jacket, setJacket] = useState('');
   const [project, setProject] = useState<score.Project | null>(null);
   const [review, setReview] = useState<app.ReviewResult | null>(null);
+  const [reviewPending, setReviewPending] = useState(false);
   const [reviewError, setReviewError] = useState('');
   const [videoStates, setVideoStates] = useState<app.VideoState[]>([]);
   const [videoLink, setVideoLink] = useState('');
@@ -111,6 +112,7 @@ function App() {
   useEffect(() => {
     if (!project) {
       setReview(null);
+      setReviewPending(false);
       setVideoStates([]);
       return;
     }
@@ -120,12 +122,14 @@ function App() {
         .then((result) => {
           if (seq === reviewSeq.current) {
             setReview(result);
+            setReviewPending(false);
             setReviewError('');
           }
         })
         .catch((error) => {
           if (seq === reviewSeq.current) {
             setReview(null);
+            setReviewPending(false);
             setReviewError(errorText(error));
           }
         });
@@ -134,9 +138,9 @@ function App() {
   }, [project]);
 
   useEffect(() => {
-    if (!project) return;
+    if (!review?.project) return;
     let active = true;
-    VideoInfos(review?.project || project)
+    VideoInfos(review.project)
       .then((result) => {
         if (active) setVideoStates(result);
       })
@@ -146,7 +150,7 @@ function App() {
     return () => {
       active = false;
     };
-  }, [project, review?.project]);
+  }, [review?.project]);
 
   useEffect(() => {
     if (!autoVideoPending.current || !review?.project) return;
@@ -273,6 +277,7 @@ function App() {
       setScoreTexts({});
       setSongIndex(0);
       setReview(null);
+      setReviewPending(true);
       setVideoStates([]);
       setVideoLink('');
       setVideoError('');
@@ -295,7 +300,7 @@ function App() {
   }
   function editSongAt(index: number, edit: (song: score.Song) => void) {
     reviewSeq.current++;
-    setReview(null);
+    setReviewPending(true);
     setProject((current) => {
       if (!current?.songs[index]) return current;
       const copy = structuredClone(current);
@@ -450,7 +455,7 @@ function App() {
     }
   }
   async function startRender() {
-    if (!review?.project || !output) return;
+    if (reviewPending || !review?.project || !output) return;
     setRenderError('');
     setLogs([]);
     setRenderState('starting');
@@ -505,7 +510,7 @@ function App() {
   const pendingSongs = pendingSongIndexes(review?.problems || [], notes, acknowledgedNotes, count);
   const availableDiffs = row && row.song_id === song?.song_id ? row.difficulties || [] : [];
   const currentDiff = song?.difficulty.name || (row?.song_id === song?.song_id ? row?.difficulty : '') || '';
-  const currentSongVideo = review?.project?.songs[songIndex]?.video || song?.video;
+  const currentSongVideo = reviewPending ? song?.video : review?.project?.songs[songIndex]?.video || song?.video;
   const currentVideo = videoStates[songIndex];
   const videoLinkChanged = videoLink !== (currentVideo?.url || '');
   const { pending: missingVideos, retryable: retryableVideos, manualCount } = videoQueues(videoStates);
@@ -782,7 +787,7 @@ function App() {
                       ) : (
                         <button
                           className="button quiet"
-                          disabled={videoBusy || retryableVideos.length === 0}
+                          disabled={reviewPending || videoBusy || retryableVideos.length === 0}
                           onClick={() => review?.project && void downloadAllVideos(review.project)}
                         >
                           重新获取未就绪
@@ -1132,6 +1137,7 @@ function App() {
                           className="button primary"
                           onClick={downloadVideo}
                           disabled={
+                            reviewPending ||
                             videoBusy ||
                             videoLinkChanged ||
                             !currentVideo?.url ||
@@ -1280,7 +1286,7 @@ function App() {
                 <div className="action-line">
                   <button
                     className="button primary"
-                    disabled={!review?.renderable || !output || active || videoBusy}
+                    disabled={reviewPending || !review?.renderable || !output || active || videoBusy}
                     onClick={startRender}
                   >
                     开始生成
