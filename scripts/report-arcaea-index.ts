@@ -8,7 +8,7 @@
  *   node scripts/report-arcaea-index.ts -i data/arcaea-index.json
  *   node scripts/report-arcaea-index.ts --constants path/to/ChartConstant.json
  *
- * 看点（决定"保管室独家来源够不够用"）
+ * 看点（检查合集与人工来源的覆盖度）
  *   1. 覆盖了多少首唯一曲目 / 多少「曲名×难度」
  *   2. 与外部定数表对照：命中率、索引多出的曲、定数不一致的条目
  *   3. 定数冲突 / 难度存疑 / 解析失败 —— 需要人工裁决的清单
@@ -78,7 +78,8 @@ const s: Record<string, unknown> = idx.stats ?? {};
 
 hr('总览');
 console.log(`  生成时间        ${idx.generated_at}`);
-console.log(`  来源 UP         ${idx.source?.mid}`);
+console.log(`  主来源 UP       ${idx.source?.mid}`);
+if (s.manual_sources) console.log(`  人工来源        ${s.manual_sources} 条`);
 console.log(`  集合 / 视频     ${s.collections} / ${s.videos}`);
 console.log(`  分P总数         ${s.pages}`);
 console.log(`  chart 条目      ${charts.length}`);
@@ -181,8 +182,7 @@ if (args.songDb) {
     console.log(`  匹配途径        ${Object.entries(via).map(([k, v]) => `${k}:${v}`).join('  ')}`);
     console.log('                  （loose = 去掉标点空白后的兜底匹配，命中即说明标题写法有出入）');
     console.log('');
-    console.log('  📌 这是判断「保管室独家来源够不够用」的关键数字。');
-    console.log('     未被覆盖的多为低难度/冷门曲 —— 该 UP 主主要做高难谱面。');
+    console.log('  📌 覆盖率包含主来源合集与人工来源。');
   }
 }
 

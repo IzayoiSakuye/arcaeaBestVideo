@@ -118,6 +118,7 @@ export interface IndexFile {
   source: {
     platform: string;
     mid: string;
+    manual_sources_file?: string | null;
     collections: Array<{ kind: 'season' | 'series'; id: string; name: string; videos: number }>;
   };
   stats: Record<string, unknown>;

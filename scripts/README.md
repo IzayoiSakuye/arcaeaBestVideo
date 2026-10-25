@@ -545,8 +545,9 @@ node scripts/build-song-db.ts --refresh
 
 > ⚠️ **`difficulties[].difficulty` 不是难度类别，而是「等级 × 2」**
 > （Aegleseeker = 10/18/22 → 等级 5/9/11；19/21 → `9+`/`10+`）。
-> **难度类别只能按数组顺序推**：`PST / PRS / FTR / BYD / ETR`。
-> 本脚本按此实现，并用 wiki 定数表交叉校验过 —— **318 首命中、0 处不一致**，映射正确。
+> **难度类别按 `ratingClass` 取槽位**：`PST / PRS / FTR / BYD / ETR / INS`。
+> `ratingClass=3` 且 `ratingClassAlias=1` 的谱面显示为 INS；定数和物量仍从第 3 号槽位读取。
+> 未知别名会报错，避免将新难度误标成 BYD。
 
 > ⚠️ `raw.githubusercontent.com` 在部分网络不可达，`api.github.com` 只有 60 次/小时。
 > 脚本**镜像优先**（`gh-proxy.com` → `ghfast.top` → 官方 raw），带本地缓存。
@@ -556,6 +557,10 @@ node scripts/build-song-db.ts --refresh
 ## build-arcaea-index.ts
 
 从 B站 UP 主的「谱面保管室」合集构建视频索引 → `data/arcaea-index.json`。
+
+额外核对的来源写在 `scripts/manual-video-sources.json`，按官方 `song_id`、难度、BV 号和分 P 定位。
+构建时逐条读取公开视频元数据，校验分 P 与时长，并写入画幅、UP 主及链接；重建索引不会丢失这些条目。
+`--no-song-db` 不加载人工来源，因为此时无法核对官方曲目和难度。第三方 UP 主的录像仍须遵守其使用要求。
 
 ```bash
 node scripts/build-arcaea-index.ts                    # 默认 UP: 441390256
@@ -709,7 +714,7 @@ node scripts/check-ptt-formula.ts --catalog data/arcaea-catalog.json --expect 13
   **只让 Go 自己跟自己比不行** —— 那只能证明它自洽，证明不了它没抄错。
 
 > 当前实测（2026-10，`data/arcaea-catalog.json` 1832 条定数）：
-> 最高定数 12（`deinosphainein` BYD）、第 50 名单曲 ptt 13.0000（`blackmind` FTR）、
+> 最高定数 12（`deinosphainein` INS）、第 50 名单曲 ptt 13.0000（`blackmind` FTR）、
 > 理论最高 PTT **13.4383** ✅ 与 wiki 的 13.438 一致。
 
 > ⚠️ 13.438 是**池相关**的量：受"最高定数的谱面数量有限"约束，**不是**公式上限

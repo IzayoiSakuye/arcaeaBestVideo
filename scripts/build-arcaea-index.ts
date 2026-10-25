@@ -51,6 +51,7 @@ import type { Difficulty, IndexFile, IndexVideoSource } from './lib/types.ts';
 // ---------------------------------------------------------------------------
 
 const DIFFICULTIES: Difficulty[] = ['PST', 'PRS', 'FTR', 'BYD', 'ETR', 'INS'];
+const MANUAL_SOURCE_FILE = 'scripts/manual-video-sources.json';
 
 /**
  * 自动生成的分P标题，形如 `Akasha-20260829-065532`。
@@ -360,6 +361,7 @@ interface SongDbDifficulty {
 
 interface SongDbSong {
   song_id: string;
+  title_en: string;
   title_norm: string;
   alias_norm: string[];
   match_keys: string[];
@@ -664,6 +666,13 @@ interface IndexChartOut {
   sources: IndexSourceOut[];
 }
 
+interface ManualVideoSource {
+  song_id: string;
+  difficulty: Difficulty;
+  bvid: string;
+  p: number;
+}
+
 /** unparsed 条目 —— 契约见 lib/types.ts 的 IndexFile.unparsed，本脚本多记几个定位字段 */
 type UnparsedEntry = IndexFile['unparsed'][number] & {
   collection?: string;
@@ -677,6 +686,7 @@ async function main() {
 
   // 0) 曲库（可选）
   const songDb = await loadSongDb(CFG.songDb);
+  let manualCount = 0;
   if (songDb) {
     log(`  曲库：${songDb.db.songs.length} 首（别名 ${songDb.byAlias.size} 条）  ← ${CFG.songDb}`);
     if (songDb.db.freshness_warning) {
@@ -857,6 +867,64 @@ async function main() {
     }
   }
 
+  // 人工确认的谱面用官方 song_id 定位，避免别名曲名和泛用分P标题误配。
+  if (songDb) {
+    const manual = JSON.parse(await fs.readFile(path.resolve(MANUAL_SOURCE_FILE), 'utf8')) as ManualVideoSource[];
+    if (!Array.isArray(manual)) throw new Error(`${MANUAL_SOURCE_FILE} 必须是数组`);
+    const seenManual = new Set<string>();
+    for (const item of manual) {
+      const ref = `${item.bvid}?p=${item.p}`;
+      if (!/^BV[0-9A-Za-z]{10}$/.test(item.bvid) || !Number.isInteger(item.p) || item.p < 1 || seenManual.has(ref)) {
+        throw new Error(`人工来源无效或重复：${ref}`);
+      }
+      seenManual.add(ref);
+      const song = songDb.bySongId.get(normalizeTitle(item.song_id));
+      const diff = song?.difficulties.find((d) => d.class === item.difficulty);
+      if (!song || !diff) throw new Error(`人工来源未命中曲库谱面：${item.song_id}/${item.difficulty}`);
+      const info = await getVideoPages(item.bvid);
+      const page = info?.pages.find((p) => p.page === item.p);
+      if (!info || !page || page.duration < 10 || !info.owner.name) {
+        throw new Error(`人工来源缺少有效分P或署名：${ref}`);
+      }
+      const key = chartKeyOf(song.title_norm, item.difficulty);
+      const source: IndexSourceOut = {
+        bvid: item.bvid,
+        p: item.p,
+        url: `https://www.bilibili.com/video/${ref}`,
+        duration_sec: page.duration,
+        part_title: page.part,
+        video_title: info.title,
+        video_pages: info.videos,
+        collections: [],
+        owner_name: info.owner.name,
+        ...(info.owner.mid != null ? { owner_mid: info.owner.mid } : {}),
+        ...(page.dimension ? {
+          video_width: page.dimension.rotate % 180 === 0 ? page.dimension.width : page.dimension.height,
+          video_height: page.dimension.rotate % 180 === 0 ? page.dimension.height : page.dimension.width,
+        } : {}),
+      };
+      const existing = chartMap.get(key);
+      if (existing) {
+        if (!existing.sources.some((s) => s.bvid === item.bvid && s.p === item.p)) existing.sources.push(source);
+      } else {
+        chartMap.set(key, {
+          chart_key: key,
+          title: song.title_en,
+          title_norm: song.title_norm,
+          difficulty: item.difficulty,
+          level: diff.level,
+          constant: diff.constant,
+          constant_source: diff.constant == null ? null : 'song_db',
+          song_id: song.song_id,
+          song_match_via: 'manual',
+          sources: [source],
+        });
+      }
+    }
+    manualCount = manual.length;
+    log(`  人工来源：${manualCount} 条`);
+  }
+
   // 4) 汇总
   const charts = [...chartMap.values()].sort((a, b) => {
     if (a.title_norm !== b.title_norm) return a.title_norm < b.title_norm ? -1 : 1;
@@ -874,6 +942,7 @@ async function main() {
     source: {
       platform: 'bilibili',
       mid: CFG.mid,
+      manual_sources_file: songDb ? MANUAL_SOURCE_FILE : null,
       collections: cols.map((c) => ({
         kind: c.kind,
         id: c.id,
@@ -883,6 +952,7 @@ async function main() {
     },
     stats: {
       collections: cols.length,
+      manual_sources: manualCount,
       videos: videos.length,
       pages: pageCount,
       charts: charts.length,

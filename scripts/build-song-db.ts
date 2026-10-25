@@ -32,7 +32,16 @@ import { WikiClient } from './lib/wiki.ts';
 // ---------------------------------------------------------------------------
 
 /** 难度类别。wiki 用 `ratingClass` 数字索引这个数组。 */
-const DIFFICULTY_CLASSES = ['PST', 'PRS', 'FTR', 'BYD', 'ETR'];
+const DIFFICULTY_CLASSES = ['PST', 'PRS', 'FTR', 'BYD', 'ETR', 'INS'];
+
+export function difficultyClass(ratingClass: number, ratingClassAlias?: number): string {
+  // INS 沿用 BYD 的定数槽位，别名只改变展示难度。
+  if (ratingClassAlias !== undefined) {
+    if (ratingClass === 3 && ratingClassAlias === 1) return 'INS';
+    throw new Error(`未知难度别名：ratingClass=${ratingClass}, ratingClassAlias=${ratingClassAlias}`);
+  }
+  return DIFFICULTY_CLASSES[ratingClass] ?? `UNKNOWN_${ratingClass}`;
+}
 
 /** wiki 页面 → 本地缓存名。缓存目录沿用既有的 .cache/wiki（可安全删除）。 */
 const WIKI_PAGES = {
@@ -76,6 +85,7 @@ const DEFAULT_UA =
 
 interface SonglistDifficulty {
   ratingClass?: number;
+  ratingClassAlias?: number;
   rating?: number;
   /** true 表示该难度是 "+" 档（如 7+ / 10+） */
   ratingPlus?: boolean;
@@ -414,7 +424,7 @@ async function main() {
       // ⚠️ 定数/物量数组按 **ratingClass** 索引，不是按 difficulties 的数组下标。
       //    实测 110 首歌有 ETR 没 BYD（rc = 0,1,2,4），用下标会把 ETR 的值读错位。
       const rc = d.ratingClass ?? idx;
-      const cls = DIFFICULTY_CLASSES[rc] ?? `UNKNOWN_${rc}`;
+      const cls = difficultyClass(rc, d.ratingClassAlias);
 
       // 精确定数：wiki 页面是权威，GitHub 那份只作交叉校验
       const ccSlot = ccSlots?.[rc] ?? null;
