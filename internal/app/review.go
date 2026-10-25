@@ -58,6 +58,19 @@ func (a *App) Review(project *score.Project) (*ReviewResult, error) {
 	if err != nil {
 		return nil, err
 	}
+	sources, err := loadVideoSources()
+	if err != nil {
+		return nil, err
+	}
+	for i := range resolved.Project.Songs {
+		song := &resolved.Project.Songs[i]
+		if song.Video != nil {
+			continue
+		}
+		if source, ok := sources[videoSourceKey(song.SongID, song.Difficulty.Name)]; ok {
+			song.Video = &source
+		}
+	}
 	out := &ReviewResult{Project: resolved.Project, Rows: make([]ReviewRow, 0, len(resolved.Rows)),
 		Problems: append(resolved.Problems, score.Check(resolved)...), Renderable: resolved.Renderable()}
 	if out.Problems == nil {

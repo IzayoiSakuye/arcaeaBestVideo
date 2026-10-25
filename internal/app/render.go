@@ -107,6 +107,25 @@ func (a *App) StartRender(project *score.Project, output string, replace bool) (
 	if err != nil {
 		return start, err
 	}
+	videoStates, err := a.VideoInfos(review.Project)
+	if err != nil {
+		return start, err
+	}
+	var missing []string
+	needDownload := false
+	for _, state := range videoStates {
+		if state.Status == "missing" || state.Status == "invalid" {
+			missing = append(missing, fmt.Sprintf("%d", state.Index))
+		} else if state.Status == "download" {
+			needDownload = true
+		}
+	}
+	if len(missing) > 0 {
+		return start, fmt.Errorf("以下曲目缺少或填错录像来源：第 %s 首，请在识别信息页指定链接或本地文件", strings.Join(missing, "、"))
+	}
+	if needDownload && tls.YtDlp == "" {
+		return start, fmt.Errorf("部分录像尚未获取，请先配置 yt-dlp 或选择本地文件")
+	}
 	cata, _ := a.catalog()
 	bg, err := resource.LoadBgManifest(filepath.Join(a.root, "data", "arcaea-backgrounds.json"))
 	if err != nil {

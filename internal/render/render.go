@@ -12,6 +12,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"rhythm-game-bvideo/internal/tools"
 )
 
 // Templates 是两种格式的谱面确认视频嵌入定位点
@@ -111,7 +113,7 @@ func CompositeArgs(l Layers, dest string) []string {
 		"[3:v]format=rgba[ch]",
 		"[o2][ch]overlay=0:0:format=auto[o3]",
 		"[4:v]format=rgba[tx]",
-		"[o3][tx]overlay=0:0:format=auto[v]",
+		"[o3][tx]overlay=0:0:format=auto,scale=out_range=tv,format=yuv420p,setsar=1[v]",
 	}, ";")
 	return []string{
 		"-y", "-v", "error",
@@ -129,6 +131,7 @@ func CompositeArgs(l Layers, dest string) []string {
 		"-preset", "medium",
 		"-crf", "18",
 		"-pix_fmt", "yuv420p",
+		"-color_range", "tv",
 		"-g", "60", "-keyint_min", "60", "-sc_threshold", "0",
 		dest,
 	}
@@ -226,6 +229,7 @@ func Probe(ctx context.Context, ffprobe string, file string) (StreamInfo, error)
 		"-v", "error",
 		"-show_entries", "stream=codec_type,codec_name,width,height,pix_fmt,avg_frame_rate,sample_aspect_ratio,sample_rate,channels",
 		"-of", "json", file)
+	tools.HideWindow(cmd)
 
 	out, err := cmd.Output()
 	if err != nil {

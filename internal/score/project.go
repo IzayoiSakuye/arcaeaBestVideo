@@ -45,12 +45,19 @@ type UserRef struct {
 	Comment string `json:"comment"`
 }
 
+type VideoRef struct {
+	URL       string `json:"url,omitempty"`
+	LocalPath string `json:"local_path,omitempty"`
+	OwnerName string `json:"owner_name,omitempty"`
+}
+
 type Song struct {
-	Index      int      `json:"index"`
-	SongID     string   `json:"song_id"`
-	Difficulty DiffRef  `json:"difficulty"`
-	Score      ScoreRef `json:"score"`
-	User       UserRef  `json:"user"`
+	Index      int       `json:"index"`
+	SongID     string    `json:"song_id"`
+	Difficulty DiffRef   `json:"difficulty"`
+	Score      ScoreRef  `json:"score"`
+	User       UserRef   `json:"user"`
+	Video      *VideoRef `json:"video,omitempty"`
 }
 type Project struct {
 	SchemaVersion int       `json:"schema_version"`

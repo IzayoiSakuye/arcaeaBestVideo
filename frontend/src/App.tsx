@@ -1,22 +1,28 @@
 import { useEffect, useRef, useState } from 'react';
 import {
+  ApplyVideoLink,
   CancelRender,
+  CancelVideoDownload,
   CheckTool,
+  DownloadVideo,
   Import,
   Jacket,
   PickFile,
   PickOutput,
+  PickVideoFile,
   RevealOut,
   Review,
   SearchSongs,
   SetToolPath,
   StartRender,
   Status,
+  VideoInfos,
 } from '../wailsjs/go/app/App';
 import { EventsOn } from '../wailsjs/runtime';
 import type { app, score } from '../wailsjs/go/models';
 import { eventText, nameOf, scoreText, type Event } from './format';
 import { noteSongIndex, pendingSongIndexes } from './issues';
+import { videoQueues } from './video';
 
 const pages = [
   '环境检查',
@@ -30,6 +36,7 @@ const pages = [
 const toolNames = ['ffmpeg', 'ffprobe', 'yt-dlp', 'edge'];
 const clearTypes = ['TL', 'NC', 'HC', 'EC', 'FR', 'PM'];
 type LogEntry = Event & { time: string };
+type VideoBatch = { processed: number; total: number; failed: number; running: boolean };
 
 function errorText(error: unknown) {
   return error instanceof Error ? error.message : String(error);
@@ -54,6 +61,13 @@ function App() {
   const [project, setProject] = useState<score.Project | null>(null);
   const [review, setReview] = useState<app.ReviewResult | null>(null);
   const [reviewError, setReviewError] = useState('');
+  const [videoStates, setVideoStates] = useState<app.VideoState[]>([]);
+  const [videoLink, setVideoLink] = useState('');
+  const [videoError, setVideoError] = useState('');
+  const [videoBusy, setVideoBusy] = useState(false);
+  const [videoBatch, setVideoBatch] = useState<VideoBatch | null>(null);
+  const [videoBatchError, setVideoBatchError] = useState('');
+  const [videoFailures, setVideoFailures] = useState<Record<number, string>>({});
   const [songIndex, setSongIndex] = useState(0);
   const [onlyProblems, setOnlyProblems] = useState(false);
   const [search, setSearch] = useState('');
@@ -68,6 +82,9 @@ function App() {
   const [finished, setFinished] = useState('');
   const outputRef = useRef('');
   const reviewSeq = useRef(0);
+  const autoVideoPending = useRef(false);
+  const stopVideoBatch = useRef(false);
+  const videoBusyRef = useRef(false);
 
   useEffect(() => {
     Status()
@@ -93,6 +110,7 @@ function App() {
   useEffect(() => {
     if (!project) {
       setReview(null);
+      setVideoStates([]);
       return;
     }
     const seq = ++reviewSeq.current;
@@ -113,6 +131,32 @@ function App() {
     }, 220);
     return () => window.clearTimeout(timer);
   }, [project]);
+
+  useEffect(() => {
+    if (!project) return;
+    let active = true;
+    VideoInfos(review?.project || project)
+      .then((result) => {
+        if (active) setVideoStates(result);
+      })
+      .catch((error) => {
+        if (active) setVideoError(errorText(error));
+      });
+    return () => {
+      active = false;
+    };
+  }, [project, review?.project]);
+
+  useEffect(() => {
+    if (!autoVideoPending.current || !review?.project) return;
+    autoVideoPending.current = false;
+    void downloadAllVideos(review.project);
+  }, [review?.project]);
+
+  useEffect(() => {
+    setVideoLink(videoStates[songIndex]?.url || '');
+    setVideoError('');
+  }, [songIndex, videoStates[songIndex]?.url]);
 
   useEffect(() => {
     if (!search.trim()) {
@@ -211,11 +255,16 @@ function App() {
   }
   async function doImport() {
     if (renderState === 'starting' || renderState === 'running') return;
+    if (videoBusy) {
+      setImportError('请等待录像获取完成');
+      return;
+    }
     setImportError('');
     setImportBusy(true);
     try {
       const draft = await Import(importMode, importPath, importMode === 'json' ? jsonText : '');
       if (!draft.Project) throw new Error('导入结果没有成绩数据');
+      reviewSeq.current++;
       setProject(draft.Project);
       setNotes(draft.Notes || []);
       setAcknowledgedNotes([]);
@@ -223,6 +272,13 @@ function App() {
       setScoreTexts({});
       setSongIndex(0);
       setReview(null);
+      setVideoStates([]);
+      setVideoLink('');
+      setVideoError('');
+      setVideoBatch(null);
+      setVideoBatchError('');
+      setVideoFailures({});
+      autoVideoPending.current = true;
       setFinished('');
       setOutput('');
       setRenderState('idle');
@@ -236,13 +292,18 @@ function App() {
       setImportBusy(false);
     }
   }
-  function editSong(edit: (song: score.Song) => void) {
-    if (!project) return;
-    const copy = structuredClone(project);
-    edit(copy.songs[songIndex]);
+  function editSongAt(index: number, edit: (song: score.Song) => void) {
     reviewSeq.current++;
     setReview(null);
-    setProject(copy);
+    setProject((current) => {
+      if (!current?.songs[index]) return current;
+      const copy = structuredClone(current);
+      edit(copy.songs[index]);
+      return copy;
+    });
+  }
+  function editSong(edit: (song: score.Song) => void) {
+    editSongAt(songIndex, edit);
   }
   function jumpProblem(index: number) {
     if (project && index > 0 && index <= project.songs.length) {
@@ -280,6 +341,108 @@ function App() {
       }
     } catch (error) {
       setRenderError(errorText(error));
+    }
+  }
+  async function applyVideoLink() {
+    if (!song) return;
+    const index = songIndex;
+    setVideoError('');
+    try {
+      const link = await ApplyVideoLink(song.song_id, currentDiff, videoLink);
+      editSongAt(index, (item) => {
+        item.video = link ? { url: link, local_path: '', owner_name: '' } : undefined;
+      });
+      setVideoFailures((old) => ({ ...old, [index + 1]: '' }));
+    } catch (error) {
+      setVideoError(errorText(error));
+    }
+  }
+  async function pickVideo() {
+    if (!song) return;
+    const index = songIndex;
+    setVideoError('');
+    try {
+      const path = await PickVideoFile(song.song_id, currentDiff);
+      if (!path) return;
+      editSongAt(index, (item) => {
+        item.video = { url: '', local_path: path, owner_name: '' };
+      });
+      setVideoFailures((old) => ({ ...old, [index + 1]: '' }));
+    } catch (error) {
+      setVideoError(errorText(error));
+    }
+  }
+  async function downloadVideo() {
+    if (!song || videoBusyRef.current || videoLink !== (videoStates[songIndex]?.url || '')) return;
+    const index = songIndex;
+    const sourceSong = review?.project?.songs[index] || song;
+    videoBusyRef.current = true;
+    setVideoBusy(true);
+    setVideoError('');
+    try {
+      const state = await DownloadVideo(sourceSong);
+      editSongAt(index, (item) => {
+        if (item.song_id !== sourceSong.song_id || (item.difficulty.name && item.difficulty.name !== sourceSong.difficulty.name)) return;
+        item.difficulty.name = sourceSong.difficulty.name;
+        item.video = { url: state.url, local_path: '', owner_name: state.owner_name };
+      });
+      setVideoFailures((old) => ({ ...old, [index + 1]: '' }));
+    } catch (error) {
+      setVideoError(errorText(error));
+    } finally {
+      videoBusyRef.current = false;
+      setVideoBusy(false);
+    }
+  }
+  async function downloadAllVideos(input: score.Project) {
+    if (videoBusyRef.current) return;
+    videoBusyRef.current = true;
+    stopVideoBatch.current = false;
+    setVideoBusy(true);
+    setVideoBatchError('');
+    try {
+      const states = await VideoInfos(input);
+      setVideoStates(states);
+      const targets = videoQueues(states).retryable;
+      setVideoBatch({ processed: 0, total: targets.length, failed: 0, running: true });
+      if (targets.length) await CheckTool('yt-dlp');
+      let failed = 0;
+      for (let i = 0; i < targets.length; i++) {
+        if (stopVideoBatch.current) break;
+        const index = targets[i].index - 1;
+        const sourceSong = input.songs[index];
+        try {
+          const state = await DownloadVideo(sourceSong);
+          setVideoStates((old) =>
+            old.map((item) => item.index === index + 1 ? { ...state, index: index + 1 } : item),
+          );
+          editSongAt(index, (item) => {
+            if (item.song_id !== sourceSong.song_id || (item.difficulty.name && item.difficulty.name !== sourceSong.difficulty.name)) return;
+            item.difficulty.name = sourceSong.difficulty.name;
+            item.video = { url: state.url, local_path: '', owner_name: state.owner_name };
+          });
+          setVideoFailures((old) => ({ ...old, [index + 1]: '' }));
+        } catch (error) {
+          if (stopVideoBatch.current) break;
+          failed++;
+          setVideoFailures((old) => ({ ...old, [index + 1]: errorText(error) }));
+        }
+        setVideoBatch({ processed: i + 1, total: targets.length, failed, running: true });
+      }
+    } catch (error) {
+      setVideoBatchError(`自动获取失败：${errorText(error)}`);
+    } finally {
+      setVideoBatch((old) => old && { ...old, running: false });
+      videoBusyRef.current = false;
+      setVideoBusy(false);
+    }
+  }
+  async function cancelVideoBatch() {
+    stopVideoBatch.current = true;
+    try {
+      await CancelVideoDownload();
+    } catch (error) {
+      setVideoBatchError(errorText(error));
     }
   }
   async function startRender() {
@@ -337,7 +500,11 @@ function App() {
     .filter((note) => noteSongIndex(note.message) === 0);
   const pendingSongs = pendingSongIndexes(review?.problems || [], notes, acknowledgedNotes, count);
   const availableDiffs = row && row.song_id === song?.song_id ? row.difficulties || [] : [];
-  const currentDiff = song?.difficulty.name || row?.difficulty || '';
+  const currentDiff = song?.difficulty.name || (row?.song_id === song?.song_id ? row?.difficulty : '') || '';
+  const currentSongVideo = review?.project?.songs[songIndex]?.video || song?.video;
+  const currentVideo = videoStates[songIndex];
+  const videoLinkChanged = videoLink !== (currentVideo?.url || '');
+  const { pending: missingVideos, retryable: retryableVideos, manualCount } = videoQueues(videoStates);
   const doneCount = new Set(
     logs
       .filter((event) => event.stage === 'render' && ['done', 'skipped'].includes(event.status))
@@ -409,7 +576,7 @@ function App() {
                             <strong>{name === 'edge' ? 'Microsoft Edge' : name}</strong>
                             <small>
                               {name === 'yt-dlp'
-                                ? 'P3 素材下载使用'
+                                ? '录像获取使用'
                                 : name === 'edge'
                                   ? '文字渲染使用'
                                   : '视频处理使用'}
@@ -475,7 +642,7 @@ function App() {
                 </div>
                 <div className="rule" />
                 <p>三种工具可在这里一次配置。Edge 用于文字渲染，也需要检查。</p>
-                <p>yt-dlp 将在 P3 素材下载功能接入后使用。</p>
+                <p>获取 B站录像时需要 yt-dlp。</p>
               </aside>
             </div>
           )}
@@ -582,6 +749,47 @@ function App() {
           {page === 3 &&
             (song ? (
               <>
+                {videoBatch && (videoBatch.running || missingVideos.length > 0 || Boolean(videoBatchError)) && (
+                  <section className="card download-summary">
+                    <h2>
+                      自动获取录像 <span>{videoBatch.processed} / {videoBatch.total} 首可自动获取</span>
+                    </h2>
+                    <div className="progress-track">
+                      <div
+                        style={{
+                          width: `${videoBatch.total ? (videoBatch.processed / videoBatch.total) * 100 : 0}%`,
+                        }}
+                      />
+                    </div>
+                    <div className="download-footer">
+                      <span>
+                        {videoBatch.running
+                          ? `正在逐首获取完整录像${manualCount ? `；${manualCount} 首需手动处理` : ''}`
+                          : stopVideoBatch.current
+                            ? `已停止，已处理 ${videoBatch.processed} 首${manualCount ? `；${manualCount} 首需手动处理` : ''}`
+                          : videoBatch.total === 0
+                            ? manualCount ? `${manualCount} 首需手动处理` : '录像均已就绪'
+                            : `本轮已处理，获取失败 ${videoBatch.failed} 首${manualCount ? `；${manualCount} 首需手动处理` : ''}`}
+                      </span>
+                      {videoBatch.running ? (
+                        <button className="button quiet" onClick={cancelVideoBatch}>
+                          停止获取
+                        </button>
+                      ) : (
+                        <button
+                          className="button quiet"
+                          disabled={videoBusy || retryableVideos.length === 0}
+                          onClick={() => review?.project && void downloadAllVideos(review.project)}
+                        >
+                          重新获取未就绪
+                        </button>
+                      )}
+                    </div>
+                    {videoBatchError && (
+                      <div className="notice bad" role="alert">{videoBatchError}</div>
+                    )}
+                  </section>
+                )}
                 {pendingSongs.length > 0 && (
                   <section className="card pending-summary">
                     <h2>
@@ -595,6 +803,24 @@ function App() {
                           onClick={() => jumpProblem(index)}
                         >
                           第 {index} 首
+                        </button>
+                      ))}
+                    </div>
+                  </section>
+                )}
+                {!videoBusy && !autoVideoPending.current && missingVideos.length > 0 && (
+                  <section className="card pending-summary">
+                    <h2>
+                      待补录像 <span>{missingVideos.length} 首</span>
+                    </h2>
+                    <div className="problem-chips">
+                      {missingVideos.map((state) => (
+                        <button
+                          key={state.index}
+                          title={videoFailures[state.index]}
+                          onClick={() => setSongIndex(state.index - 1)}
+                        >
+                          第 {state.index} 首
                         </button>
                       ))}
                     </div>
@@ -675,6 +901,7 @@ function App() {
                                     item.difficulty.name = choice.difficulties[0] || '';
                                     item.difficulty.constant = 0;
                                     item.difficulty.level = '';
+                                    item.video = undefined;
                                   });
                                   setSearch('');
                                 }}
@@ -698,6 +925,7 @@ function App() {
                               item.difficulty.name = event.target.value;
                               item.difficulty.constant = 0;
                               item.difficulty.level = '';
+                              item.video = undefined;
                             })
                           }
                         >
@@ -835,6 +1063,86 @@ function App() {
                     </div>
                   </section>
                   <aside className="right-stack">
+                    <section className="card video-card">
+                      <h2>
+                        录像预览{' '}
+                        <span>
+                          {videoLinkChanged
+                            ? '未就绪'
+                            : currentVideo?.status === 'ready'
+                              ? '已就绪'
+                              : currentVideo?.status === 'legacy'
+                                ? '旧缓存，请核对'
+                                : '未就绪'}
+                        </span>
+                      </h2>
+                      {currentVideo?.preview_url && !videoLinkChanged ? (
+                        <video
+                          key={currentVideo.preview_url}
+                          controls
+                          preload="metadata"
+                          src={currentVideo.preview_url}
+                        />
+                      ) : (
+                        <div className="video-empty">
+                          {currentVideo?.status === 'download'
+                            ? '可获取录像'
+                            : currentVideo?.status === 'invalid'
+                              ? '链接无效，请修改'
+                              : '暂无可预览录像'}
+                        </div>
+                      )}
+                    </section>
+                    <section className="card video-card">
+                      <h2>视频来源</h2>
+                      <label className="field">
+                        视频链接（B站 / YouTube）
+                        <input
+                          value={videoLink}
+                          onChange={(event) => setVideoLink(event.target.value)}
+                          disabled={videoBusy}
+                          placeholder="粘贴 B站或 YouTube 视频链接"
+                        />
+                      </label>
+                      {currentVideo?.status === 'missing' && !currentSongVideo?.local_path && currentDiff && (
+                        <p className="video-path">曲库暂无该谱面录像，请粘贴链接或选择本地文件。</p>
+                      )}
+                      {currentSongVideo?.local_path && (
+                        <p className="video-path">本地文件：{currentSongVideo.local_path}</p>
+                      )}
+                      {currentVideo?.owner_name && !videoLinkChanged && (
+                        <p className="video-owner">发布者：{currentVideo.owner_name}</p>
+                      )}
+                      <div className="video-actions">
+                        <button
+                          className="button quiet"
+                          onClick={applyVideoLink}
+                          disabled={videoBusy || (!videoLinkChanged && !currentSongVideo?.local_path)}
+                        >
+                          应用链接
+                        </button>
+                        <button className="button quiet" onClick={pickVideo} disabled={videoBusy}>
+                          选择本地文件
+                        </button>
+                        <button
+                          className="button primary"
+                          onClick={downloadVideo}
+                          disabled={
+                            videoBusy ||
+                            videoLinkChanged ||
+                            !currentVideo?.url ||
+                            currentVideo.status === 'ready'
+                          }
+                        >
+                          {videoBusy ? '获取中…' : '获取录像'}
+                        </button>
+                      </div>
+                      {(videoError || videoFailures[songIndex + 1]) && (
+                        <div className="notice bad" role="alert">
+                          {videoError || videoFailures[songIndex + 1]}
+                        </div>
+                      )}
+                    </section>
                     <section className="card">
                       <h2>
                         校对结果{' '}
@@ -968,7 +1276,7 @@ function App() {
                 <div className="action-line">
                   <button
                     className="button primary"
-                    disabled={!review?.renderable || !output || active}
+                    disabled={!review?.renderable || !output || active || videoBusy}
                     onClick={startRender}
                   >
                     开始生成

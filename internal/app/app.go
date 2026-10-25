@@ -10,14 +10,16 @@ import (
 )
 
 type App struct {
-	ctx      context.Context
-	root     string
-	mu       sync.Mutex
-	jobID    string
-	cancel   context.CancelFunc
-	cataOnce sync.Once
-	cata     *catalog.Catalog
-	cataErr  error
+	ctx         context.Context
+	root        string
+	mu          sync.Mutex
+	jobID       string
+	cancel      context.CancelFunc
+	cataOnce    sync.Once
+	cata        *catalog.Catalog
+	cataErr     error
+	previews    map[string]string
+	videoCancel context.CancelFunc
 }
 
 func New() *App {

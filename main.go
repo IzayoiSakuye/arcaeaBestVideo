@@ -22,7 +22,8 @@ func main() {
 		Height:        900,
 		DisableResize: false,
 		AssetServer: &assetserver.Options{
-			Assets: assets,
+			Assets:  assets,
+			Handler: app.NewPreviewHandler(application),
 		},
 		BackgroundColour: &options.RGBA{R: 27, G: 38, B: 54, A: 1},
 		OnStartup:        application.Startup,

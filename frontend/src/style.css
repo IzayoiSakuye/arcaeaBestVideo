@@ -93,6 +93,10 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 .review-toolbar{display:flex;gap:10px;align-items:center;margin-bottom:13px}
 .pending-summary{margin-bottom:13px;border-color:#c8b5df;background:#faf7ff}
 .pending-summary h2{margin-bottom:12px}
+.download-summary{margin-bottom:13px;background:#faf7ff}
+.download-summary .progress-track{height:7px}
+.download-footer{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:10px;color:#70667b;font-size:12px}
+.download-footer .button{min-height:32px;font-size:12px}
 .review-toolbar .compact{flex-direction:row;align-items:center;white-space:nowrap}
 .review-toolbar input[type=number]{width:66px;text-align:center}
 .checkline{display:flex;align-items:center;gap:5px;color:#655973;font-size:12px}
@@ -114,6 +118,12 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 .readout{min-height:39px;border:1px solid #ebe5f0;background:#f6f3f9;padding:10px 11px;color:#63576e}
 .judgment-row{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
 .right-stack{display:flex;flex-direction:column;gap:16px}
+.video-card video,.video-empty{display:block;width:100%;aspect-ratio:16/9;background:#292337;border:1px solid #ded5e8}
+.video-card video{object-fit:contain}
+.video-empty{display:grid;place-items:center;color:#c7b9d4;font-size:12px}
+.video-actions{display:flex;flex-wrap:wrap;gap:7px;margin-top:13px}
+.video-actions .button{font-size:11px;padding:6px 9px;min-height:34px}
+.video-path,.video-owner{font-size:11px;color:#70667b;overflow-wrap:anywhere;margin:9px 0 0}
 .problem-list{max-height:300px;overflow:auto}
 .problem{display:flex;gap:9px;padding:9px 0;border-bottom:1px solid #f0eaf3;font-size:12px;line-height:1.5}
 .problem span{min-width:0;flex:1;overflow-wrap:anywhere}
@@ -160,7 +170,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 @media(max-width:1150px){.content-grid,.review-grid{grid-template-columns:1fr}
 .sidebar{width:185px}
 .tool-row{grid-template-columns:130px minmax(80px,1fr) auto}
-.right-stack{display:grid;grid-template-columns:1fr 1fr}
+.right-stack{display:flex;flex-direction:column}
 .log-card{min-height:300px}
 }
 @media(max-width:960px){.workspace{padding:10px;gap:10px}

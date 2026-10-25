@@ -11,6 +11,9 @@ import (
 func testApp(t *testing.T) *App {
 	t.Helper()
 	root := t.TempDir()
+	configDir := t.TempDir()
+	t.Setenv("APPDATA", configDir)
+	t.Setenv("XDG_CONFIG_HOME", configDir)
 	if err := os.Mkdir(filepath.Join(root, "data"), 0o755); err != nil {
 		t.Fatal(err)
 	}

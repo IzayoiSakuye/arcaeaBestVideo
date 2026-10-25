@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"rhythm-game-bvideo/internal/catalog"
 	"rhythm-game-bvideo/internal/render"
 	"rhythm-game-bvideo/internal/resource"
 	"rhythm-game-bvideo/internal/score"
@@ -28,10 +29,9 @@ func (j *Job) renderOne(ctx context.Context, i int, s score.Song, songRating flo
 		return "", d, false, fmt.Errorf("song %s not found", s.SongID)
 	}
 	chart, ok := j.deps.Catalog.Chart(s.SongID, s.Difficulty.Name)
-	if !ok || chart.Video == nil || len(chart.Video.Sources) == 0 {
-		return "", d, false, fmt.Errorf("no video sources for song %s", s.SongID)
+	if !ok {
+		return "", d, false, fmt.Errorf("song %s has no chart %s", s.SongID, s.Difficulty.Name)
 	}
-	src := chart.Video.Sources[0]
 	jacket, err := j.deps.Catalog.JacketPath(s.SongID, s.Difficulty.Name)
 	if err != nil {
 		return "", d, false, fmt.Errorf("parse jacket path failed: %w", err)
@@ -40,11 +40,16 @@ func (j *Job) renderOne(ctx context.Context, i int, s score.Song, songRating flo
 	if err != nil {
 		return "", d, false, fmt.Errorf("parse bg path failed: %w", err)
 	}
-	clip, err := resource.ClipPath(j.cfg.ClipsDir, s.SongID, s.Difficulty.Name)
+	clip, err := j.videoClip(ctx, s, chart)
 	if err != nil {
-		return "", d, false, fmt.Errorf("parse clip failed: %w", err)
+		return "", d, false, err
 	}
-	tpl := render.Templates[resource.TemplateFor(&src)]
+	info, err := render.Probe(ctx, j.deps.Tools.FFprobe, clip)
+	if err != nil {
+		return "", d, false, err
+	}
+	width, height := info.Width, info.Height
+	tpl := render.Templates[resource.TemplateFor(&catalog.VideoSource{VideoWidth: &width, VideoHeight: &height})]
 	val := valuesOf(song, chart, s, songRating)
 
 	in := SegInput{
@@ -55,7 +60,7 @@ func (j *Job) renderOne(ctx context.Context, i int, s score.Song, songRating flo
 		Win:      tpl.Win,
 		Value:    val,
 	}
-	if !j.cfg.Force && reusable(dir, seg, in) {
+	if !j.cfg.Force && reusable(ctx, j.deps.Tools.FFprobe, dir, seg, in) {
 		return seg, d, true, nil
 	}
 
