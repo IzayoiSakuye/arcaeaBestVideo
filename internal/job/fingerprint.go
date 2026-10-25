@@ -18,6 +18,7 @@ type SegInput struct {
 	Bg       string            `json:"bg"`
 	Jacket   string            `json:"jacket"`
 	Template string            `json:"template"`
+	TextHash string            `json:"text_hash"`
 	Win      render.RectWin    `json:"win"`
 	Value    map[string]string `json:"value"`
 }

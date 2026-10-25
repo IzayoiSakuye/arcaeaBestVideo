@@ -37,3 +37,12 @@ func TestReusableRejectsFullRangeSegment(t *testing.T) {
 		}
 	}
 }
+
+func TestSegmentHashChangesWithTextTemplate(t *testing.T) {
+	in := SegInput{TextHash: "old"}
+	before := in.hash()
+	in.TextHash = "new"
+	if before == in.hash() {
+		t.Fatal("文字模板修改后应重新渲染片段")
+	}
+}

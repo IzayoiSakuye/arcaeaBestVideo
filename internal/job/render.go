@@ -2,6 +2,7 @@ package job
 
 import (
 	"context"
+	"crypto/sha256"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -14,7 +15,7 @@ import (
 )
 
 // renderOne 渲染单首歌片段
-func (j *Job) renderOne(ctx context.Context, i int, s score.Song, songRating float64) (string, RenderPhaseDuration, bool, error) {
+func (j *Job) renderOne(ctx context.Context, i int, s score.Song) (string, RenderPhaseDuration, bool, error) {
 	var d RenderPhaseDuration
 	root := j.cfg.Root
 
@@ -50,13 +51,19 @@ func (j *Job) renderOne(ctx context.Context, i int, s score.Song, songRating flo
 	}
 	width, height := info.Width, info.Height
 	tpl := render.Templates[resource.TemplateFor(&catalog.VideoSource{VideoWidth: &width, VideoHeight: &height})]
-	val := valuesOf(song, chart, s, songRating)
+	val := valuesOf(song, chart, s)
+	textHTML := filepath.Join(root, "templates/text.html")
+	textSource, err := os.ReadFile(textHTML)
+	if err != nil {
+		return "", d, false, fmt.Errorf("读取文字模板失败: %w", err)
+	}
 
 	in := SegInput{
 		Clip:     clip,
 		Bg:       bg,
 		Jacket:   jacket,
 		Template: filepath.Join(root, tpl.Source),
+		TextHash: fmt.Sprintf("%x", sha256.Sum256(textSource)),
 		Win:      tpl.Win,
 		Value:    val,
 	}
@@ -74,7 +81,7 @@ func (j *Job) renderOne(ctx context.Context, i int, s score.Song, songRating flo
 	textPng := filepath.Join(dir, "text.png")
 	t = time.Now()
 	if err := render.RenderText(ctx, val, j.deps.Tools.Edge,
-		filepath.Join(root, "templates/text.html"),
+		textHTML,
 		filepath.Join(root, ".cache/edge-profile"),
 		textPng); err != nil {
 		return "", d, false, err

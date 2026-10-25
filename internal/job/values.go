@@ -10,7 +10,13 @@ import (
 )
 
 // valuesOf 用于需要的字段值
-func valuesOf(song *catalog.Song, chart *catalog.Chart, s score.Song, songRating float64) map[string]string {
+func valuesOf(song *catalog.Song, chart *catalog.Chart, s score.Song) map[string]string {
+	ptt := "—"
+	if chart.Constant != nil && s.Score.ClearType != "" {
+		if value, err := score.SinglePTT(*chart.Constant, s.Score.Score(), score.ClearType(s.Score.ClearType)); err == nil {
+			ptt = "+" + strconv.FormatFloat(value, 'f', 3, 64)
+		}
+	}
 	pure, far, lost := "—", "—", "—"
 	if s.Score.Pure+s.Score.Far+s.Score.Lost != 0 {
 		pure, far, lost = strconv.Itoa(s.Score.Pure), strconv.Itoa(s.Score.Far), strconv.Itoa(s.Score.Lost)
@@ -20,7 +26,7 @@ func valuesOf(song *catalog.Song, chart *catalog.Chart, s score.Song, songRating
 		title = song.TitleJP
 	}
 	return map[string]string{
-		"ptt":       "+" + strconv.FormatFloat(songRating, 'f', 3, 64),
+		"ptt":       ptt,
 		"score":     formatScore(s.Score.Achievement),
 		"pure":      pure,
 		"far":       far,

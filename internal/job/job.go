@@ -116,7 +116,7 @@ func (j *Job) Run(ctx context.Context) (Result, error) {
 		j.emit(Event{Stage: StageRender, SongIndex: i + 1, SongID: s.SongID,
 			Status: StatusRunning, Progress: float64(i) / float64(total)})
 
-		seg, d, skipped, err := j.renderOne(ctx, i+1, s, proj.Player.Rating)
+		seg, d, skipped, err := j.renderOne(ctx, i+1, s)
 		if err != nil {
 			j.emit(Event{Stage: StageRender, SongIndex: i + 1, SongID: s.SongID,
 				Status: StatusFailed, Err: err.Error()})
