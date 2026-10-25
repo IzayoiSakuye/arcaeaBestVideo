@@ -1,13 +1,15 @@
 package job
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"os"
 	"path/filepath"
-	"rhythm-game-bvideo/internal/render"
 	"strings"
+
+	"rhythm-game-bvideo/internal/render"
 )
 
 // SegInput 负责为每段处理幂等提供数据结构
@@ -37,7 +39,7 @@ func (in SegInput) hash() string {
 }
 
 // reusable 用于去重
-func reusable(dir, seg string, in SegInput) bool {
+func reusable(ctx context.Context, ffprobe, dir, seg string, in SegInput) bool {
 	if !isFile(seg) {
 		return false
 	}
@@ -46,5 +48,9 @@ func reusable(dir, seg string, in SegInput) bool {
 		return false
 	}
 	want := in.hash()
-	return want != "" && strings.TrimSpace(string(b)) == want
+	if want == "" || strings.TrimSpace(string(b)) != want {
+		return false
+	}
+	info, err := render.Probe(ctx, ffprobe, seg)
+	return err == nil && info.PixFmt == "yuv420p"
 }
