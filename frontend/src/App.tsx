@@ -66,6 +66,7 @@ function App() {
   const [videoError, setVideoError] = useState('');
   const [videoBusy, setVideoBusy] = useState(false);
   const [videoBatch, setVideoBatch] = useState<VideoBatch | null>(null);
+  const [videoStopping, setVideoStopping] = useState(false);
   const [videoBatchError, setVideoBatchError] = useState('');
   const [videoFailures, setVideoFailures] = useState<Record<number, string>>({});
   const [songIndex, setSongIndex] = useState(0);
@@ -398,6 +399,7 @@ function App() {
     if (videoBusyRef.current) return;
     videoBusyRef.current = true;
     stopVideoBatch.current = false;
+    setVideoStopping(false);
     setVideoBusy(true);
     setVideoBatchError('');
     try {
@@ -438,7 +440,9 @@ function App() {
     }
   }
   async function cancelVideoBatch() {
+    if (stopVideoBatch.current) return;
     stopVideoBatch.current = true;
+    setVideoStopping(true);
     try {
       await CancelVideoDownload();
     } catch (error) {
@@ -772,8 +776,8 @@ function App() {
                             : `本轮已处理，获取失败 ${videoBatch.failed} 首${manualCount ? `；${manualCount} 首需手动处理` : ''}`}
                       </span>
                       {videoBatch.running ? (
-                        <button className="button quiet" onClick={cancelVideoBatch}>
-                          停止获取
+                        <button className="button quiet" onClick={cancelVideoBatch} disabled={videoStopping}>
+                          {videoStopping ? '停止中…' : '停止获取'}
                         </button>
                       ) : (
                         <button
