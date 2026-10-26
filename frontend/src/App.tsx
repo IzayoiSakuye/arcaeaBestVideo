@@ -411,7 +411,7 @@ function App() {
       const states = await VideoInfos(input);
       setVideoStates(states);
       const targets = videoQueues(states).retryable;
-      setVideoBatch({ processed: 0, total: targets.length, failed: 0, running: true });
+      setVideoBatch({ processed: 0, total: targets.length, failed: 0, running: targets.length > 0 });
       if (targets.length) await CheckTool('yt-dlp');
       let failed = 0;
       for (let i = 0; i < targets.length; i++) {
@@ -758,7 +758,7 @@ function App() {
           {page === 3 &&
             (song ? (
               <>
-                {videoBatch && (videoBatch.running || missingVideos.length > 0 || Boolean(videoBatchError)) && (
+                {videoBatch && (videoBatch.running || retryableVideos.length > 0 || Boolean(videoBatchError)) && (
                   <section className="card download-summary">
                     <h2>
                       自动获取录像 <span>{videoBatch.processed} / {videoBatch.total} 首可自动获取</span>
