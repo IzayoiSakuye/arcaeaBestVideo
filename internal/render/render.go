@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"net/url"
 	"os"
 	"os/exec"
@@ -89,7 +90,11 @@ func TextArgs(textHTMLPath, profileDir, dest string, values map[string]string) [
 
 // Composite 用于把各层组装起来
 func Composite(ctx context.Context, l Layers, dest, ffmpeg string) error {
-	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	timeout := 30 * time.Second
+	if l.DurationMs > 0 {
+		timeout += 5 * time.Duration(l.DurationMs) * time.Millisecond
+	}
+	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
 	cmd := exec.CommandContext(ctx, ffmpeg, CompositeArgs(l, dest)...)
@@ -115,9 +120,18 @@ func CompositeArgs(l Layers, dest string) []string {
 		"[4:v]format=rgba[tx]",
 		"[o3][tx]overlay=0:0:format=auto,scale=out_range=tv,format=yuv420p,setsar=1[v]",
 	}, ";")
-	return []string{
+	args := []string{
 		"-y", "-v", "error",
-		"-i", l.Clip,
+	}
+	if l.StartMs > 0 {
+		args = append(args, "-ss", strconv.FormatFloat(float64(l.StartMs)/1000, 'f', 3, 64))
+	}
+	args = append(args, "-i", l.Clip)
+	duration := strconv.Itoa(SecPerSong)
+	if l.DurationMs > 0 {
+		duration = strconv.FormatFloat(float64(l.DurationMs)/1000, 'f', 3, 64)
+	}
+	return append(args,
 		"-loop", "1", "-framerate", "30", "-i", l.BG,
 		"-loop", "1", "-framerate", "30", "-i", l.Jacket,
 		"-loop", "1", "-framerate", "30", "-i", l.Template,
@@ -126,7 +140,7 @@ func CompositeArgs(l Layers, dest string) []string {
 		"-map", "[v]",
 		"-map", "0:a:0",
 		"-c:a", "aac", "-b:a", "192k", "-ar", "48000", "-ac", "2",
-		"-t", strconv.Itoa(SecPerSong),
+		"-t", duration,
 		"-c:v", "libx264",
 		"-preset", "medium",
 		"-crf", "18",
@@ -134,7 +148,7 @@ func CompositeArgs(l Layers, dest string) []string {
 		"-color_range", "tv",
 		"-g", "60", "-keyint_min", "60", "-sc_threshold", "0",
 		dest,
-	}
+	)
 }
 
 // Concat 用于将多个视频片段拼接起来
@@ -211,6 +225,9 @@ func Probe(ctx context.Context, ffprobe string, file string) (StreamInfo, error)
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 	var raw struct {
+		Format struct {
+			Duration string `json:"duration"`
+		} `json:"format"`
 		Streams []struct {
 			CodecType    string `json:"codec_type"`
 			CodecName    string `json:"codec_name"`
@@ -227,7 +244,7 @@ func Probe(ctx context.Context, ffprobe string, file string) (StreamInfo, error)
 	// ffprobe执行
 	cmd := exec.CommandContext(ctx, ffprobe,
 		"-v", "error",
-		"-show_entries", "stream=codec_type,codec_name,width,height,pix_fmt,avg_frame_rate,sample_aspect_ratio,sample_rate,channels",
+		"-show_entries", "stream=codec_type,codec_name,width,height,pix_fmt,avg_frame_rate,sample_aspect_ratio,sample_rate,channels:format=duration",
 		"-of", "json", file)
 	tools.HideWindow(cmd)
 
@@ -259,6 +276,9 @@ func Probe(ctx context.Context, ffprobe string, file string) (StreamInfo, error)
 	}
 	// 视频流和音频流拼接
 	info.CodecName = vCodec + "/" + aCodec // "h264/aac"
+	if seconds, err := strconv.ParseFloat(raw.Format.Duration, 64); err == nil && !math.IsNaN(seconds) && !math.IsInf(seconds, 0) && seconds > 0 {
+		info.DurationMs = int(math.Round(seconds * 1000))
+	}
 	return info, nil
 }
 

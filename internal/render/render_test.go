@@ -131,6 +131,14 @@ func TestTemplatesMatchMeasuredConstants(t *testing.T) {
 	}
 }
 
+func TestCompositeArgsClipRange(t *testing.T) {
+	args := CompositeArgs(Layers{Clip: "video.mp4", StartMs: 1250, DurationMs: 8500}, "out.mp4")
+	joined := strings.Join(args, " ")
+	if !strings.Contains(joined, "-ss 1.250 -i video.mp4") || !strings.Contains(joined, "-t 8.500") {
+		t.Fatalf("未按选择的片段截取：%s", joined)
+	}
+}
+
 // ── Probe（真跑 ffprobe）─────────────────────────────────────────────────────
 
 func TestProbeRealFile(t *testing.T) {

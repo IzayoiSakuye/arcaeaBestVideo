@@ -46,3 +46,12 @@ func TestSegmentHashChangesWithTextTemplate(t *testing.T) {
 		t.Fatal("文字模板修改后应重新渲染片段")
 	}
 }
+
+func TestSegmentHashChangesWithClipRange(t *testing.T) {
+	in := SegInput{Clip: "same-input"}
+	before := in.hash()
+	in.StartMs, in.DurationMs = 1250, 8500
+	if before == in.hash() {
+		t.Fatal("修改片段起点或时长后应重新渲染")
+	}
+}

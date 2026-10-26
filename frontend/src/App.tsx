@@ -23,6 +23,7 @@ import type { app, score } from '../wailsjs/go/models';
 import { eventText, nameOf, scoreText, type Event } from './format';
 import { noteSongIndex, pendingSongIndexes } from './issues';
 import { videoQueues } from './video';
+import { clipRangeError, formatClipTime, parseClipTime } from './clip';
 
 const pages = [
   '环境检查',
@@ -70,6 +71,12 @@ function App() {
   const [videoStopping, setVideoStopping] = useState(false);
   const [videoBatchError, setVideoBatchError] = useState('');
   const [videoFailures, setVideoFailures] = useState<Record<number, string>>({});
+  const [clipStartText, setClipStartText] = useState('0:00');
+  const [clipEndText, setClipEndText] = useState('0:10');
+  const [videoLength, setVideoLength] = useState(0);
+  const [previewTime, setPreviewTime] = useState(0);
+  const [previewPlaying, setPreviewPlaying] = useState(false);
+  const previewRef = useRef<HTMLVideoElement>(null);
   const [songIndex, setSongIndex] = useState(0);
   const [onlyProblems, setOnlyProblems] = useState(false);
   const [search, setSearch] = useState('');
@@ -162,6 +169,19 @@ function App() {
     setVideoLink(videoStates[songIndex]?.url || '');
     setVideoError('');
   }, [songIndex, videoStates[songIndex]?.url]);
+
+  useEffect(() => {
+    const start = (project?.songs[songIndex]?.clip?.start_ms || 0) / 1000;
+    const duration = (project?.songs[songIndex]?.clip?.duration_ms || 10000) / 1000;
+    setClipStartText(formatClipTime(start));
+    setClipEndText(formatClipTime(start + duration));
+  }, [songIndex, project?.songs[songIndex]?.clip?.start_ms, project?.songs[songIndex]?.clip?.duration_ms]);
+
+  useEffect(() => {
+    setVideoLength(0);
+    setPreviewTime(0);
+    setPreviewPlaying(false);
+  }, [songIndex, videoStates[songIndex]?.preview_url]);
 
   useEffect(() => {
     if (!search.trim()) {
@@ -513,6 +533,15 @@ function App() {
   const currentSongVideo = reviewPending ? song?.video : review?.project?.songs[songIndex]?.video || song?.video;
   const currentVideo = videoStates[songIndex];
   const videoLinkChanged = videoLink !== (currentVideo?.url || '');
+  const clipStart = parseClipTime(clipStartText);
+  const clipEnd = parseClipTime(clipEndText);
+  const rangeStart = Math.min(clipStart ?? 0, videoLength);
+  const rangeEnd = Math.min(clipEnd ?? 0, videoLength);
+  const clipError = videoLength > 0 ? clipRangeError(clipStart, clipEnd, videoLength) : '';
+  const clipDuration = clipStart !== null && clipEnd !== null ? Math.max(0, clipEnd - clipStart) : 0;
+  const clipChanged = clipStart !== null && clipEnd !== null &&
+    (Math.round(clipStart * 1000) !== (song?.clip?.start_ms || 0) ||
+      Math.round(clipDuration * 1000) !== (song?.clip?.duration_ms || 10000));
   const { pending: missingVideos, retryable: retryableVideos, manualCount } = videoQueues(videoStates);
   const doneCount = new Set(
     logs
@@ -1087,10 +1116,37 @@ function App() {
                       </h2>
                       {currentVideo?.preview_url && !videoLinkChanged ? (
                         <video
-                          key={currentVideo.preview_url}
-                          controls
+                          key={`${songIndex}-${currentVideo.preview_url}`}
+                          ref={previewRef}
                           preload="metadata"
                           src={currentVideo.preview_url}
+                          onLoadedMetadata={(event) => {
+                            setVideoLength(event.currentTarget.duration);
+                            event.currentTarget.currentTime = clipStart ?? 0;
+                            setPreviewTime(0);
+                          }}
+                          onPause={() => setPreviewPlaying(false)}
+                          onPlaying={() => setPreviewPlaying(true)}
+                          onPlay={(event) => {
+                            if (clipError || clipStart === null || clipEnd === null) {
+                              event.currentTarget.pause();
+                            } else if (event.currentTarget.currentTime < clipStart || event.currentTarget.currentTime >= clipEnd) {
+                              event.currentTarget.currentTime = clipStart;
+                            }
+                          }}
+                          onTimeUpdate={(event) => {
+                            if (clipStart === null || clipEnd === null || clipError) {
+                              event.currentTarget.pause();
+                            } else if (event.currentTarget.currentTime < clipStart) {
+                              event.currentTarget.currentTime = clipStart;
+                            } else if (event.currentTarget.currentTime >= clipEnd - 0.03) {
+                              event.currentTarget.pause();
+                              event.currentTarget.currentTime = clipStart;
+                              setPreviewTime(0);
+                            } else {
+                              setPreviewTime(event.currentTarget.currentTime - clipStart);
+                            }
+                          }}
                         />
                       ) : (
                         <div className="video-empty">
@@ -1099,6 +1155,86 @@ function App() {
                             : currentVideo?.status === 'invalid'
                               ? '链接无效，请修改'
                               : '暂无可预览录像'}
+                        </div>
+                      )}
+                      {videoLength > 0 && !videoLinkChanged && (
+                        <div className="clip-picker">
+                          <div className="clip-playback">
+                            <button className="button quiet" disabled={Boolean(clipError)} onClick={() => {
+                              const video = previewRef.current;
+                              if (!video) return;
+                              if (video.paused) void video.play().catch((error) => setVideoError(errorText(error)));
+                              else video.pause();
+                            }}>{previewPlaying ? '暂停预览' : '播放片段'}</button>
+                            <input aria-label="片段预览进度" type="range" min={0} max={clipDuration} step={0.1}
+                              disabled={Boolean(clipError)}
+                              value={Math.min(previewTime, clipDuration)}
+                              onChange={(event) => {
+                                const elapsed = Number(event.target.value);
+                                setPreviewTime(elapsed);
+                                if (previewRef.current && clipStart !== null) previewRef.current.currentTime = clipStart + elapsed;
+                              }} />
+                            <span>{formatClipTime(Math.min(previewTime, clipDuration))} / {formatClipTime(clipDuration)}</span>
+                          </div>
+                          <div className="clip-range">
+                            <div className="clip-range-rail">
+                              <div className={`clip-range-selected${clipError ? ' invalid' : ''}`} style={{
+                                left: `${Math.min(rangeStart, rangeEnd) / videoLength * 100}%`,
+                                width: `${Math.abs(rangeEnd - rangeStart) / videoLength * 100}%`,
+                              }} />
+                            </div>
+                            <input aria-label="拖动开始时间" title="开始时间" className="clip-range-start"
+                              type="range" min={0} max={videoLength} step={0.1}
+                              value={rangeStart}
+                              onChange={(event) => {
+                                const start = Number(event.target.value);
+                                setClipStartText(formatClipTime(start));
+                                setPreviewTime(0);
+                                if (previewRef.current) previewRef.current.currentTime = start;
+                              }} />
+                            <input aria-label="拖动结束时间" title="结束时间" className="clip-range-end"
+                              type="range" min={0} max={videoLength} step={0.1}
+                              value={rangeEnd}
+                              onChange={(event) => {
+                                setClipEndText(formatClipTime(Number(event.target.value)));
+                                setPreviewTime(0);
+                                if (previewRef.current && clipStart !== null) previewRef.current.currentTime = clipStart;
+                              }} />
+                          </div>
+                          <div className="clip-times">
+                            <label className="field">开始时间（分:秒）
+                              <input type="text" inputMode="decimal" value={clipStartText} placeholder="0:00"
+                                onChange={(event) => {
+                                  const value = event.target.value;
+                                  setClipStartText(value);
+                                  setPreviewTime(0);
+                                  const start = parseClipTime(value);
+                                  if (previewRef.current && start !== null && start >= 0 && start < videoLength) previewRef.current.currentTime = start;
+                                }} onBlur={() => {
+                                  const start = parseClipTime(clipStartText);
+                                  if (start !== null) setClipStartText(formatClipTime(start));
+                                }} />
+                            </label>
+                            <label className="field">结束时间（分:秒）
+                              <input type="text" inputMode="decimal" value={clipEndText} placeholder="0:10"
+                                onChange={(event) => {
+                                  setClipEndText(event.target.value);
+                                  setPreviewTime(0);
+                                  if (previewRef.current && clipStart !== null) previewRef.current.currentTime = clipStart;
+                                }} onBlur={() => {
+                                  const end = parseClipTime(clipEndText);
+                                  if (end !== null) setClipEndText(formatClipTime(end));
+                                }} />
+                            </label>
+                          </div>
+                          <div className="clip-footer">
+                            <span className={clipError ? 'clip-error' : undefined} role={clipError ? 'alert' : undefined}>{clipError || `预览 ${formatClipTime(clipStart ?? 0)}–${formatClipTime(clipEnd ?? 0)}`}</span>
+                            <button className="button quiet" disabled={Boolean(clipError) || !clipChanged}
+                              onClick={() => editSong((item) => {
+                                if (clipStart === null || clipEnd === null) return;
+                                item.clip = { start_ms: Math.round(clipStart * 1000), duration_ms: Math.round((clipEnd - clipStart) * 1000) };
+                              })}>应用片段</button>
+                          </div>
                         </div>
                       )}
                     </section>

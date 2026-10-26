@@ -33,14 +33,17 @@ type StreamInfo struct {
 	SAR           string // 单个像素长宽比
 	SampleRate    string // 音频采样率
 	Channels      int    // 声道数
+	DurationMs    int
 }
 
 // Layers 是视频最终形态各层的定义
 type Layers struct {
-	Clip     string
-	BG       string
-	Jacket   string
-	Template string
-	Text     string
-	Win      RectWin
+	Clip       string
+	BG         string
+	Jacket     string
+	Template   string
+	Text       string
+	Win        RectWin
+	StartMs    int
+	DurationMs int
 }

@@ -14,13 +14,15 @@ import (
 
 // SegInput 负责为每段处理幂等提供数据结构
 type SegInput struct {
-	Clip     string            `json:"clip"`
-	Bg       string            `json:"bg"`
-	Jacket   string            `json:"jacket"`
-	Template string            `json:"template"`
-	TextHash string            `json:"text_hash"`
-	Win      render.RectWin    `json:"win"`
-	Value    map[string]string `json:"value"`
+	Clip       string            `json:"clip"`
+	Bg         string            `json:"bg"`
+	Jacket     string            `json:"jacket"`
+	Template   string            `json:"template"`
+	TextHash   string            `json:"text_hash"`
+	Win        render.RectWin    `json:"win"`
+	Value      map[string]string `json:"value"`
+	StartMs    int               `json:"start_ms,omitempty"`
+	DurationMs int               `json:"duration_ms,omitempty"`
 }
 
 // isFile 判断传入的是不是文件

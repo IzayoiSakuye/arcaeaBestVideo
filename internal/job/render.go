@@ -49,6 +49,13 @@ func (j *Job) renderOne(ctx context.Context, i int, s score.Song) (string, Rende
 	if err != nil {
 		return "", d, false, err
 	}
+	startMs, durationMs := 0, render.SecPerSong*1000
+	if s.Clip != nil {
+		startMs, durationMs = s.Clip.StartMs, s.Clip.DurationMs
+		if startMs < 0 || durationMs < 1000 || info.DurationMs <= 0 || startMs > info.DurationMs || durationMs > info.DurationMs-startMs+50 {
+			return "", d, false, fmt.Errorf("第 %d 首片段超出录像时长，请重新选择起点和展示时长", i)
+		}
+	}
 	width, height := info.Width, info.Height
 	tpl := render.Templates[resource.TemplateFor(&catalog.VideoSource{VideoWidth: &width, VideoHeight: &height})]
 	val := valuesOf(song, chart, s)
@@ -66,6 +73,9 @@ func (j *Job) renderOne(ctx context.Context, i int, s score.Song) (string, Rende
 		TextHash: fmt.Sprintf("%x", sha256.Sum256(textSource)),
 		Win:      tpl.Win,
 		Value:    val,
+	}
+	if s.Clip != nil {
+		in.StartMs, in.DurationMs = startMs, durationMs
 	}
 	if !j.cfg.Force && reusable(ctx, j.deps.Tools.FFprobe, dir, seg, in) {
 		return seg, d, true, nil
@@ -94,7 +104,7 @@ func (j *Job) renderOne(ctx context.Context, i int, s score.Song) (string, Rende
 		Clip: clip, BG: bgPng,
 		Jacket:   filepath.Join(root, filepath.FromSlash(jacket)),
 		Template: filepath.Join(root, tpl.Source),
-		Text:     textPng, Win: tpl.Win,
+		Text:     textPng, Win: tpl.Win, StartMs: in.StartMs, DurationMs: in.DurationMs,
 	}, tmp, j.deps.Tools.FFmpeg); err != nil {
 		os.Remove(tmp)
 		return "", d, false, err

@@ -51,13 +51,19 @@ type VideoRef struct {
 	OwnerName string `json:"owner_name,omitempty"`
 }
 
+type ClipRange struct {
+	StartMs    int `json:"start_ms"`
+	DurationMs int `json:"duration_ms"`
+}
+
 type Song struct {
-	Index      int       `json:"index"`
-	SongID     string    `json:"song_id"`
-	Difficulty DiffRef   `json:"difficulty"`
-	Score      ScoreRef  `json:"score"`
-	User       UserRef   `json:"user"`
-	Video      *VideoRef `json:"video,omitempty"`
+	Index      int        `json:"index"`
+	SongID     string     `json:"song_id"`
+	Difficulty DiffRef    `json:"difficulty"`
+	Score      ScoreRef   `json:"score"`
+	User       UserRef    `json:"user"`
+	Video      *VideoRef  `json:"video,omitempty"`
+	Clip       *ClipRange `json:"clip,omitempty"`
 }
 type Project struct {
 	SchemaVersion int       `json:"schema_version"`
