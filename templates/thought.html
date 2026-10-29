@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <style>
+    html,body{width:1920px;height:1080px;margin:0;overflow:hidden}
+    body{position:relative;background:url("thought-bg.png") center/cover no-repeat}
+    #decorations{position:absolute;inset:0}
+    #decorations img{position:absolute;height:auto;max-width:none}
+    #text{position:absolute;left:210px;top:265px;width:1500px;height:615px;overflow:hidden;
+      display:flex;align-items:center;justify-content:center;white-space:pre-wrap;overflow-wrap:anywhere;
+      text-align:center;color:#3d3148;font:56px/1.45 "Microsoft YaHei",Arial,sans-serif}
+  </style>
+</head>
+<body>
+  <div id="decorations"></div>
+  <div id="text"></div>
+  <script>
+    const decorations = document.getElementById('decorations');
+    function apply(values) {
+      document.getElementById('text').textContent = values.text || '';
+      let images = values.images || [];
+      if (typeof images === 'string') {
+        try { images = JSON.parse(images); } catch { images = []; }
+      }
+      decorations.replaceChildren();
+      for (const item of Array.isArray(images) ? images : []) {
+        const img = document.createElement('img');
+        img.src = item.source;
+        img.style.left = `${Number(item.x || 0)}px`;
+        img.style.top = `${Number(item.y || 0)}px`;
+        img.style.width = `${Number(item.width || 300)}px`;
+        decorations.append(img);
+      }
+    }
+    apply(Object.fromEntries(new URLSearchParams(location.search)));
+    addEventListener('message', (event) => {
+      if (event.origin === location.origin && event.data?.type === 'thought-preview') apply(event.data);
+    });
+  </script>
+</body>
+</html>
