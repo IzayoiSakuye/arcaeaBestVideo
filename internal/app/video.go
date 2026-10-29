@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"mime"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -112,6 +113,10 @@ func fileReady(path string) bool {
 }
 
 func (a *App) previewURL(path string) string {
+	return a.mediaURL(path, ".mp4")
+}
+
+func (a *App) mediaURL(path, ext string) string {
 	absolute, err := filepath.Abs(path)
 	if err != nil {
 		return ""
@@ -124,7 +129,7 @@ func (a *App) previewURL(path string) string {
 	}
 	a.previews[token] = absolute
 	a.mu.Unlock()
-	return "/preview/" + token + ".mp4"
+	return "/preview/" + token + ext
 }
 
 // NewPreviewHandler 只提供已登记的本地录像
@@ -134,8 +139,18 @@ func NewPreviewHandler(a *App) http.Handler {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
-		token := strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/preview/"), ".mp4")
-		if !strings.HasPrefix(r.URL.Path, "/preview/") || len(token) != 32 {
+		if r.URL.Path == "/thought-bg.png" {
+			http.ServeFile(w, r, filepath.Join(a.root, "templates", "thought-bg.png"))
+			return
+		}
+		if r.URL.Path == "/thought-template" {
+			http.ServeFile(w, r, filepath.Join(a.root, "templates", "thought.html"))
+			return
+		}
+		ext := filepath.Ext(r.URL.Path)
+		token := strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/preview/"), ext)
+		if !strings.HasPrefix(r.URL.Path, "/preview/") || len(token) != 32 ||
+			!strings.Contains("|.mp4|.png|.jpg|.jpeg|.mp3|.wav|.flac|.m4a|.ogg|", "|"+ext+"|") {
 			http.NotFound(w, r)
 			return
 		}
@@ -153,8 +168,12 @@ func NewPreviewHandler(a *App) http.Handler {
 			http.NotFound(w, r)
 			return
 		}
-		w.Header().Set("Content-Type", "video/mp4")
-		http.ServeContent(w, r, "preview.mp4", fi.ModTime(), f)
+		if !strings.EqualFold(filepath.Ext(path), ext) {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", mime.TypeByExtension(ext))
+		http.ServeContent(w, r, "preview"+ext, fi.ModTime(), f)
 	})
 }
 

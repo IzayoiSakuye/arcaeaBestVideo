@@ -56,6 +56,7 @@ func RenderText(ctx context.Context, values map[string]string, edge, textHTMLPat
 	defer cancel()
 
 	cmd := exec.CommandContext(ctx, edge, TextArgs(textHTMLPath, profileDir, dest, values)...)
+	tools.HideWindow(cmd)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("render text error: %w, output=%s", err, strings.TrimSpace(string(out)))

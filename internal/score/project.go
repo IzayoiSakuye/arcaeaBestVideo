@@ -56,6 +56,51 @@ type ClipRange struct {
 	DurationMs int `json:"duration_ms"`
 }
 
+type ThoughtImage struct {
+	Path  string `json:"path"`
+	X     int    `json:"x"`
+	Y     int    `json:"y"`
+	Width int    `json:"width"`
+}
+
+type ThoughtPage struct {
+	Text   string         `json:"text"`
+	Images []ThoughtImage `json:"images,omitempty"`
+}
+
+type ThoughtAudio struct {
+	Kind    string `json:"kind"`
+	Path    string `json:"path,omitempty"`
+	StartMs int    `json:"start_ms,omitempty"`
+	EndMs   int    `json:"end_ms,omitempty"`
+}
+
+type Thought struct {
+	ID         string        `json:"id,omitempty"`
+	Name       string        `json:"name"`
+	Pages      []ThoughtPage `json:"pages,omitempty"`
+	Texts      []string      `json:"texts,omitempty"`
+	DurationMs int           `json:"duration_ms"`
+	Audio      ThoughtAudio  `json:"audio"`
+	Image      *ThoughtImage `json:"image,omitempty"`
+}
+
+// EffectivePages 保留旧草稿中的共享装饰图，避免读入后丢失画面
+func (t Thought) EffectivePages() []ThoughtPage {
+	if len(t.Pages) > 0 {
+		return t.Pages
+	}
+	pages := make([]ThoughtPage, 0, len(t.Texts))
+	for _, line := range t.Texts {
+		page := ThoughtPage{Text: line}
+		if t.Image != nil {
+			page.Images = []ThoughtImage{*t.Image}
+		}
+		pages = append(pages, page)
+	}
+	return pages
+}
+
 type Song struct {
 	Index      int        `json:"index"`
 	SongID     string     `json:"song_id"`
@@ -74,6 +119,8 @@ type Project struct {
 	Source        Source    `json:"source"`
 	Defaults      Defaults  `json:"defaults"`
 	Songs         []Song    `json:"songs"`
+	Thoughts      []Thought `json:"thoughts,omitempty"`
+	Thought       *Thought  `json:"thought,omitempty"`
 }
 
 // SchemaVersion 是当前支持的契约版本

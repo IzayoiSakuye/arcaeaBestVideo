@@ -10,6 +10,7 @@ import {
   PickFile,
   PickOutput,
   PickVideoFile,
+  ThoughtAudioOptions,
   RevealOut,
   Review,
   SearchSongs,
@@ -19,11 +20,13 @@ import {
   VideoInfos,
 } from '../wailsjs/go/app/App';
 import { EventsOn } from '../wailsjs/runtime';
-import type { app, score } from '../wailsjs/go/models';
+import { score, type app } from '../wailsjs/go/models';
 import { eventText, nameOf, scoreText, type Event } from './format';
 import { noteSongIndex, pendingSongIndexes } from './issues';
 import { videoQueues } from './video';
 import { clipRangeError, formatClipTime, parseClipTime } from './clip';
+import ThoughtEditor from './ThoughtEditor';
+import { emptyThought, sameThought, thoughtFromProject, type ThoughtDraft } from './thought';
 
 const pages = [
   '环境检查',
@@ -60,6 +63,12 @@ function App() {
   const [scoreTexts, setScoreTexts] = useState<Record<number, string>>({});
   const [jacket, setJacket] = useState('');
   const [project, setProject] = useState<score.Project | null>(null);
+  const [thoughtDraft, setThoughtDraft] = useState<ThoughtDraft>(emptyThought);
+  const [thoughtID, setThoughtID] = useState<string | null>(null);
+  const [thoughtEditorVersion, setThoughtEditorVersion] = useState(0);
+  const [bgmOptions, setBgmOptions] = useState<app.ThoughtAudioOption[]>([]);
+  const [bgmLoading, setBgmLoading] = useState(true);
+  const [bgmError, setBgmError] = useState('');
   const [review, setReview] = useState<app.ReviewResult | null>(null);
   const [reviewPending, setReviewPending] = useState(false);
   const [reviewError, setReviewError] = useState('');
@@ -99,6 +108,10 @@ function App() {
     Status()
       .then(setStatus)
       .catch((error) => setImportError(`环境状态读取失败：${errorText(error)}`));
+    ThoughtAudioOptions()
+      .then(setBgmOptions)
+      .catch((error) => setBgmError(errorText(error)))
+      .finally(() => setBgmLoading(false));
     return EventsOn('job:event', (event: Event) => {
       setLogs((old) => [
         ...old,
@@ -142,7 +155,7 @@ function App() {
         });
     }, 220);
     return () => window.clearTimeout(timer);
-  }, [project]);
+  }, [project?.songs]);
 
   useEffect(() => {
     if (!review?.project) return;
@@ -289,8 +302,14 @@ function App() {
     try {
       const draft = await Import(importMode, importPath, importMode === 'json' ? jsonText : '');
       if (!draft.Project) throw new Error('导入结果没有成绩数据');
+      const importedThoughts = draft.Project.thoughts?.length ? draft.Project.thoughts : draft.Project.thought ? [draft.Project.thought] : [];
+      const thoughts = importedThoughts.map((thought) => new score.Thought({ ...thought, id: thought.id || crypto.randomUUID() }));
+      const importedProject = { ...draft.Project, thoughts, thought: undefined } as score.Project;
       reviewSeq.current++;
-      setProject(draft.Project);
+      setProject(importedProject);
+      setThoughtID(thoughts[0]?.id || null);
+      setThoughtDraft(thoughtFromProject(thoughts[0]) || emptyThought());
+      setThoughtEditorVersion((version) => version + 1);
       setNotes(draft.Notes || []);
       setAcknowledgedNotes([]);
       setJudgmentTexts({});
@@ -311,7 +330,7 @@ function App() {
       setRenderError('');
       setLogs([]);
       setJobID('');
-      setPage(3);
+      setPage(2);
     } catch (error) {
       setImportError(errorText(error));
     } finally {
@@ -330,6 +349,53 @@ function App() {
   }
   function editSong(edit: (song: score.Song) => void) {
     editSongAt(songIndex, edit);
+  }
+  function saveThought(thought: ThoughtDraft) {
+    const id = thought.id || crypto.randomUUID();
+    const saved = new score.Thought({ ...thought, id });
+    setProject((current) => {
+      if (!current) return current;
+      const thoughts = current.thoughts || [];
+      const index = thoughts.findIndex((item) => item.id === id);
+      const next = [...thoughts];
+      if (index < 0) next.push(saved);
+      else next[index] = saved;
+      return { ...current, thoughts: next, thought: undefined } as score.Project;
+    });
+    setThoughtID(id);
+    setThoughtDraft(thoughtFromProject(saved) || emptyThought());
+  }
+  function leaveThoughtDraft() {
+    const saved = project?.thoughts?.find((item) => item.id === thoughtID);
+    const current = thoughtFromProject(saved);
+    const blank = emptyThought();
+    if (sameThought(thoughtDraft, current || blank)) return true;
+    return window.confirm('当前感想片段有未保存修改，确定放弃这些修改？');
+  }
+  function selectThought(id: string) {
+    if (id === thoughtID || !leaveThoughtDraft()) return;
+    const thought = project?.thoughts?.find((item) => item.id === id);
+    if (!thought) return;
+    setThoughtID(id);
+    setThoughtDraft(thoughtFromProject(thought) || emptyThought());
+    setThoughtEditorVersion((version) => version + 1);
+  }
+  function newThought() {
+    if (!leaveThoughtDraft()) return;
+    setThoughtID(null);
+    setThoughtDraft(emptyThought());
+    setThoughtEditorVersion((version) => version + 1);
+  }
+  function deleteThought(id: string) {
+    const thought = project?.thoughts?.find((item) => item.id === id);
+    if (!thought || !window.confirm(`确定删除感想片段「${thought.name}」？`)) return;
+    const remaining = project?.thoughts?.filter((item) => item.id !== id) || [];
+    setProject((current) => current ? { ...current, thoughts: remaining } as score.Project : current);
+    if (thoughtID === id) {
+      setThoughtID(null);
+      setThoughtDraft(emptyThought());
+      setThoughtEditorVersion((version) => version + 1);
+    }
   }
   function jumpProblem(index: number) {
     if (project && index > 0 && index <= project.songs.length) {
@@ -484,7 +550,7 @@ function App() {
     try {
       let replace = false;
       try {
-        const result = await StartRender(review.project, output, replace);
+        const result = await StartRender({ ...review.project, thoughts: project?.thoughts, thought: undefined } as score.Project, output, replace);
         setJobID(result.job_id);
         outputRef.current = result.output;
         setRenderState((state) => (state === 'starting' ? 'running' : state));
@@ -496,7 +562,7 @@ function App() {
           return;
         }
         replace = true;
-        const result = await StartRender(review.project, output, replace);
+        const result = await StartRender({ ...review.project, thoughts: project?.thoughts, thought: undefined } as score.Project, output, replace);
         setJobID(result.job_id);
         outputRef.current = result.output;
         setRenderState((state) => (state === 'starting' ? 'running' : state));
@@ -569,14 +635,14 @@ function App() {
             {pages.map((label, index) => (
               <button
                 key={label}
-                className={`nav-item ${page === index ? 'selected' : ''} ${[2, 4].includes(index) ? 'future' : ''}`}
+                className={`nav-item ${page === index ? 'selected' : ''} ${index === 4 ? 'future' : ''}`}
                 onClick={() => setPage(index)}
                 aria-current={page === index ? 'page' : undefined}
               >
                 <span className="nav-number">{String(index + 1).padStart(2, '0')}</span>
                 <span className="nav-label">
                   {label}
-                  {[2, 4].includes(index) && <small>待开发</small>}
+                  {index === 4 && <small>待开发</small>}
                 </span>
                 <span className="nav-dot">{page === index ? '●' : '○'}</span>
               </button>
@@ -749,7 +815,7 @@ function App() {
                     }
                     onClick={doImport}
                   >
-                    {importBusy ? '正在导入…' : '导入并校对 →'}
+                    {importBusy ? '正在导入…' : '导入并填写感想 →'}
                   </button>
                 </div>
                 {importError && (
@@ -776,11 +842,31 @@ function App() {
             </div>
           )}
 
-          {(page === 2 || page === 4) && (
+          {page === 2 && (project ? (
+            <>
+              {videoBatch?.running && <div className="notice warn">录像正在后台获取：{videoBatch.processed} / {videoBatch.total} 首。<button className="button text" onClick={() => setPage(3)}>查看详情</button></div>}
+              <section className="card thought-library">
+                <div className="thought-library-head"><div><h2>已保存的感想片段 <span>{project.thoughts?.length || 0}</span></h2><p className="muted">每段独立保存，后续可在「编排顺序」中放置。</p></div><button className="button quiet" onClick={newThought}>新建片段</button></div>
+                {!!project.thoughts?.length && <div className="thought-library-list">{project.thoughts.map((thought) => <div className={`thought-library-item ${thought.id === thoughtID ? 'selected' : ''}`} key={thought.id}>
+                  <button className="button text" onClick={() => selectThought(thought.id || '')}>{thought.name} · {Math.round(thought.duration_ms / 1000)} 秒</button>
+                  <button className="thought-library-delete" onClick={() => deleteThought(thought.id || '')} aria-label={`删除 ${thought.name}`}>删除</button>
+                </div>)}</div>}
+              </section>
+              <ThoughtEditor key={thoughtEditorVersion} draft={thoughtDraft} saved={thoughtFromProject(project.thoughts?.find((item) => item.id === thoughtID))} options={bgmOptions} optionsLoading={bgmLoading} optionsError={bgmError} onChange={setThoughtDraft} onSave={saveThought} />
+            </>
+          ) : (
+            <section className="card placeholder"><h2>请先导入成绩</h2><button className="button primary" onClick={() => setPage(1)}>前往导入</button></section>
+          ))}
+
+          {page === 4 && (
             <section className="card placeholder">
               <span className="placeholder-symbol">◇</span>
               <h2>{pages[page]}</h2>
-              <p>待开发</p>
+              {project?.thoughts?.length ? <>
+                <p>当前作品已保存 {project.thoughts.length} 个感想片段，编排功能完成后可放入任意位置。</p>
+                <div className="thought-library-list">{project.thoughts.map((thought) => <div className="thought-library-item" key={thought.id}>{thought.name} · {Math.round(thought.duration_ms / 1000)} 秒</div>)}</div>
+              </> : <p>当前作品还没有感想片段。可返回「填写感想」新建。</p>}
+              <p>顺序编排与转场待实现。</p>
             </section>
           )}
 
