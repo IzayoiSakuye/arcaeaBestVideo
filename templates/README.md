@@ -1,5 +1,7 @@
 # templates/ —— 成片模板
 
+感想片段使用 `thought-bg.png` 和 `thought.html`：编辑页与 Edge 截图共用同一个 HTML 模板。预置 BGM 放在 `audio/`，文件名和格式见 `audio/README.md`。
+
 成片的画面是**五层用 ffmpeg 叠出来的**。这里放的是除视频素材外的四层，以及一个用来调版的预览台。
 
 ```

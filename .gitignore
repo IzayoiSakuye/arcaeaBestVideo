@@ -6,6 +6,8 @@ docs/
 dist/
 build/bin
 .cache/
+templates/audio/*.wav
+templates/audio/*.pkf
 sidecar/ocr/__pycache__/
 
 # 曲绘原图（可选下载，默认只留 256px）
