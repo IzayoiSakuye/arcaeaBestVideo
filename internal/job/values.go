@@ -2,6 +2,7 @@ package job
 
 import (
 	"math"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -20,6 +21,11 @@ func valuesOf(song *catalog.Song, chart *catalog.Chart, s score.Song) map[string
 	pure, far, lost := "—", "—", "—"
 	if s.Score.Pure+s.Score.Far+s.Score.Lost != 0 {
 		pure, far, lost = strconv.Itoa(s.Score.Pure), strconv.Itoa(s.Score.Far), strconv.Itoa(s.Score.Lost)
+		if slices.Contains(s.Score.UnreadJudgments, "pure") {
+			pure = "—"
+		} else if s.Score.ShinyPerfect != nil {
+			pure += " (+" + strconv.Itoa(*s.Score.ShinyPerfect) + ")"
+		}
 	}
 	title := song.TitleEn
 	if title == "" {

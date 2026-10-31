@@ -24,3 +24,25 @@ func TestValuesOfUsesEachSongPTT(t *testing.T) {
 		t.Fatalf("缺通关类型时不应显示玩家 PTT：%v", v)
 	}
 }
+
+func TestValuesOfShowsTotalAndShinyPure(t *testing.T) {
+	song := &catalog.Song{TitleEn: "Example"}
+	chart := &catalog.Chart{Difficulty: "FTR"}
+	shiny := 567
+	s := score.Song{Score: score.ScoreRef{Pure: 1234, ShinyPerfect: &shiny}}
+	if got := valuesOf(song, chart, s)["pure"]; got != "1234 (+567)" {
+		t.Fatalf("大 PURE 展示错误：%q", got)
+	}
+	shiny = 0
+	if got := valuesOf(song, chart, s)["pure"]; got != "1234 (+0)" {
+		t.Fatalf("真实 0 不应隐藏：%q", got)
+	}
+	s.Score.ShinyPerfect = nil
+	if got := valuesOf(song, chart, s)["pure"]; got != "1234" {
+		t.Fatalf("未知大 PURE 不应伪造：%q", got)
+	}
+	s.Score.UnreadJudgments = []string{"pure"}
+	if got := valuesOf(song, chart, s)["pure"]; got != "—" {
+		t.Fatalf("未读取总 PURE 不应显示数值：%q", got)
+	}
+}
