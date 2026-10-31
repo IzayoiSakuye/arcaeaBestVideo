@@ -234,3 +234,22 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 .tool-result{grid-column:1/-1}
 .right-stack{grid-template-columns:1fr}
 }
+.arrangement { display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: 18px; align-items: start; }
+.arrange-main, .arrange-side { min-width: 0; }
+.arrange-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.arrange-heading h2 { margin: 0; }
+.arrange-row, .arrange-source { display: flex; align-items: center; gap: 10px; padding: 9px 10px; border-bottom: 1px solid rgba(128,128,128,.18); }
+.arrange-row { cursor: grab; position: relative; }
+.arrange-row:active { cursor: grabbing; }
+.arrange-row.arrange-drop-before::before, .arrange-row.arrange-drop-after::after { content: ''; position: absolute; left: 0; right: 0; height: 4px; background: #7868eb; border-radius: 4px; z-index: 2; }
+.arrange-row.arrange-drop-before::before { top: -2px; }
+.arrange-row.arrange-drop-after::after { bottom: -2px; }
+.arrange-number { width: 52px; flex: none; padding: 6px 3px; text-align: center; }
+.arrange-title, .arrange-source span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.arrange-handle { opacity: .55; }
+.arrange-side h3 { margin: 18px 0 6px; }
+.arrange-source { cursor: grab; }
+.arrange-drop-tail { height: 24px; border-radius: 6px; }
+.arrange-drop-tail:hover { background: rgba(120,104,235,.12); }
+.arrange-drag-card { position: fixed; top: 0; left: 0; z-index: 9999; pointer-events: none; min-width: 220px; max-width: 360px; padding: 13px 16px; border: 2px solid #7868eb; border-radius: 10px; background: #fff; color: #242033; box-shadow: 0 12px 28px rgba(20,15,60,.28); font-weight: 600; }
+@media (max-width: 800px) { .arrangement { grid-template-columns: 1fr; } }

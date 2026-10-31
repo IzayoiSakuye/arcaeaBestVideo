@@ -110,17 +110,23 @@ type Song struct {
 	Video      *VideoRef  `json:"video,omitempty"`
 	Clip       *ClipRange `json:"clip,omitempty"`
 }
+type PlayItem struct {
+	Kind      string `json:"kind"`
+	SongIndex int    `json:"song_index,omitempty"`
+	ThoughtID string `json:"thought_id,omitempty"`
+}
 type Project struct {
-	SchemaVersion int       `json:"schema_version"`
-	Game          string    `json:"game"`
-	Region        string    `json:"region"`
-	Player        Player    `json:"player"`
-	SnapshotAt    time.Time `json:"snapshot_at"`
-	Source        Source    `json:"source"`
-	Defaults      Defaults  `json:"defaults"`
-	Songs         []Song    `json:"songs"`
-	Thoughts      []Thought `json:"thoughts,omitempty"`
-	Thought       *Thought  `json:"thought,omitempty"`
+	SchemaVersion int        `json:"schema_version"`
+	Game          string     `json:"game"`
+	Region        string     `json:"region"`
+	Player        Player     `json:"player"`
+	SnapshotAt    time.Time  `json:"snapshot_at"`
+	Source        Source     `json:"source"`
+	Defaults      Defaults   `json:"defaults"`
+	Songs         []Song     `json:"songs"`
+	Thoughts      []Thought  `json:"thoughts,omitempty"`
+	Thought       *Thought   `json:"thought,omitempty"`
+	PlayOrder     []PlayItem `json:"play_order,omitempty"`
 }
 
 // SchemaVersion 是当前支持的契约版本

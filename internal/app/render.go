@@ -78,8 +78,20 @@ func (a *App) StartRender(project *score.Project, output string, replace bool) (
 	if err != nil {
 		return start, err
 	}
-	if !review.Renderable {
-		return start, fmt.Errorf("成绩存在 fatal 问题，请先校对")
+	order, err := review.Project.EffectivePlayOrder()
+	if err != nil {
+		return start, err
+	}
+	selected := make(map[int]bool)
+	for _, item := range order {
+		if item.Kind == "song" {
+			selected[item.SongIndex] = true
+		}
+	}
+	for _, problem := range review.Problems {
+		if problem.Severity == score.SeverityFatal && (problem.SongIndex == 0 || selected[problem.SongIndex]) {
+			return start, fmt.Errorf("待播放的成绩存在 fatal 问题，请先校对或移除")
+		}
 	}
 	if output == "" {
 		return start, fmt.Errorf("请选择输出路径")
@@ -114,6 +126,9 @@ func (a *App) StartRender(project *score.Project, output string, replace bool) (
 	var missing []string
 	needDownload := false
 	for _, state := range videoStates {
+		if !selected[state.Index] {
+			continue
+		}
 		if state.Status == "missing" || state.Status == "invalid" {
 			missing = append(missing, fmt.Sprintf("%d", state.Index))
 		} else if state.Status == "download" {

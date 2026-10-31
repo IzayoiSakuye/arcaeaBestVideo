@@ -26,6 +26,7 @@ import { noteSongIndex, pendingSongIndexes } from './issues';
 import { videoQueues } from './video';
 import { clipRangeError, formatClipTime, parseClipTime } from './clip';
 import ThoughtEditor from './ThoughtEditor';
+import Arrangement from './Arrangement';
 import { emptyThought, sameThought, thoughtFromProject, type ThoughtDraft } from './thought';
 
 const pages = [
@@ -390,7 +391,7 @@ function App() {
     const thought = project?.thoughts?.find((item) => item.id === id);
     if (!thought || !window.confirm(`确定删除感想片段「${thought.name}」？`)) return;
     const remaining = project?.thoughts?.filter((item) => item.id !== id) || [];
-    setProject((current) => current ? { ...current, thoughts: remaining } as score.Project : current);
+    setProject((current) => current ? { ...current, thoughts: remaining, play_order: current.play_order?.filter((item) => item.kind !== 'thought' || item.thought_id !== id) } as score.Project : current);
     if (thoughtID === id) {
       setThoughtID(null);
       setThoughtDraft(emptyThought());
@@ -550,7 +551,7 @@ function App() {
     try {
       let replace = false;
       try {
-        const result = await StartRender({ ...review.project, thoughts: project?.thoughts, thought: undefined } as score.Project, output, replace);
+        const result = await StartRender({ ...review.project, thoughts: project?.thoughts, play_order: project?.play_order, thought: undefined } as score.Project, output, replace);
         setJobID(result.job_id);
         outputRef.current = result.output;
         setRenderState((state) => (state === 'starting' ? 'running' : state));
@@ -562,7 +563,7 @@ function App() {
           return;
         }
         replace = true;
-        const result = await StartRender({ ...review.project, thoughts: project?.thoughts, thought: undefined } as score.Project, output, replace);
+        const result = await StartRender({ ...review.project, thoughts: project?.thoughts, play_order: project?.play_order, thought: undefined } as score.Project, output, replace);
         setJobID(result.job_id);
         outputRef.current = result.output;
         setRenderState((state) => (state === 'starting' ? 'running' : state));
@@ -640,10 +641,6 @@ function App() {
                 aria-current={page === index ? 'page' : undefined}
               >
                 <span className="nav-number">{String(index + 1).padStart(2, '0')}</span>
-                <span className="nav-label">
-                  {label}
-                  {index === 4 && <small>待开发</small>}
-                </span>
                 <span className="nav-dot">{page === index ? '●' : '○'}</span>
               </button>
             ))}
@@ -858,17 +855,7 @@ function App() {
             <section className="card placeholder"><h2>请先导入成绩</h2><button className="button primary" onClick={() => setPage(1)}>前往导入</button></section>
           ))}
 
-          {page === 4 && (
-            <section className="card placeholder">
-              <span className="placeholder-symbol">◇</span>
-              <h2>{pages[page]}</h2>
-              {project?.thoughts?.length ? <>
-                <p>当前作品已保存 {project.thoughts.length} 个感想片段，编排功能完成后可放入任意位置。</p>
-                <div className="thought-library-list">{project.thoughts.map((thought) => <div className="thought-library-item" key={thought.id}>{thought.name} · {Math.round(thought.duration_ms / 1000)} 秒</div>)}</div>
-              </> : <p>当前作品还没有感想片段。可返回「填写感想」新建。</p>}
-              <p>顺序编排与转场待实现。</p>
-            </section>
-          )}
+          {page === 4 && (project ? <Arrangement project={project} rows={review?.rows || []} onChange={(play_order) => setProject((current) => current ? { ...current, play_order } as score.Project : current)} /> : <section className="card placeholder"><h2>请先导入成绩</h2></section>)}
 
           {page === 3 &&
             (song ? (
