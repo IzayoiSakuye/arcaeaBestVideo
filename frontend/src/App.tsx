@@ -1172,6 +1172,7 @@ function App() {
                           }
                           placeholder="写下关于这首歌的回忆…"
                         />
+                        <small className="comment-hint">36px 时约 44 个汉字/行；超过 4 行自动缩小字号，最低 18px。过长仍可能超出画面，请删减文字。回车会保留换行。</small>
                       </label>
                     </div>
                   </section>

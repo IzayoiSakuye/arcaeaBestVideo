@@ -3,13 +3,81 @@ package render
 import (
 	"context"
 	"encoding/json"
+	"image/png"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
+
+	"rhythm-game-bvideo/internal/tools"
 )
+
+func TestCommentKeepsEditorLineBreaks(t *testing.T) {
+	if testing.Short() {
+		t.Skip("需要运行 Edge")
+	}
+	edge := tools.Detect(tools.Tools{}).Tools.Edge
+	if edge == "" {
+		t.Skip("缺少 Edge")
+	}
+	template, err := filepath.Abs(filepath.Join("..", "..", "templates", "text.html"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := t.TempDir()
+	dest := filepath.Join(dir, "comment.png")
+	if err := RenderText(context.Background(), map[string]string{"comment": "第一行\n第二行"}, edge, template, filepath.Join(dir, "profile"), dest); err != nil {
+		t.Fatal(err)
+	}
+	file, err := os.Open(dest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer file.Close()
+	img, err := png.Decode(file)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, band := range [][2]int{{845, 895}, {895, 945}} {
+		visible := false
+		for y := band[0]; y < band[1] && !visible; y++ {
+			for x := 60; x < 500; x++ {
+				_, _, _, a := img.At(x, y).RGBA()
+				if a > 0 {
+					visible = true
+					break
+				}
+			}
+		}
+		if !visible {
+			t.Fatalf("评语第 %d 行没有渲染出来", (band[0]-845)/50+1)
+		}
+	}
+	longDest := filepath.Join(dir, "long-comment.png")
+	if err := RenderText(context.Background(), map[string]string{"comment": "\n\n\n\n\n第六行"}, edge, template, filepath.Join(dir, "long-profile"), longDest); err != nil {
+		t.Fatal(err)
+	}
+	longFile, err := os.Open(longDest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer longFile.Close()
+	longImage, err := png.Decode(longFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for y := 990; y < 1040; y++ {
+		for x := 60; x < 500; x++ {
+			_, _, _, a := longImage.At(x, y).RGBA()
+			if a > 0 {
+				return
+			}
+		}
+	}
+	t.Fatal("六行评语的最后一行未缩小到面板内")
+}
 
 func TestWaitForScreenshotAfterEdgeExits(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "late.png")
@@ -19,6 +87,20 @@ func TestWaitForScreenshotAfterEdgeExits(t *testing.T) {
 	}()
 	if !waitForScreenshot(context.Background(), path) {
 		t.Fatal("Edge 延迟写出的截图未被识别")
+	}
+}
+
+func TestRenderTextDoesNotKeepOldScreenshot(t *testing.T) {
+	dir := t.TempDir()
+	dest := filepath.Join(dir, "text.png")
+	if err := os.WriteFile(dest, []byte("旧截图"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := RenderText(context.Background(), map[string]string{"comment": "新评语"}, filepath.Join(dir, "missing-edge.exe"), filepath.Join(dir, "text.html"), filepath.Join(dir, "profile"), dest); err == nil {
+		t.Fatal("Edge 未启动时不应成功")
+	}
+	if _, err := os.Stat(dest); !os.IsNotExist(err) {
+		t.Fatalf("旧截图仍留在目标位置：%v", err)
 	}
 }
 

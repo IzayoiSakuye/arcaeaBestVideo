@@ -75,6 +75,9 @@ func (j *Job) renderOne(ctx context.Context, i int, s score.Song) (string, Rende
 		Value:         val,
 		RenderVersion: "video-fade-1s",
 	}
+	if s.User.Comment != "" {
+		in.RenderVersion = "video-fade-1s-comment-fix"
+	}
 	if s.Clip != nil {
 		in.StartMs, in.DurationMs = startMs, durationMs
 	}

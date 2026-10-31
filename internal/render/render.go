@@ -55,6 +55,10 @@ func BuildBackground(ctx context.Context, ffmpeg, bgPath, dest string) error {
 func RenderText(ctx context.Context, values map[string]string, edge, textHTMLPath, profileDir, dest string) error {
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
+	// Edge 可能返回成功却不写新图；旧截图必须先移除，避免误当成本次结果。
+	if err := os.Remove(dest); err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("移除旧文字截图失败：%w", err)
+	}
 
 	cmd := exec.CommandContext(ctx, edge, TextArgs(textHTMLPath, profileDir, dest, values)...)
 	tools.HideWindow(cmd)

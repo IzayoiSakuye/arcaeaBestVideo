@@ -79,6 +79,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 .field.full{grid-column:1/-1}
 .field input,.field select,.field textarea{width:100%;border:1px solid #d3c9df;background:#fdfcff;color:#30283f;min-height:39px;padding:9px 11px;border-radius:3px;outline:none}
 .field textarea{resize:vertical;line-height:1.5}
+.comment-hint{color:#85788f;font-weight:400;line-height:1.5}
 .field input:focus,.field select:focus,.field textarea:focus{border-color:#7656aa}
 .file-box+.field{margin-top:18px}
 .action-line{display:flex;justify-content:flex-end;gap:10px;margin-top:18px}

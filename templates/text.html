@@ -183,10 +183,12 @@
 
   /* ── 底部面板：评语（左侧）── */
   .comment {
-    position: absolute; left: 60px; top: 845px; width: 660px;
-    font-size: 32px; line-height: 1.5; color: #dfe6f5;
+    position: absolute; left: 60px; top: 845px; width: 1584px;
+    font-size: 36px; line-height: 1.35; color: #eee6f5;
     text-align: left;
-    font-family: "Noto Sans SC", "Microsoft YaHei", sans-serif;
+    height: 198px; overflow: hidden;
+    white-space: pre-wrap; overflow-wrap: anywhere;
+    font-family: "SimHei", "Noto Sans SC", sans-serif;
   }
 </style>
 </head>
@@ -234,6 +236,10 @@
   document.querySelectorAll('[data-k]').forEach(function (el) {
     var v = q.get(el.dataset.k);
     if (v === null) return;
+    if (el.dataset.k === 'comment') {
+      el.textContent = v.replace(/\|/g, '\n');
+      return;
+    }
     // 先转义再换行，避免数据里的尖括号破坏结构
     var esc = v.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     el.innerHTML = esc.replace(/\|/g, '<br>');
@@ -293,6 +299,15 @@
              ok: el.scrollWidth <= maxW && lineCount() <= maxLines };
   }
 
+  function fitComment(el) {
+    var size = 36;
+    while (size > 18 && el.scrollHeight > el.clientHeight) {
+      size -= 1;
+      el.style.fontSize = size + 'px';
+    }
+    return { el: 'comment', from: 36, to: size, ok: el.scrollHeight <= el.clientHeight };
+  }
+
   // 供截图前确认「已就绪」，也方便在 devtools 里查
   window.__textLayer = { fitted: [] };
 
@@ -301,6 +316,7 @@
       var r = fitText(el);
       if (r) window.__textLayer.fitted.push({ el: el.className, from: r.from, to: r.to, lines: r.lines, ok: r.ok });
     });
+    window.__textLayer.fitted.push(fitComment(document.querySelector('.comment')));
     document.documentElement.setAttribute('data-ready', '1');
   });
 })();
