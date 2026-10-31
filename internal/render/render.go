@@ -42,6 +42,7 @@ func BuildBackground(ctx context.Context, ffmpeg, bgPath, dest string) error {
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, ffmpeg, BackgroundArgs(bgPath, dest)...)
+	tools.HideWindow(cmd)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("build background error: %w (ctx: %v, out=%s)",
@@ -99,6 +100,7 @@ func Composite(ctx context.Context, l Layers, dest, ffmpeg string) error {
 	defer cancel()
 
 	cmd := exec.CommandContext(ctx, ffmpeg, CompositeArgs(l, dest)...)
+	tools.HideWindow(cmd)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("ffmpeg: %w (ctx=%v, out=%s)",
@@ -181,6 +183,7 @@ func Concat(ctx context.Context, ffmpeg, ffprobe, listFile, outFile string, segs
 		return fmt.Errorf("concat list error: %w", err)
 	}
 	cmd := exec.CommandContext(ctx, ffmpeg, ConcatArgs(listFile, outFile)...)
+	tools.HideWindow(cmd)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("concat error: %w (ctx=%v, out=%s)",
