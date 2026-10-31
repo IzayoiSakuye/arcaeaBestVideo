@@ -26,7 +26,6 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 .nav-label small{display:block;font-size:10px;color:#9a90a3;font-weight:400;margin-top:3px}
 .nav-dot{font-size:13px;color:#9d8aad}
 .selected .nav-dot{color:#7656aa}
-.future{color:#8b8394}
 .sidebar-foot{margin-top:auto;padding:14px 12px 2px;font-size:11px;color:#9b90a7}
 .main-area{flex:1;min-width:0;overflow-y:auto;padding:4px 3px 25px}
 .page-heading{display:flex;align-items:end;justify-content:space-between;border-bottom:1px solid #d8cee5;padding:4px 2px 17px;margin-bottom:18px}

@@ -98,6 +98,7 @@ function App() {
   const [renderError, setRenderError] = useState('');
   const [jobID, setJobID] = useState('');
   const [logs, setLogs] = useState<LogEntry[]>([]);
+  const [renderTotal, setRenderTotal] = useState(0);
   const [finished, setFinished] = useState('');
   const outputRef = useRef('');
   const reviewSeq = useRef(0);
@@ -330,6 +331,7 @@ function App() {
       setRenderState('idle');
       setRenderError('');
       setLogs([]);
+      setRenderTotal(0);
       setJobID('');
       setPage(2);
     } catch (error) {
@@ -545,6 +547,7 @@ function App() {
     if (reviewPending || !review?.project || !output) return;
     setRenderError('');
     setLogs([]);
+    setRenderTotal(project?.play_order?.length ?? review.project.songs.length);
     setRenderState('starting');
     setFinished('');
     outputRef.current = output;
@@ -610,11 +613,7 @@ function App() {
     (Math.round(clipStart * 1000) !== (song?.clip?.start_ms || 0) ||
       Math.round(clipDuration * 1000) !== (song?.clip?.duration_ms || 10000));
   const { pending: missingVideos, retryable: retryableVideos, manualCount } = videoQueues(videoStates);
-  const doneCount = new Set(
-    logs
-      .filter((event) => event.stage === 'render' && ['done', 'skipped'].includes(event.status))
-      .map((event) => event.song_index),
-  ).size;
+  const doneCount = logs.filter((event) => event.stage === 'render' && ['done', 'skipped'].includes(event.status)).length;
   const active = renderState === 'starting' || renderState === 'running';
 
   return (
@@ -636,11 +635,14 @@ function App() {
             {pages.map((label, index) => (
               <button
                 key={label}
-                className={`nav-item ${page === index ? 'selected' : ''} ${index === 4 ? 'future' : ''}`}
+                className={`nav-item ${page === index ? 'selected' : ''}`}
                 onClick={() => setPage(index)}
                 aria-current={page === index ? 'page' : undefined}
               >
                 <span className="nav-number">{String(index + 1).padStart(2, '0')}</span>
+                <span className="nav-label">
+                  {label}
+                </span>
                 <span className="nav-dot">{page === index ? '●' : '○'}</span>
               </button>
             ))}
@@ -1484,12 +1486,12 @@ function App() {
                           : '等待开始'}
                   </strong>
                   <span>
-                    {doneCount} / {count} 段完成
+                    {doneCount} / {renderTotal || project?.play_order?.length || count} 段完成
                   </span>
                 </div>
                 <div className="progress-track">
                   <div
-                    style={{ width: count ? `${Math.min(100, (doneCount / count) * 100)}%` : '0%' }}
+                    style={{ width: renderTotal ? `${Math.min(100, (doneCount / renderTotal) * 100)}%` : '0%' }}
                   />
                 </div>
                 <div className="action-line">

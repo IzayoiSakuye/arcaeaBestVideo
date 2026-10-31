@@ -82,6 +82,12 @@ func Thought(ctx context.Context, thought score.Thought, audioPath, templatesDir
 	if err := os.MkdirAll(framesDir, 0o755); err != nil {
 		return "", err
 	}
+	// 预览和成片可能同时启动 Edge
+	profileDir, err := os.MkdirTemp(workDir, "edge-profile-")
+	if err != nil {
+		return "", err
+	}
+	defer os.RemoveAll(profileDir)
 	frames := make([]string, 0, len(pages))
 	for i, page := range pages {
 		values := map[string]string{"text": page.Text}
@@ -104,7 +110,7 @@ func Thought(ctx context.Context, thought score.Thought, audioPath, templatesDir
 		if err := os.Remove(frame); err != nil && !os.IsNotExist(err) {
 			return "", err
 		}
-		if err := RenderText(ctx, values, edge, filepath.Join(templatesDir, "thought.html"), filepath.Join(workDir, "edge-profile"), frame); err != nil {
+		if err := RenderText(ctx, values, edge, filepath.Join(templatesDir, "thought.html"), profileDir, frame); err != nil {
 			return "", fmt.Errorf("第 %d 段感想画面生成失败：%w", i+1, err)
 		}
 		frames = append(frames, frame)
