@@ -62,10 +62,37 @@ func RenderText(ctx context.Context, values map[string]string, edge, textHTMLPat
 	if err != nil {
 		return fmt.Errorf("render text error: %w, output=%s", err, strings.TrimSpace(string(out)))
 	}
-	if !isFile(dest) {
+	if !waitForScreenshot(ctx, dest) {
 		return fmt.Errorf("edge render text error, output=%s", strings.TrimSpace(string(out)))
 	}
 	return nil
+}
+
+// Edge 有时先返回成功，再异步写出截图
+func waitForScreenshot(ctx context.Context, path string) bool {
+	ready := func() bool {
+		fi, err := os.Stat(path)
+		return err == nil && fi.Mode().IsRegular() && fi.Size() > 0
+	}
+	if ready() {
+		return true
+	}
+	timer := time.NewTimer(5 * time.Second)
+	defer timer.Stop()
+	ticker := time.NewTicker(100 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ticker.C:
+			if ready() {
+				return true
+			}
+		case <-timer.C:
+			return false
+		case <-ctx.Done():
+			return false
+		}
+	}
 }
 
 // TextArgs 是文字层的 Edge 参数（**不含 edge 路径本身**）
@@ -113,6 +140,10 @@ func Composite(ctx context.Context, l Layers, dest, ffmpeg string) error {
 func CompositeArgs(l Layers, dest string) []string {
 	// 各层参数
 	w := l.Win
+	durationMs := SecPerSong * 1000
+	if l.DurationMs > 0 {
+		durationMs = l.DurationMs
+	}
 	filter := strings.Join([]string{
 		fmt.Sprintf("[0:v]fps=%d,scale=%d:%d:force_original_aspect_ratio=increase,crop=%d:%d,setsar=1[vid]", FPS, w.W, w.H, w.W, w.H),
 		fmt.Sprintf("[1:v]format=rgba[bg];[bg][vid]overlay=%d:%d:format=auto[o1]", w.X, w.Y),
@@ -121,7 +152,7 @@ func CompositeArgs(l Layers, dest string) []string {
 		"[3:v]format=rgba[ch]",
 		"[o2][ch]overlay=0:0:format=auto[o3]",
 		"[4:v]format=rgba[tx]",
-		"[o3][tx]overlay=0:0:format=auto,scale=out_range=tv,format=yuv420p,setsar=1[v]",
+		"[o3][tx]overlay=0:0:format=auto,scale=out_range=tv,format=yuv420p,setsar=1," + videoFade(durationMs) + "[v]",
 	}, ";")
 	args := []string{
 		"-y", "-v", "error",

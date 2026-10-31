@@ -66,13 +66,14 @@ func (j *Job) renderOne(ctx context.Context, i int, s score.Song) (string, Rende
 	}
 
 	in := SegInput{
-		Clip:     clip,
-		Bg:       bg,
-		Jacket:   jacket,
-		Template: filepath.Join(root, tpl.Source),
-		TextHash: fmt.Sprintf("%x", sha256.Sum256(textSource)),
-		Win:      tpl.Win,
-		Value:    val,
+		Clip:          clip,
+		Bg:            bg,
+		Jacket:        jacket,
+		Template:      filepath.Join(root, tpl.Source),
+		TextHash:      fmt.Sprintf("%x", sha256.Sum256(textSource)),
+		Win:           tpl.Win,
+		Value:         val,
+		RenderVersion: "video-fade-1s",
 	}
 	if s.Clip != nil {
 		in.StartMs, in.DurationMs = startMs, durationMs

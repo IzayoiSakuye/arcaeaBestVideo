@@ -11,6 +11,21 @@ import (
 	"rhythm-game-bvideo/internal/tools"
 )
 
+// fadeSeconds 避免短片段的淡入淡出相互覆盖
+func fadeSeconds(durationMs int) float64 {
+	seconds := float64(durationMs) / 1000
+	if seconds < 4 {
+		return seconds / 4
+	}
+	return 1
+}
+
+func videoFade(durationMs int) string {
+	seconds := float64(durationMs) / 1000
+	fade := fadeSeconds(durationMs)
+	return fmt.Sprintf("fade=t=in:st=0:d=%.3f,fade=t=out:st=%.3f:d=%.3f", fade, seconds-fade, fade)
+}
+
 // FadeAudio 只重编码音轨，保留已渲染的视频和无损拼接参数
 func FadeAudio(ctx context.Context, ffmpeg, ffprobe, source, dest string, fadeIn, fadeOut bool) (string, error) {
 	info, err := Probe(ctx, ffprobe, source)
@@ -21,10 +36,7 @@ func FadeAudio(ctx context.Context, ffmpeg, ffprobe, source, dest string, fadeIn
 	if seconds <= 0 {
 		return "", fmt.Errorf("片段时长无效：%s", source)
 	}
-	fade := 0.4
-	if seconds < 1.6 {
-		fade = seconds / 4
-	}
+	fade := fadeSeconds(info.DurationMs)
 	filters := make([]string, 0, 2)
 	if fadeIn {
 		filters = append(filters, "afade=t=in:st=0:d="+strconv.FormatFloat(fade, 'f', 3, 64))

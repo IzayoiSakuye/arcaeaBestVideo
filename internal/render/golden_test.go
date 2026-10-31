@@ -54,6 +54,10 @@ func TestGoldenCommands(t *testing.T) {
 				Clip: ins[0], BG: ins[1], Jacket: ins[2],
 				Template: ins[3], Text: ins[4], Win: Templates[wide].Win,
 			}, last(c.Argv))
+			// 历史捕获不含新增转场；只剥离这一处有意变更，其他参数仍逐字对拍。
+			for i, arg := range got {
+				got[i] = strings.Replace(arg, ","+videoFade(SecPerSong*1000)+"[v]", "[v]", 1)
+			}
 
 		case strings.HasPrefix(c.Name, "render-text"):
 			u, err := url.Parse(last(c.Argv))

@@ -8,7 +8,19 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
+
+func TestWaitForScreenshotAfterEdgeExits(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "late.png")
+	go func() {
+		time.Sleep(150 * time.Millisecond)
+		_ = os.WriteFile(path, []byte("png"), 0o644)
+	}()
+	if !waitForScreenshot(context.Background(), path) {
+		t.Fatal("Edge 延迟写出的截图未被识别")
+	}
+}
 
 // ── fingerprint ──────────────────────────────────────────────────────────────
 
