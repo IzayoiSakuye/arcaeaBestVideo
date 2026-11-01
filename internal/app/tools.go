@@ -10,16 +10,17 @@ import (
 )
 
 type AppStatus struct {
-	DataDir   string         `json:"data_dir"`
-	SongCount int            `json:"song_count"`
-	DataError string         `json:"data_error,omitempty"`
-	Tools     []tools.Status `json:"tools"`
-	ToolError string         `json:"tool_error,omitempty"`
+	DataDir     string         `json:"data_dir"`
+	DataVersion string         `json:"data_version"`
+	SongCount   int            `json:"song_count"`
+	DataError   string         `json:"data_error,omitempty"`
+	Tools       []tools.Status `json:"tools"`
+	ToolError   string         `json:"tool_error,omitempty"`
 }
 
 // Status 汇总数据状态和工具检测结果
 func (a *App) Status() AppStatus {
-	st := AppStatus{DataDir: filepath.Join(a.root, "data"), Tools: []tools.Status{}}
+	st := AppStatus{DataDir: filepath.Join(a.dataRoot(), "data"), DataVersion: a.dataVersion, Tools: []tools.Status{}}
 	if cata, err := a.catalog(); err != nil {
 		st.DataError = err.Error()
 	} else {

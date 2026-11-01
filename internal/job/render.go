@@ -18,6 +18,7 @@ import (
 func (j *Job) renderOne(ctx context.Context, i int, s score.Song) (string, RenderPhaseDuration, bool, error) {
 	var d RenderPhaseDuration
 	root := j.cfg.Root
+	dataRoot := filepath.Dir(j.cfg.DataDir)
 
 	dir := filepath.Join(j.cfg.WorkDir, fmt.Sprintf("%03d-%s", i, s.SongID))
 	if err := os.MkdirAll(dir, 0o755); err != nil {
@@ -87,7 +88,7 @@ func (j *Job) renderOne(ctx context.Context, i int, s score.Song) (string, Rende
 
 	bgPng := filepath.Join(dir, "bg.png")
 	t := time.Now()
-	if err := render.BuildBackground(ctx, j.deps.Tools.FFmpeg, filepath.Join(root, filepath.FromSlash(bg)), bgPng); err != nil {
+	if err := render.BuildBackground(ctx, j.deps.Tools.FFmpeg, filepath.Join(dataRoot, filepath.FromSlash(bg)), bgPng); err != nil {
 		return "", d, false, err
 	}
 	d.Background = time.Since(t)
@@ -106,7 +107,7 @@ func (j *Job) renderOne(ctx context.Context, i int, s score.Song) (string, Rende
 	t = time.Now()
 	if err := render.Composite(ctx, render.Layers{
 		Clip: clip, BG: bgPng,
-		Jacket:   filepath.Join(root, filepath.FromSlash(jacket)),
+		Jacket:   filepath.Join(dataRoot, filepath.FromSlash(jacket)),
 		Template: filepath.Join(root, tpl.Source),
 		Text:     textPng, Win: tpl.Win, StartMs: in.StartMs, DurationMs: in.DurationMs,
 	}, tmp, j.deps.Tools.FFmpeg); err != nil {

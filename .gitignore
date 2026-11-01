@@ -1,5 +1,4 @@
 data/*
-!data/song-id-aliases.json
 docs/
 
 # 构建中间产物与发布包

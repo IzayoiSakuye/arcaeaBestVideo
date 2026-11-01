@@ -8,7 +8,7 @@ import (
 
 func TestFindRootFromBuildDirectory(t *testing.T) {
 	root := t.TempDir()
-	for _, file := range []string{"data/arcaea-catalog.json", "templates/text.html"} {
+	for _, file := range []string{"templates/text.html"} {
 		path := filepath.Join(root, filepath.FromSlash(file))
 		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 			t.Fatal(err)

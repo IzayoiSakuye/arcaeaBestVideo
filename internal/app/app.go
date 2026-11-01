@@ -10,16 +10,20 @@ import (
 )
 
 type App struct {
-	ctx         context.Context
-	root        string
-	mu          sync.Mutex
-	jobID       string
-	cancel      context.CancelFunc
-	cataOnce    sync.Once
-	cata        *catalog.Catalog
-	cataErr     error
-	previews    map[string]string
-	videoCancel context.CancelFunc
+	ctx              context.Context
+	root             string
+	resourceRoot     string
+	dataVersion      string
+	dataDigest       string
+	resourceUpdating bool
+	mu               sync.Mutex
+	jobID            string
+	cancel           context.CancelFunc
+	cataOnce         sync.Once
+	cata             *catalog.Catalog
+	cataErr          error
+	previews         map[string]string
+	videoCancel      context.CancelFunc
 }
 
 func New() *App {
@@ -31,15 +35,17 @@ func New() *App {
 			root = found
 		}
 	}
-	return &App{root: root}
+	a := &App{root: root}
+	if store, err := resourceStoreDir(); err == nil {
+		a.resourceRoot, a.dataVersion, a.dataDigest = installedResource(store)
+	}
+	return a
 }
 
 func findRoot(start string) string {
 	for dir := start; dir != ""; dir = filepath.Dir(dir) {
-		if _, err := os.Stat(filepath.Join(dir, "data", "arcaea-catalog.json")); err == nil {
-			if _, err := os.Stat(filepath.Join(dir, "templates", "text.html")); err == nil {
-				return dir
-			}
+		if _, err := os.Stat(filepath.Join(dir, "templates", "text.html")); err == nil {
+			return dir
 		}
 		if parent := filepath.Dir(dir); parent == dir {
 			break
@@ -65,7 +71,14 @@ func (a *App) context() context.Context {
 
 func (a *App) catalog() (*catalog.Catalog, error) {
 	a.cataOnce.Do(func() {
-		a.cata, a.cataErr = catalog.Load(filepath.Join(a.root, "data", "arcaea-catalog.json"), 1)
+		a.cata, a.cataErr = catalog.Load(filepath.Join(a.dataRoot(), "data", "arcaea-catalog.json"), 1)
 	})
 	return a.cata, a.cataErr
+}
+
+func (a *App) dataRoot() string {
+	if a.resourceRoot != "" {
+		return a.resourceRoot
+	}
+	return a.root
 }

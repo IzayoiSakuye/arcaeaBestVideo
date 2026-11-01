@@ -25,7 +25,7 @@
 | 阶段 | 状态 |
 |---|---|
 | 方案设计 | ✅ `docs/设计文档.md`（唯一设计文档） |
-| 数据层（曲库/索引/曲绘/背景/合并 + 打包） | ✅ `scripts/` → `data/` |
+| 数据层（曲库/索引/曲绘/背景/合并 + 打包） | ✅ `resource/scripts/` → `resource/data/`，应用读取根目录 `data/` |
 | P0 地基 | ✅ |
 | 阶段 1–4：`catalog` / `tools` / `render` / `resource` + `cmd/pipeline` | ✅ **端到端跑通** |
 | 阶段 5 性能实测 | ✅ **50 段外推 6.3 分钟**（预算 ≤10） |
@@ -150,8 +150,11 @@ frontend/                 React 19 + Vite 7（七页界面已接入，部分功�
 templates/                ★ 成片模板：bg16-9.png / bg4-3.png / text.html / 字体
 build/                    Wails 打包资源（是源码，要提交）；build/bin/ 是产物，忽略
 docs/                     设计文档.md + *-research.md / 音游成绩数据获取方式调研.md（**都不入库**）
-scripts/                  构建期工具（TS，零依赖，不参与运行时）
-  build-ocr.ts            构建本地 OCR 组件（产物在 build/bin/ocr）
+scripts/build-ocr.ts      构建本地 OCR 组件（产物在 build/bin/ocr）
+resource/                 可迁出的独立资源项目；在此目录运行资源命令
+  data/song-id-aliases.json  唯一提交的资源数据文件
+  dist/                   ZIP 和 latest.json（忽略）
+  scripts/                曲库、视频索引、曲绘、背景和发布脚本（TS，零运行时依赖）
   lib/types.ts            数据契约
   lib/anubis-fetch.ts     Anubis PoW 反爬客户端（三个必读的坑）
   lib/wiki.ts             wiki JSON 页面客户端
@@ -162,9 +165,10 @@ scripts/                  构建期工具（TS，零依赖，不参与运行时�
   build-catalog.ts        ⑤ 合并成应用唯一读取的目录
   report-arcaea-index.ts  ⑥ 质量报告
   pack-data.ts            ⑦ 打包发布
+  build-release.ts        一键刷新、打包和核验
   check-ptt-formula.ts    § 潜力值公式自检（**不产数据**；Go 版公式的对拍 oracle）
   check-normalize.ts      § 归一化落差审计（Go 复刻 TS 归一化会漏几首 → 决定引不引 x/text）
-data/                     ⚠️ 构建产物，不进版本库（例外：song-id-aliases.json）
+data/                     应用当前读取的数据目录，不进版本库
   arcaea-catalog.json     ⭐ 应用唯一读取的目录（564 曲 / 1849 谱面）
   arcaea-backgrounds.json 曲目→背景映射（权威）
   arcaea-songdb.json / arcaea-index.json / arcaea-jackets.json   原始层
@@ -185,6 +189,7 @@ dist/                     发布包产物（不进版本库）
 ### 构建管线
 
 ```bash
+cd resource
 node scripts/build-song-db.ts        # ① 曲库       联网  ~1s
 node scripts/build-arcaea-index.ts   # ② 视频索引    联网  冷跑 ~180s
 node scripts/build-jackets.ts        # ③ 曲绘+哈希   联网  冷跑 ~208s / 热跑 ~2s
@@ -192,6 +197,7 @@ node scripts/build-backgrounds.ts    # ④ 游玩背景    联网  冷跑 ~100s
 node scripts/build-catalog.ts        # ⑤ 合并目录    本地  0s    ← 应用读这个
 node scripts/report-arcaea-index.ts  # ⑥ 质量报告
 node scripts/pack-data.ts            # ⑦ 打包发布
+node scripts/build-release.ts --version YYYY.MM.DD # 一键发布准备
 ```
 
 **① ② ③ ④ 是原始层，⑤ 是合并层。应用只读 ⑤ 的产物，运行时零网络依赖。**
@@ -210,7 +216,7 @@ node scripts/pack-data.ts            # ⑦ 打包发布
 | 视频素材 | B站「谱面保管室」合集（索引由标题正则构建，非人工审核） |
 
 > **2026-09 已把曲库主源从 2023 年的 GitHub 仓库切到 wiki** —— 可解析曲目 335 → 553，
-> 「元数据不全」的曲目 198 → **11**。踩过的坑见 `scripts/README.md`。
+> 「元数据不全」的曲目 198 → **11**。踩过的坑见 `resource/README.md`。
 > ⚠️ GitHub 那两份仍停在 2023 年，只作补充与交叉校验。
 
 ### song_id 三级对齐
@@ -218,19 +224,19 @@ node scripts/pack-data.ts            # ⑦ 打包发布
 索引里的 `song_id` 从曲名推导（`deriveSongId`），官方 ID 有大量无法自动推导的改写：
 `Aleph-0 → alephzero`、`Alone & Lorn → aloneandlorn`、`Ashen 6oundary → ashenboundary`。
 
-对齐顺序：**① 精确命中 → ② 互为前缀（≥6 字符）→ ③ 人工映射表 `data/song-id-aliases.json`**。
+对齐顺序：**① 精确命中 → ② 互为前缀（≥6 字符）→ ③ 人工映射表 `resource/data/song-id-aliases.json`**。
 
 ---
 
 ## 🚨 铁律（违反会破坏项目）
 
-1. **绝不提交 `data/` 下除 `song-id-aliases.json` 外的任何文件。**
+1. **绝不提交 `data/` 下任何文件；`resource/data/` 下只提交 `song-id-aliases.json`。**
    620 张二进制 + 15MB，刷新一次就在 git 历史里永久留下十几 MB。`.gitignore` 已配好，别改。
 
 2. **绝不手工编辑 `data/` 下的任何 JSON。** 全是构建产物。
    要改数据 → 改 `scripts/` 或 `song-id-aliases.json` → 重跑管线。
 
-3. **不要"简化" `scripts/lib/anubis-fetch.ts` 的三个约束**，每个都是实测踩出来的：
+3. **不要"简化" `resource/scripts/lib/anubis-fetch.ts` 的三个约束**，每个都是实测踩出来的：
    必须锁 **TLS 1.2**（WAF 拦 TLS 1.3 指纹）· 必须做 **cookie 往返** · `redir` 必须是绝对 URL。
 
 4. **抓取要限速。** wiki.arcaea.cn 是社区个人维基，不是 CDN。用 `--delay`，不要并发轰炸。
@@ -238,7 +244,7 @@ node scripts/pack-data.ts            # ⑦ 打包发布
 5. **绝不自动套用 song_id 别名建议。** `--suggest-aliases` 只产出**建议**，必须人工核对。
    **给一首曲配上别人的曲绘，比缺图糟糕得多。**
 
-6. **改动标题解析逻辑后必须跑 `node scripts/build-arcaea-index.ts --self-test`。**
+6. **改动标题解析逻辑后必须在 `resource/` 跑 `node scripts/build-arcaea-index.ts --self-test`。**
    曲名带方括号（`[X]`、`AI[UE]OON`）曾被解析器吃没，10 条回归用例就是为此存在的。
 
 7. **应用运行时原则上不依赖任何外部站点。** 曲库、定数、曲绘、模型、工具链全部离线化或自托管。
@@ -272,7 +278,7 @@ node scripts/pack-data.ts            # ⑦ 打包发布
 - ⚠️ **agent 会话里 `NODE_ENV=production`**（会话注入，不在用户/系统变量里）——
   npm 会因此跳过 devDependencies，报 "up to date" 却什么都不装。
   **agent 跑 npm 要加 `--include=dev`；用户自己终端里不受影响。**
-- 破坏性变更要同步更新 `scripts/README.md` 与相关 `--help`。
+- 破坏性变更要同步更新 `resource/README.md` 与相关 `--help`。
 - **不要 `git add` / `commit` / `push`** —— 用户手动验收。
 - 写注释**简单**一点，不要添加过多agent自身的思考文本、docs文本与后端细节，只要说清楚是干什么的就行
 - 遇到不确定的部分要询问用户，不要自作主张
@@ -291,6 +297,7 @@ go test ./... -count=1
 go run ./cmd/pipeline --limit=1 --force     # 只渲一首，调试主力
 
 # 数据管线（改任何数据相关逻辑后全跑一遍）
+cd resource
 node scripts/build-song-db.ts && node scripts/build-arcaea-index.ts --quiet \
   && node scripts/build-jackets.ts --quiet && node scripts/build-backgrounds.ts --quiet \
   && node scripts/build-catalog.ts
@@ -314,7 +321,7 @@ node scripts/pack-data.ts --emit-tree --base-url https://<域名>/arcaea
 | `docs/设计文档.md` | ★★ **唯一设计文档**：产品定义、架构决策、数据层、渲染管线、成绩层契约与自检、OCR、界面、门禁与验收 |
 | `docs/ui设计.md` / `docs/设计图/` | 七页界面细则与视觉参考；与设计文档冲突时以设计文档 §8 为准 |
 | `internal/render/testdata/README.md` | golden argv 怎么捕获、**两份 golden 的区别**、翻译时的坑 |
-| `scripts/README.md` | 脚本用法、Anubis 过盾、曲绘命名规律、数据分发策略 |
+| `resource/README.md` | 脚本用法、Anubis 过盾、曲绘命名规律、数据分发策略 |
 | `docs/*-research.md` | 调研原始报告（结论以 `设计文档.md` 为准） |
 
 > ⚠️ **`docs/` 与 `_research/` 不入库是「有意为之」**，不是漏配。

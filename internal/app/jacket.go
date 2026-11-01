@@ -17,8 +17,8 @@ func (a *App) Jacket(songID, difficulty string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	abs := filepath.Join(a.root, filepath.FromSlash(path))
-	base := filepath.Join(a.root, "data", "jackets")
+	abs := filepath.Join(a.dataRoot(), filepath.FromSlash(path))
+	base := filepath.Join(a.dataRoot(), "data", "jackets")
 	rel, err := filepath.Rel(base, abs)
 	if err != nil || !filepath.IsLocal(rel) {
 		return "", fmt.Errorf("曲绘路径不在本地曲绘目录：%s", path)

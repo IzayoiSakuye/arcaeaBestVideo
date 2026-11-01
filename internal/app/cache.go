@@ -13,7 +13,7 @@ func (a *App) ClearCache(includeVideos bool) error {
 	}
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	if a.jobID != "" || a.videoCancel != nil {
+	if a.jobID != "" || a.videoCancel != nil || a.resourceUpdating {
 		return fmt.Errorf("生成或下载进行中，无法清理缓存")
 	}
 	cache := filepath.Join(a.root, ".cache")

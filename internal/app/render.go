@@ -103,8 +103,10 @@ func (a *App) StartRender(project *score.Project, output string, replace bool) (
 	if strings.ToLower(filepath.Ext(output)) != ".mp4" {
 		return start, fmt.Errorf("输出文件必须为 .mp4")
 	}
-	if rel, err := filepath.Rel(filepath.Join(a.root, "data"), output); err == nil && filepath.IsLocal(rel) {
-		return start, fmt.Errorf("不能把视频写入只读数据目录：%s", output)
+	for _, dataDir := range []string{filepath.Join(a.root, "data"), filepath.Join(a.dataRoot(), "data")} {
+		if rel, err := filepath.Rel(dataDir, output); err == nil && filepath.IsLocal(rel) {
+			return start, fmt.Errorf("不能把视频写入只读数据目录：%s", output)
+		}
 	}
 	if _, err := os.Stat(output); err == nil && !replace {
 		return start, fmt.Errorf("输出文件已存在，请确认覆盖：%s", output)
@@ -142,7 +144,7 @@ func (a *App) StartRender(project *score.Project, output string, replace bool) (
 		return start, fmt.Errorf("部分录像尚未获取，请先配置 yt-dlp 或选择本地文件")
 	}
 	cata, _ := a.catalog()
-	bg, err := resource.LoadBgManifest(filepath.Join(a.root, "data", "arcaea-backgrounds.json"))
+	bg, err := resource.LoadBgManifest(filepath.Join(a.dataRoot(), "data", "arcaea-backgrounds.json"))
 	if err != nil {
 		return start, err
 	}
@@ -161,7 +163,7 @@ func (a *App) StartRender(project *score.Project, output string, replace bool) (
 	a.mu.Unlock()
 
 	j := job.NewJob(job.Deps{Catalog: cata, Bg: bg, Tools: tls}, job.Config{
-		Project: review.Project, Output: output, Root: a.root, DataDir: filepath.Join(a.root, "data"),
+		Project: review.Project, Output: output, Root: a.root, DataDir: filepath.Join(a.dataRoot(), "data"),
 		WorkDir: filepath.Join(a.root, ".cache", "pipeline"), ClipsDir: filepath.Join(a.root, ".cache", "clips"),
 	}, func(ev job.Event) {
 		if ev.Stage == job.StageDone {

@@ -5,6 +5,7 @@ import {
   CancelVideoDownload,
   CheckTool,
   ClearCache,
+  CheckResourceUpdate,
   DownloadVideo,
   Import,
   Jacket,
@@ -18,6 +19,7 @@ import {
   SetToolPath,
   StartRender,
   Status,
+  UpdateResources,
   VideoInfos,
   Version,
 } from '../wailsjs/go/app/App';
@@ -44,6 +46,7 @@ const toolNames = ['ffmpeg', 'ffprobe', 'yt-dlp', 'edge'];
 const clearTypes = ['TL', 'NC', 'HC', 'EC', 'FR', 'PM'];
 type LogEntry = Event & { time: string };
 type VideoBatch = { processed: number; total: number; failed: number; running: boolean };
+type ResourceProgress = { downloaded: number; total: number };
 
 function errorText(error: unknown) {
   return error instanceof Error ? error.message : String(error);
@@ -55,6 +58,10 @@ function App() {
   const [version, setVersion] = useState('');
   const [cacheMessage, setCacheMessage] = useState('');
   const [cacheBusy, setCacheBusy] = useState(false);
+  const [resourceInfo, setResourceInfo] = useState<app.ResourceUpdateStatus | null>(null);
+  const [resourceMessage, setResourceMessage] = useState('正在检查资源更新…');
+  const [resourceBusy, setResourceBusy] = useState(false);
+  const [resourceProgress, setResourceProgress] = useState<ResourceProgress | null>(null);
   const [configSaved, setConfigSaved] = useState(false);
   const clearCacheDialog = useRef<HTMLDialogElement>(null);
   const [checks, setChecks] = useState<
@@ -121,11 +128,17 @@ function App() {
       })
       .catch((error) => setImportError(`环境状态读取失败：${errorText(error)}`));
     Version().then(setVersion).catch(() => setVersion('未知'));
+    CheckResourceUpdate()
+      .then((value) => {
+        setResourceInfo(value);
+        setResourceMessage(value.update_available ? `发现资源版本 ${value.latest_version}` : '资源已是最新版本');
+      })
+      .catch((error) => setResourceMessage(`检查更新失败：${errorText(error)}`));
     ThoughtAudioOptions()
       .then(setBgmOptions)
       .catch((error) => setBgmError(errorText(error)))
       .finally(() => setBgmLoading(false));
-    return EventsOn('job:event', (event: Event) => {
+    const offJob = EventsOn('job:event', (event: Event) => {
       setLogs((old) => [
         ...old,
         { ...event, time: new Date().toLocaleTimeString('zh-CN', { hour12: false }) },
@@ -140,6 +153,8 @@ function App() {
         setPage(4);
       }
     });
+    const offResource = EventsOn('resource:progress', (value: ResourceProgress) => setResourceProgress(value));
+    return () => { offJob(); offResource(); };
   }, []);
 
   useEffect(() => {
@@ -261,6 +276,22 @@ function App() {
 
   async function refreshStatus() {
     setStatus(await Status());
+  }
+  async function updateResources() {
+    setResourceBusy(true);
+    setResourceProgress(null);
+    setResourceMessage('正在检查更新…');
+    try {
+      const result = await UpdateResources();
+      setResourceInfo(result);
+      setResourceMessage(result.restart_required
+        ? `资源 ${result.latest_version} 已安装，重启应用后生效`
+        : '资源已是最新版本');
+    } catch (error) {
+      setResourceMessage(`资源更新失败：${errorText(error)}；仍可使用原有资源`);
+    } finally {
+      setResourceBusy(false);
+    }
   }
   async function clearCache(includeVideos: boolean) {
     try {
@@ -780,8 +811,12 @@ function App() {
                   <span>已载入 / 数据包共计（首）</span>
                 </div>
                 <div className="rule" />
-                <p>资源更新：尚未配置更新源。</p>
-                <button className="button quiet" disabled title="需要先配置资源发布地址">更新资源</button>
+                <p>当前资源：{status?.data_version || (status?.data_error ? '未安装' : '应用内置')}；最新资源：{resourceInfo?.latest_version || '—'}</p>
+                <button className="button quiet" disabled={resourceBusy} onClick={updateResources}>
+                  {resourceBusy ? '更新中…' : '更新资源'}
+                </button>
+                {resourceBusy && resourceProgress && <p>下载中：{(resourceProgress.downloaded / 1048576).toFixed(1)} / {(resourceProgress.total / 1048576).toFixed(1)} MB</p>}
+                {resourceMessage && <div className="notice" role="status">{resourceMessage}</div>}
                 <div className="rule" />
                 <p>清理可重新生成的渲染缓存，不影响已下载录像。</p>
                 <button className="button quiet" disabled={cacheBusy} onClick={() => clearCache(false)}>清理渲染缓存</button>
@@ -795,6 +830,7 @@ function App() {
             <div className="content-grid">
               <section className="card wide">
                 <h2>导入方式</h2>
+                {status?.data_error && <div className="notice warn">资源未就绪：{status.data_error} <button className="button quiet" onClick={() => setPage(6)}>前往设置更新资源</button></div>}
                 <div className="segmented">
                   <button
                     className={importMode === 'image' ? 'active' : ''}

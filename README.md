@@ -19,12 +19,14 @@ Windows 桌面应用。导入 Arcaea Best50 成绩，校对结果和录像素材
 
 需要 Windows、Go、Node.js、Wails v2、Python 3.12，以及 ffmpeg 和 ffprobe；自动获取录像还需 yt-dlp。Python 只用于构建 OCR 组件，运行应用时不需要单独安装。
 
-本仓库不包含可直接运行的 `data/` 数据包。先按 [数据脚本说明](scripts/README.md)生成本地数据，再构建应用：
+本仓库不包含可直接运行的 `data/` 数据包。开发时可从 [资源仓库](https://github.com/IzayoiSakuye/arcaea-b50-resources)生成数据，并将其 `data/` 复制到应用的 `data/`。也可以启动应用，在设置页点击「更新资源」安装已发布的资源包；下载完成后重启应用生效。资源安装在当前用户缓存目录，不写入源码目录。然后构建应用：
 
 ```powershell
 wails build
 node scripts/build-ocr.ts
 ```
+
+资源清单默认从 GitHub 官方 API 获取；ZIP 下载依次尝试公开 GitHub 代理和原站，所有来源都必须通过清单中的 SHA-256 校验。代理可用性和速度会随网络变化；需要自有镜像时，可用 `ARCAEA_RESOURCE_MIRRORS` 指定分号分隔的 `latest.json` 地址。
 
 OCR 构建步骤会生成 `build/bin/ocr/`；使用图片导入功能时，该目录须与 `build/bin/rhythm-game-bvideo.exe` 放在一起。更多构建说明见 [build/README.md](build/README.md)。
 
