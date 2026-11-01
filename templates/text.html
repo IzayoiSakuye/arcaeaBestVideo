@@ -184,12 +184,14 @@
   /* ── 底部面板：评语（左侧）── */
   .comment {
     position: absolute; left: 60px; top: 845px; width: 1584px;
-    font-size: 36px; line-height: 1.35; color: #eee6f5;
+    font-size: 44px; line-height: 1.35; color: #eee6f5;
     text-align: left;
     height: 198px; overflow: hidden;
+    display: flex; align-items: center;
     white-space: pre-wrap; overflow-wrap: anywhere;
     font-family: "SimHei", "Noto Sans SC", sans-serif;
   }
+  .comment-text { width: 100%; }
 </style>
 </head>
 <body>
@@ -223,7 +225,7 @@
     </div>
   </div>
 
-  <div class="comment"  data-k="comment">这首终于推上去了<br>感觉还能再压一点，下次试试不开音押</div>
+  <div class="comment"><div class="comment-text" data-k="comment">这首终于推上去了<br>感觉还能再压一点，下次试试不开音押</div></div>
 
 <script>
 (function () {
@@ -300,12 +302,13 @@
   }
 
   function fitComment(el) {
-    var size = 36;
-    while (size > 18 && el.scrollHeight > el.clientHeight) {
+    var size = 44;
+    var content = el.querySelector('.comment-text');
+    while (size > 18 && content.scrollHeight > el.clientHeight) {
       size -= 1;
       el.style.fontSize = size + 'px';
     }
-    return { el: 'comment', from: 36, to: size, ok: el.scrollHeight <= el.clientHeight };
+    return { el: 'comment', from: 44, to: size, ok: content.scrollHeight <= el.clientHeight };
   }
 
   // 供截图前确认「已就绪」，也方便在 devtools 里查
