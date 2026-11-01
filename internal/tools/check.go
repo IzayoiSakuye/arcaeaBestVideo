@@ -25,14 +25,14 @@ func Check(name, path string) (string, error) {
 		defer os.RemoveAll(dir)
 		shot := filepath.Join(dir, "check.png")
 		cmd := exec.CommandContext(ctx, path, "--headless=new", "--disable-gpu", "--no-first-run",
-			"--user-data-dir="+filepath.Join(dir, "profile"), "--screenshot="+shot, "--window-size=16,16", "about:blank")
+			"--user-data-dir="+filepath.Join(dir, "profile"), "--screenshot="+shot, "--window-size=320,180", "about:blank")
 		HideWindow(cmd)
 		out, err := cmd.CombinedOutput()
 		if err != nil {
 			return "", fmt.Errorf("Edge 截图测试失败：%w：%s", err, strings.TrimSpace(string(out)))
 		}
-		if fi, err := os.Stat(shot); err != nil || fi.Size() == 0 {
-			return "", fmt.Errorf("Edge 截图测试未生成图片")
+		if !waitForScreenshot(ctx, shot) {
+			return "", fmt.Errorf("Edge 截图测试未生成图片：%s", strings.TrimSpace(string(out)))
 		}
 		return "截图测试通过", nil
 	}
@@ -56,4 +56,19 @@ func Check(name, path string) (string, error) {
 		return "", fmt.Errorf("%s 版本输出不符合预期：%s", name, first)
 	}
 	return first, nil
+}
+
+// Edge 可能先退出再写截图，等待文件落盘
+func waitForScreenshot(ctx context.Context, path string) bool {
+	for i := 0; i < 50; i++ {
+		if fi, err := os.Stat(path); err == nil && fi.Size() > 0 {
+			return true
+		}
+		select {
+		case <-ctx.Done():
+			return false
+		case <-time.After(100 * time.Millisecond):
+		}
+	}
+	return false
 }

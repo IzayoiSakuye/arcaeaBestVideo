@@ -4,6 +4,7 @@ import {
   CancelRender,
   CancelVideoDownload,
   CheckTool,
+  ClearCache,
   DownloadVideo,
   Import,
   Jacket,
@@ -18,6 +19,7 @@ import {
   StartRender,
   Status,
   VideoInfos,
+  Version,
 } from '../wailsjs/go/app/App';
 import { EventsOn } from '../wailsjs/runtime';
 import { score, type app } from '../wailsjs/go/models';
@@ -30,13 +32,13 @@ import Arrangement from './Arrangement';
 import { emptyThought, sameThought, thoughtFromProject, type ThoughtDraft } from './thought';
 
 const pages = [
-  '环境检查',
   '导入图片 / JSON',
   '填写感想',
   '识别信息',
   '编排顺序',
   '生成视频',
   '完成与导出',
+  '设置',
 ];
 const toolNames = ['ffmpeg', 'ffprobe', 'yt-dlp', 'edge'];
 const clearTypes = ['TL', 'NC', 'HC', 'EC', 'FR', 'PM'];
@@ -50,6 +52,11 @@ function errorText(error: unknown) {
 function App() {
   const [page, setPage] = useState(0);
   const [status, setStatus] = useState<app.AppStatus | null>(null);
+  const [version, setVersion] = useState('');
+  const [cacheMessage, setCacheMessage] = useState('');
+  const [cacheBusy, setCacheBusy] = useState(false);
+  const [configSaved, setConfigSaved] = useState(false);
+  const clearCacheDialog = useRef<HTMLDialogElement>(null);
   const [checks, setChecks] = useState<
     Record<string, { result?: string; error?: string; busy?: boolean }>
   >({});
@@ -108,8 +115,12 @@ function App() {
 
   useEffect(() => {
     Status()
-      .then(setStatus)
+      .then((value) => {
+        setStatus(value);
+        if (localStorage.getItem('environment-ready') !== '1') setPage(6);
+      })
       .catch((error) => setImportError(`环境状态读取失败：${errorText(error)}`));
+    Version().then(setVersion).catch(() => setVersion('未知'));
     ThoughtAudioOptions()
       .then(setBgmOptions)
       .catch((error) => setBgmError(errorText(error)))
@@ -122,11 +133,11 @@ function App() {
       if (event.stage === 'done' && event.status === 'done') {
         setFinished(outputRef.current);
         setRenderState('done');
-        setPage(6);
+        setPage(5);
       } else if (event.status === 'failed') {
         setRenderError(event.error || event.message || '生成失败');
         setRenderState('failed');
-        setPage(5);
+        setPage(4);
       }
     });
   }, []);
@@ -251,6 +262,18 @@ function App() {
   async function refreshStatus() {
     setStatus(await Status());
   }
+  async function clearCache(includeVideos: boolean) {
+    try {
+      setCacheBusy(true);
+      setCacheMessage('清理中…');
+      await ClearCache(includeVideos);
+      setCacheMessage(includeVideos ? '渲染缓存和录像缓存已清理' : '渲染缓存已清理，录像已保留');
+    } catch (error) {
+      setCacheMessage(errorText(error));
+    } finally {
+      setCacheBusy(false);
+    }
+  }
   async function testTool(name: string) {
     setChecks((old) => ({ ...old, [name]: { busy: true } }));
     try {
@@ -333,7 +356,7 @@ function App() {
       setLogs([]);
       setRenderTotal(0);
       setJobID('');
-      setPage(2);
+      setPage(1);
     } catch (error) {
       setImportError(errorText(error));
     } finally {
@@ -403,7 +426,7 @@ function App() {
   function jumpProblem(index: number) {
     if (project && index > 0 && index <= project.songs.length) {
       setSongIndex(index - 1);
-      setPage(3);
+      setPage(2);
     }
   }
   function toggleNote(index: number) {
@@ -632,7 +655,7 @@ function App() {
             制作流程 <span>WORKFLOW</span>
           </div>
           <nav aria-label="制作流程">
-            {pages.map((label, index) => (
+            {pages.slice(0, 6).map((label, index) => (
               <button
                 key={label}
                 className={`nav-item ${page === index ? 'selected' : ''}`}
@@ -647,24 +670,27 @@ function App() {
               </button>
             ))}
           </nav>
+          <button className={`nav-item settings-link ${page === 6 ? 'selected' : ''}`} onClick={() => setPage(6)} aria-current={page === 6 ? 'page' : undefined}>
+            <span className="nav-number">⚙</span><span className="nav-label">设置</span>
+          </button>
           <div className="sidebar-foot">当前版本 · Arcaea</div>
         </aside>
         <main className="main-area">
           <div className="page-heading">
             <div>
-              <span className="eyebrow">STEP {String(page + 1).padStart(2, '0')} / 07</span>
+              <span className="eyebrow">{page === 6 ? 'APPLICATION SETTINGS' : `STEP ${String(page + 1).padStart(2, '0')} / 06`}</span>
               <h1>{pages[page]}</h1>
             </div>
             <span className="heading-tag">
-              {page === 3 && count ? `第 ${songIndex + 1} / ${count} 首` : 'ARCAEA · BEST 50'}
+              {page === 2 && count ? `第 ${songIndex + 1} / ${count} 首` : 'ARCAEA · BEST 50'}
             </span>
           </div>
 
-          {page === 0 && (
+          {page === 6 && (
             <div className="content-grid">
               <section className="card wide">
                 <h2>
-                  工具检测 <span>01 / 04</span>
+                  环境设置 <span>工具路径自动保存</span>
                 </h2>
                 <p className="muted">自动检测工具；找不到时点「⋯」选择文件。</p>
                 <div className="tool-list">
@@ -733,9 +759,19 @@ function App() {
                 {status?.tool_error && (
                   <div className="notice bad">工具配置：{status.tool_error}</div>
                 )}
+                <button className="button primary" onClick={() => {
+                  localStorage.setItem('environment-ready', '1');
+                  setConfigSaved(true);
+                }}>
+                  保存配置
+                </button>
+                {configSaved && <div className="notice">配置已保存，下次启动将直接进入导入页。</div>}
+                {status && status.tools.some((tool) => !tool.Path) && <div className="notice warn">请先补齐未找到的工具路径。</div>}
               </section>
               <aside className="card side-card">
-                <h2>当前状态</h2>
+                <h2>关于与资源</h2>
+                <p>作者：IzayoiSakuye</p>
+                <p>版本：{version || '读取中…'}</p>
                 <div className="status-figure">
                   <strong>
                     {status?.song_count ?? '—'}{' '}
@@ -744,13 +780,18 @@ function App() {
                   <span>已载入 / 数据包共计（首）</span>
                 </div>
                 <div className="rule" />
-                <p>三种工具可在这里一次配置。Edge 用于文字渲染，也需要检查。</p>
-                <p>获取 B站录像时需要 yt-dlp。</p>
+                <p>资源更新：尚未配置更新源。</p>
+                <button className="button quiet" disabled title="需要先配置资源发布地址">更新资源</button>
+                <div className="rule" />
+                <p>清理可重新生成的渲染缓存，不影响已下载录像。</p>
+                <button className="button quiet" disabled={cacheBusy} onClick={() => clearCache(false)}>清理渲染缓存</button>
+                <button className="button quiet" disabled={cacheBusy} onClick={() => clearCacheDialog.current?.showModal()}>清理全部缓存</button>
+                {cacheMessage && <div className="notice">{cacheMessage}</div>}
               </aside>
             </div>
           )}
 
-          {page === 1 && (
+          {page === 0 && (
             <div className="content-grid">
               <section className="card wide">
                 <h2>导入方式</h2>
@@ -841,9 +882,9 @@ function App() {
             </div>
           )}
 
-          {page === 2 && (project ? (
+          {page === 1 && (project ? (
             <>
-              {videoBatch?.running && <div className="notice warn">录像正在后台获取：{videoBatch.processed} / {videoBatch.total} 首。<button className="button text" onClick={() => setPage(3)}>查看详情</button></div>}
+              {videoBatch?.running && <div className="notice warn">录像正在后台获取：{videoBatch.processed} / {videoBatch.total} 首。<button className="button text" onClick={() => setPage(2)}>查看详情</button></div>}
               <section className="card thought-library">
                 <div className="thought-library-head"><div><h2>已保存的感想片段 <span>{project.thoughts?.length || 0}</span></h2><p className="muted">每段独立保存，后续可在「编排顺序」中放置。</p></div><button className="button quiet" onClick={newThought}>新建片段</button></div>
                 {!!project.thoughts?.length && <div className="thought-library-list">{project.thoughts.map((thought) => <div className={`thought-library-item ${thought.id === thoughtID ? 'selected' : ''}`} key={thought.id}>
@@ -854,12 +895,12 @@ function App() {
               <ThoughtEditor key={thoughtEditorVersion} draft={thoughtDraft} saved={thoughtFromProject(project.thoughts?.find((item) => item.id === thoughtID))} options={bgmOptions} optionsLoading={bgmLoading} optionsError={bgmError} onChange={setThoughtDraft} onSave={saveThought} />
             </>
           ) : (
-            <section className="card placeholder"><h2>请先导入成绩</h2><button className="button primary" onClick={() => setPage(1)}>前往导入</button></section>
+            <section className="card placeholder"><h2>请先导入成绩</h2><button className="button primary" onClick={() => setPage(0)}>前往导入</button></section>
           ))}
 
-          {page === 4 && (project ? <Arrangement project={project} rows={review?.rows || []} onChange={(play_order) => setProject((current) => current ? { ...current, play_order } as score.Project : current)} /> : <section className="card placeholder"><h2>请先导入成绩</h2></section>)}
+          {page === 3 && (project ? <Arrangement project={project} rows={review?.rows || []} onChange={(play_order) => setProject((current) => current ? { ...current, play_order } as score.Project : current)} /> : <section className="card placeholder"><h2>请先导入成绩</h2></section>)}
 
-          {page === 3 &&
+          {page === 2 &&
             (song ? (
               <>
                 {videoBatch && (videoBatch.running || retryableVideos.length > 0 || Boolean(videoBatchError)) && (
@@ -1456,13 +1497,13 @@ function App() {
                 <span className="placeholder-symbol">⌑</span>
                 <h2>尚无成绩</h2>
                 <p>请先在「导入图片 / JSON」导入一份成绩。</p>
-                <button className="button primary" onClick={() => setPage(1)}>
+                <button className="button primary" onClick={() => setPage(0)}>
                   前往导入
                 </button>
               </section>
             ))}
 
-          {page === 5 && (
+          {page === 4 && (
             <div className="content-grid">
               <section className="card wide">
                 <h2>生成任务</h2>
@@ -1539,7 +1580,7 @@ function App() {
             </div>
           )}
 
-          {page === 6 &&
+          {page === 5 &&
             (finished ? (
               <section className="card completion">
                 <div className="completion-icon">✓</div>
@@ -1575,13 +1616,24 @@ function App() {
             ))}
         </main>
       </div>
-      {page !== 6 && (
+      <dialog ref={clearCacheDialog} className="confirm-dialog" aria-labelledby="clear-cache-title">
+        <h2 id="clear-cache-title">清理全部缓存？</h2>
+        <p>渲染缓存和已下载的完整谱面录像都会删除。之后生成视频可能需要重新下载录像。</p>
+        <div className="confirm-actions">
+          <button className="button quiet" autoFocus onClick={() => clearCacheDialog.current?.close()}>取消</button>
+          <button className="button primary" onClick={() => {
+            clearCacheDialog.current?.close();
+            void clearCache(true);
+          }}>确认清理</button>
+        </div>
+      </dialog>
+      {page !== 5 && page !== 6 && (
         <footer className="footer">
           <button className="button quiet" disabled={page === 0} onClick={() => setPage(page - 1)}>
             ← 上一步
           </button>
           <span>
-            {String(page + 1).padStart(2, '0')} / 07 · {pages[page]}
+            {String(page + 1).padStart(2, '0')} / 06 · {pages[page]}
           </span>
           <button className="button primary" onClick={() => setPage(page + 1)}>
             下一步 →

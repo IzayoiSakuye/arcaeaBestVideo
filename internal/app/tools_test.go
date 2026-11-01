@@ -37,3 +37,22 @@ func TestToolPathsPersistAndRejectBadOverride(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestAutoDetectFailureKeepsSavedPath(t *testing.T) {
+	if runtime.GOOS != "windows" {
+		t.Skip("UserConfigDir 的位置与平台有关")
+	}
+	t.Setenv("APPDATA", t.TempDir())
+	t.Setenv("PATH", "")
+	want := tools.Tools{YtDlp: filepath.Join(t.TempDir(), "yt-dlp.exe")}
+	if err := saveToolPaths(want); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := (&App{}).SetToolPath("yt-dlp", ""); err == nil {
+		t.Fatal("自动检测无结果时应报错")
+	}
+	got, err := loadToolPaths()
+	if err != nil || got.YtDlp != want.YtDlp {
+		t.Fatalf("自动检测失败不应删除手动路径：%+v, %v", got, err)
+	}
+}

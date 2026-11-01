@@ -1,10 +1,12 @@
 package tools
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"runtime"
 	"testing"
+	"time"
 )
 
 func TestCheckRejectsInvalidTool(t *testing.T) {
@@ -34,5 +36,16 @@ func TestCheckDetectedFFmpeg(t *testing.T) {
 	}
 	if line == "" {
 		t.Fatal("没有版本信息")
+	}
+}
+
+func TestWaitForScreenshotAfterProcessExit(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "check.png")
+	go func() {
+		time.Sleep(150 * time.Millisecond)
+		_ = os.WriteFile(path, []byte("png"), 0o600)
+	}()
+	if !waitForScreenshot(context.Background(), path) {
+		t.Fatal("未等待延迟写出的截图")
 	}
 }

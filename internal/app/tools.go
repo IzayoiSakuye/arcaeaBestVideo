@@ -129,22 +129,37 @@ func (a *App) SetToolPath(name, path string) (ToolCheck, error) {
 	if err != nil {
 		return result, err
 	}
-	if path != "" {
-		path, err = filepath.Abs(path)
-		if err != nil {
-			return result, err
+	if path == "" {
+		*slot = ""
+		for _, st := range tools.Detect(paths).Statuses {
+			if st.Name != name {
+				continue
+			}
+			if st.Path == "" {
+				return result, fmt.Errorf("%s 自动检测未找到", name)
+			}
+			version, err := tools.Check(name, st.Path)
+			if err != nil {
+				return result, fmt.Errorf("%s 自动检测失败：%w", name, err)
+			}
+			if err := saveToolPaths(paths); err != nil {
+				return result, err
+			}
+			return ToolCheck{Name: name, Path: st.Path, Source: st.Source, Result: version}, nil
 		}
-		result.Result, err = tools.Check(name, path)
-		if err != nil {
-			return result, err
-		}
+		return result, fmt.Errorf("未知工具：%s", name)
+	}
+	path, err = filepath.Abs(path)
+	if err != nil {
+		return result, err
+	}
+	result.Result, err = tools.Check(name, path)
+	if err != nil {
+		return result, err
 	}
 	*slot = path
 	if err := saveToolPaths(paths); err != nil {
 		return ToolCheck{}, err
-	}
-	if path == "" {
-		return a.CheckTool(name)
 	}
 	return ToolCheck{Name: name, Path: path, Source: "override", Result: result.Result}, nil
 }
