@@ -26,7 +26,7 @@ wails build
 node scripts/build-ocr.ts
 ```
 
-资源清单默认从 GitHub 官方 API 获取；ZIP 下载依次尝试公开 GitHub 代理和原站，所有来源都必须通过清单中的 SHA-256 校验。代理可用性和速度会随网络变化；需要自有镜像时，可用 `ARCAEA_RESOURCE_MIRRORS` 指定分号分隔的 `latest.json` 地址。
+资源清单默认从 Cloudflare R2 获取，失败后依次尝试 GitHub Release API 和 Release 附件；ZIP 优先从清单所在目录获取，GitHub 地址仍可通过公开代理下载。所有来源都必须通过清单中的 SHA-256 校验。可用 `ARCAEA_RESOURCE_MIRRORS` 指定优先尝试的、分号分隔的 `latest.json` 地址。
 
 OCR 构建步骤会生成 `build/bin/ocr/`；使用图片导入功能时，该目录须与 `build/bin/rhythm-game-bvideo.exe` 放在一起。更多构建说明见 [build/README.md](build/README.md)。
 

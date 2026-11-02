@@ -25,6 +25,7 @@ import (
 )
 
 const resourceManifestURL = "https://github.com/IzayoiSakuye/arcaea-b50-resources/releases/latest/download/latest.json"
+const resourceR2ManifestURL = "https://pub-af1517927a52401bb02d6f98bba5199e.r2.dev/arc-data/latest.json"
 const resourceReleaseAPI = "https://api.github.com/repos/IzayoiSakuye/arcaea-b50-resources/releases/latest"
 
 var resourceZipProxies = []string{"https://ghfast.top/", "https://gh-proxy.org/"}
@@ -79,7 +80,7 @@ func resourceManifestURLs() []string {
 			urls = append(urls, s)
 		}
 	}
-	return append(urls, resourceReleaseAPI, resourceManifestURL)
+	return append(urls, resourceR2ManifestURL, resourceReleaseAPI, resourceManifestURL)
 }
 
 func resourceHTTPClient() *http.Client {
@@ -401,7 +402,10 @@ func resourceArchiveURLs(m resourceManifest) []string {
 	urls := []string{}
 	if m.sourceURL != "" && m.sourceURL != resourceManifestURL {
 		if source, err := url.Parse(m.sourceURL); err == nil {
-			urls = append(urls, source.ResolveReference(&url.URL{Path: m.Archive.Path}).String())
+			archiveURL := source.ResolveReference(&url.URL{Path: m.Archive.Path}).String()
+			if archiveURL != m.Archive.URL {
+				urls = append(urls, archiveURL)
+			}
 		}
 	}
 	if strings.HasPrefix(m.Archive.URL, "https://github.com/") {

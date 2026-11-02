@@ -124,3 +124,16 @@ func TestReleaseAPIManifestAndProxyArchiveURLs(t *testing.T) {
 		t.Fatalf("archive sources = %v", urls)
 	}
 }
+
+func TestR2ResourceSource(t *testing.T) {
+	t.Setenv("ARCAEA_RESOURCE_MIRRORS", "")
+	if got := resourceManifestURLs()[0]; got != resourceR2ManifestURL {
+		t.Fatalf("默认清单地址 = %s", got)
+	}
+	m := resourceManifest{sourceURL: resourceR2ManifestURL}
+	m.Archive.Path = "data-2026.11.01.zip"
+	m.Archive.URL = strings.TrimSuffix(resourceR2ManifestURL, "latest.json") + m.Archive.Path
+	if got := resourceArchiveURLs(m); len(got) != 1 || got[0] != m.Archive.URL {
+		t.Fatalf("R2 归档地址 = %v", got)
+	}
+}
