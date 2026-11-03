@@ -191,7 +191,7 @@ export default function ThoughtEditor({ draft, saved, options, optionsLoading, o
     <section className="card thought-editor">
       <h2>感想片段</h2>
       <label className="field full">片段名称
-        <input value={draft.name} onChange={(e) => change({ ...draft, name: e.target.value })} placeholder="例如：这次 B50 的感想" />
+        <input value={draft.name} onChange={(e) => change({ ...draft, name: e.target.value })} placeholder="这次 B50 的感想" />
       </label>
       <h3>感想文字</h3>
       <p className="muted">同一画面依次显示各段文字，每段平分片段时长。</p>

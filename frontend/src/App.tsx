@@ -719,14 +719,7 @@ function App() {
 
   return (
     <div className="shell">
-      <header className="topbar">
-        <div className="brand-mark">◈</div>
-        <div>
-          <strong>回忆视频生成器</strong>
-          <small>ARCAEA MEMORY VIDEO MAKER</small>
-        </div>
-        <span className="top-version">BEST 50 · VIDEO STUDIO</span>
-      </header>
+      <header className="topbar" />
       <div className="workspace">
         <aside className="sidebar">
           <div className="sidebar-title">
@@ -751,7 +744,6 @@ function App() {
           <button className={`nav-item settings-link ${page === 6 ? 'selected' : ''}`} onClick={() => setPage(6)} aria-current={page === 6 ? 'page' : undefined}>
             <span className="nav-number">⚙</span><span className="nav-label">设置</span>
           </button>
-          <div className="sidebar-foot">当前版本 · Arcaea</div>
         </aside>
         <main className="main-area">
           <div className="page-heading">
@@ -759,9 +751,7 @@ function App() {
               <span className="eyebrow">{page === 6 ? 'APPLICATION SETTINGS' : `STEP ${String(page + 1).padStart(2, '0')} / 06`}</span>
               <h1>{pages[page]}</h1>
             </div>
-            <span className="heading-tag">
-              {page === 2 && count ? `第 ${songIndex + 1} / ${count} 首` : 'ARCAEA · BEST 50'}
-            </span>
+            {page === 2 && count > 0 && <span className="heading-tag">第 {songIndex + 1} / {count} 首</span>}
           </div>
 
           {page === 6 && (
@@ -938,7 +928,7 @@ function App() {
                     }
                     onClick={doImport}
                   >
-                    {importBusy ? '正在导入…' : '导入并填写感想 →'}
+                    {importBusy ? '正在导入…' : '导入'}
                   </button>
                   <button className="button quiet" disabled={importBusy || active || videoBusy} onClick={addBlankSong}>手动新增歌曲</button>
                 </div>
@@ -956,8 +946,6 @@ function App() {
                       <strong>{count}</strong>
                       <span>首成绩已导入</span>
                     </div>
-                    <div className="rule" />
-                    <p>请在「识别信息」校对成绩。</p>
                   </>
                 ) : (
                   <p className="empty-aside">尚未导入成绩</p>
@@ -970,7 +958,7 @@ function App() {
             <>
               {videoBatch?.running && <div className="notice warn">录像正在后台获取：{videoBatch.processed} / {videoBatch.total} 首。<button className="button text" onClick={() => setPage(2)}>查看详情</button></div>}
               <section className="card thought-library">
-                <div className="thought-library-head"><div><h2>已保存的感想片段 <span>{project.thoughts?.length || 0}</span></h2><p className="muted">每段独立保存，后续可在「编排顺序」中放置。</p></div><button className="button quiet" onClick={newThought}>新建片段</button></div>
+                <div className="thought-library-head"><h2>已保存的感想片段</h2><button className="button quiet" onClick={newThought}>新建片段</button></div>
                 {!!project.thoughts?.length && <div className="thought-library-list">{project.thoughts.map((thought) => <div className={`thought-library-item ${thought.id === thoughtID ? 'selected' : ''}`} key={thought.id}>
                   <button className="button text" onClick={() => selectThought(thought.id || '')}>{thought.name} · {Math.round(thought.duration_ms / 1000)} 秒</button>
                   <button className="thought-library-delete" onClick={() => deleteThought(thought.id || '')} aria-label={`删除 ${thought.name}`}>删除</button>
@@ -1719,9 +1707,6 @@ function App() {
           <button className="button quiet" disabled={page === 0} onClick={() => setPage(page - 1)}>
             ← 上一步
           </button>
-          <span>
-            {String(page + 1).padStart(2, '0')} / 06 · {pages[page]}
-          </span>
           <button className="button primary" onClick={() => setPage(page + 1)}>
             下一步 →
           </button>
