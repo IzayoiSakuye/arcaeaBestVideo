@@ -134,7 +134,14 @@ func (a *App) SearchSongs(key string, limit int) ([]SongChoice, error) {
 			choice.Title = song.TitleJP
 		}
 		for _, chart := range song.Charts {
-			choice.Difficulties = append(choice.Difficulties, chart.Difficulty)
+			if chart.Video != nil && len(chart.Video.Sources) > 0 {
+				choice.Difficulties = append(choice.Difficulties, chart.Difficulty)
+			}
+		}
+		for _, chart := range song.Charts {
+			if chart.Video == nil || len(chart.Video.Sources) == 0 {
+				choice.Difficulties = append(choice.Difficulties, chart.Difficulty)
+			}
 		}
 		out = append(out, choice)
 		if len(out) == limit {

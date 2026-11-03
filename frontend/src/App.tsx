@@ -407,6 +407,28 @@ function App() {
   function editSong(edit: (song: score.Song) => void) {
     editSongAt(songIndex, edit);
   }
+  function addBlankSong() {
+    if (active || videoBusy) return;
+    const blank = { index: (project?.songs.length || 0) + 1, song_id: '',
+      difficulty: { name: '', level: '', constant: 0 },
+      score: { achievement: 0, rank: '', clear_type: '', pure: 0, far: 0, lost: 0 },
+      user: { comment: '' } } as score.Song;
+    setProject((current) => {
+      if (!current) return new score.Project({
+        schema_version: 1, game: 'arcaea', region: '',
+        player: { name: '', rating: 0, rating_label: '' },
+        snapshot_at: new Date().toISOString(), source: { type: 'manual', provider: 'user', confidence: 1 },
+        defaults: { clips: { start_ms: 0, duration_ms: 10000 } },
+        songs: [blank], thoughts: [], play_order: [{ kind: 'song', song_index: 1 }],
+      });
+      return { ...current, songs: [...current.songs, blank],
+        play_order: current.play_order ? [...current.play_order, { kind: 'song', song_index: blank.index }] : undefined,
+      } as score.Project;
+    });
+    setSongIndex(blank.index - 1);
+    setSearch('');
+    setPage(2);
+  }
   function saveThought(thought: ThoughtDraft) {
     const id = thought.id || crypto.randomUUID();
     const saved = new score.Thought({ ...thought, id });
@@ -893,6 +915,7 @@ function App() {
                   >
                     {importBusy ? '正在导入…' : '导入并填写感想 →'}
                   </button>
+                  <button className="button quiet" disabled={importBusy || active || videoBusy} onClick={addBlankSong}>手动新增歌曲</button>
                 </div>
                 {importError && (
                   <div className="notice bad" role="alert">
@@ -1043,8 +1066,8 @@ function App() {
                   <button className="button quiet" onClick={() => stepSong(-1)}>
                     ← 上一首
                   </button>
-                  <button className="button quiet" onClick={() => stepSong(1)}>
-                    下一首 →
+                  <button className="button quiet" disabled={songIndex === count - 1 && (active || videoBusy)} onClick={() => songIndex === count - 1 ? addBlankSong() : stepSong(1)}>
+                    {songIndex === count - 1 ? '新增歌曲 →' : '下一首 →'}
                   </button>
                 </div>
                 <div className="content-grid review-grid">
@@ -1162,21 +1185,22 @@ function App() {
                           )}
                         </select>
                       </label>
-                      <div className="field">
-                        单曲 PTT
-                        <div className="readout">
-                          {row?.ptt == null ? '待计算' : row.ptt.toFixed(3)}
-                        </div>
-                      </div>
-                      <div className="field">
-                        曲库定数
-                        <div className="readout">
-                          {row?.constant == null ? '未匹配' : row.constant}
-                        </div>
-                      </div>
-                      <div className="field">
-                        评级<div className="readout">{row?.rank || '待计算'}</div>
-                      </div>
+                      <label className="field">单曲 PTT
+                        <input type="number" min={0} max={20} step="0.0001"
+                          value={song.score.ptt ?? ''} placeholder={row?.ptt?.toFixed(4) || '未计算'}
+                          onChange={(event) => editSong((item) => { item.score.ptt = event.target.value === '' ? undefined : Number(event.target.value); })} />
+                      </label>
+                      <label className="field">定数
+                        <input type="number" min={0} max={20} step="0.1"
+                          value={song.difficulty.constant || ''} placeholder={row?.constant?.toString() || '未匹配'}
+                          onChange={(event) => editSong((item) => { item.difficulty.constant = Number(event.target.value); })} />
+                      </label>
+                      <label className="field">评级
+                        <select value={song.score.rank || ''} onChange={(event) => editSong((item) => { item.score.rank = event.target.value; })}>
+                          <option value="">{row?.rank ? `自动计算：${row.rank}` : '未填写'}</option>
+                          {['EX+', 'EX', 'AA', 'A', 'B', 'C', 'D'].map((rank) => <option key={rank} value={rank}>{rank}</option>)}
+                        </select>
+                      </label>
                       <div className="judgment-row full">
                         {(['pure', 'shiny_perfect', 'far', 'lost'] as const).map((key) =>
                           key === 'shiny_perfect' ? (

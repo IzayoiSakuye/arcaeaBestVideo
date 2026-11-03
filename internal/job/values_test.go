@@ -25,6 +25,16 @@ func TestValuesOfUsesEachSongPTT(t *testing.T) {
 	}
 }
 
+func TestValuesOfUsesEditedScoreDetails(t *testing.T) {
+	catalogConstant, editedConstant, editedPTT := 10.5, 10.6, 12.3456
+	chart := &catalog.Chart{Difficulty: "FTR", Constant: &catalogConstant}
+	s := score.Song{Difficulty: score.DiffRef{Constant: editedConstant}, Score: score.ScoreRef{PTT: &editedPTT}}
+	v := valuesOf(&catalog.Song{TitleEn: "Example"}, chart, s)
+	if v["ptt"] != "+12.346" || v["diff"] != "Future 10.6" {
+		t.Fatalf("手动校对值未进入画面：%v", v)
+	}
+}
+
 func TestValuesOfShowsTotalAndShinyPure(t *testing.T) {
 	song := &catalog.Song{TitleEn: "Example"}
 	chart := &catalog.Chart{Difficulty: "FTR"}

@@ -117,16 +117,6 @@ func resolveRow(i int, s *Song, cata *catalog.Catalog) (Row, []Problem) {
 			Message:   "缺少 song_id",
 		}}
 	}
-	if s.Score.Achievement <= 0 {
-		return row, []Problem{{
-			SongIndex: i + 1,
-			Rule:      "missing-field",
-			Severity:  SeverityFatal,
-			Field:     field("score.achievement"),
-			Message:   "缺少评级",
-		}}
-	}
-
 	song, _, ok := cata.Find(s.SongID)
 	if !ok {
 		return row, []Problem{{
@@ -139,6 +129,15 @@ func resolveRow(i int, s *Song, cata *catalog.Catalog) (Row, []Problem) {
 		}}
 	}
 	row.Catalog = song
+	if s.Score.Achievement <= 0 {
+		return row, []Problem{{
+			SongIndex: i + 1,
+			Rule:      "missing-field",
+			Severity:  SeverityFatal,
+			Field:     field("score.achievement"),
+			Message:   "缺少分数",
+		}}
+	}
 	row.Rank = Rank(s.Score.Score())
 
 	inputConstant := s.Difficulty.Constant

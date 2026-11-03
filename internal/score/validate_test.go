@@ -52,6 +52,17 @@ func TestPartialJudgmentsDoNotChooseChart(t *testing.T) {
 	}
 }
 
+func TestBlankScoreStillResolvesSong(t *testing.T) {
+	cata := &catalog.Catalog{Songs: []*catalog.Song{{SongID: "sample", TitleEn: "Sample Song", Charts: []*catalog.Chart{{Difficulty: "FTR"}}}}}
+	row, problems := resolveRow(0, &Song{SongID: "sample"}, cata)
+	if row.Catalog == nil || row.Catalog.TitleEn != "Sample Song" {
+		t.Fatalf("空白成绩未显示曲库信息：%+v", row)
+	}
+	if p, ok := findProblem(problems, "missing-field"); !ok || p.Severity != SeverityFatal {
+		t.Fatalf("空白成绩仍须阻止生成：%+v", problems)
+	}
+}
+
 func TestUnselectedDifficultyBlocksRender(t *testing.T) {
 	cata := &catalog.Catalog{Songs: []*catalog.Song{{SongID: "egoeimi", Charts: []*catalog.Chart{{Difficulty: "FTR"}}}}}
 	song := Song{SongID: "egoeimi", Score: ScoreRef{Achievement: 99}}

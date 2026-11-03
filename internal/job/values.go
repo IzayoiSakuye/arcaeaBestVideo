@@ -13,7 +13,9 @@ import (
 // valuesOf 用于需要的字段值
 func valuesOf(song *catalog.Song, chart *catalog.Chart, s score.Song) map[string]string {
 	ptt := "—"
-	if chart.Constant != nil && s.Score.ClearType != "" {
+	if s.Score.PTT != nil {
+		ptt = "+" + strconv.FormatFloat(*s.Score.PTT, 'f', 3, 64)
+	} else if chart.Constant != nil && s.Score.ClearType != "" {
 		if value, err := score.SinglePTT(*chart.Constant, s.Score.Score(), score.ClearType(s.Score.ClearType)); err == nil {
 			ptt = "+" + strconv.FormatFloat(value, 'f', 3, 64)
 		}
@@ -31,6 +33,10 @@ func valuesOf(song *catalog.Song, chart *catalog.Chart, s score.Song) map[string
 	if title == "" {
 		title = song.TitleJP
 	}
+	constant := chart.Constant
+	if s.Difficulty.Constant > 0 {
+		constant = &s.Difficulty.Constant
+	}
 	return map[string]string{
 		"ptt":       ptt,
 		"score":     formatScore(s.Score.Achievement),
@@ -39,7 +45,7 @@ func valuesOf(song *catalog.Song, chart *catalog.Chart, s score.Song) map[string
 		"lost":      lost,
 		"title":     title,
 		"author":    song.Artist,
-		"diff":      score.DiffName(chart.Difficulty) + " " + formatConstant(chart.Constant),
+		"diff":      score.DiffName(chart.Difficulty) + " " + formatConstant(constant),
 		"diffClass": strings.ToLower(chart.Difficulty),
 		"comment":   s.User.Comment,
 	}

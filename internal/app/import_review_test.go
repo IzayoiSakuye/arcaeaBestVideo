@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"rhythm-game-bvideo/internal/catalog"
 	"rhythm-game-bvideo/internal/score"
 )
 
@@ -65,5 +66,20 @@ func TestP2ImportReviewSearch(t *testing.T) {
 	}
 	if checked.Renderable {
 		t.Fatal("无法定位的曲目不应允许渲染")
+	}
+}
+
+func TestSearchSongsPrioritizesIndexedDifficulty(t *testing.T) {
+	a := &App{cata: &catalog.Catalog{Songs: []*catalog.Song{{SongID: "example", TitleEn: "Example Song", Charts: []*catalog.Chart{
+		{Difficulty: "PST"}, {Difficulty: "FTR", Video: &catalog.Video{Sources: []catalog.VideoSource{{URL: "https://www.bilibili.com/video/BV1op4y1W7M2"}}}},
+	}}}}}
+	a.cataOnce.Do(func() {})
+	choices, err := a.SearchSongs("example", 5)
+	if err != nil || len(choices) != 1 || choices[0].Title != "Example Song" || len(choices[0].Difficulties) != 2 || choices[0].Difficulties[0] != "FTR" {
+		t.Fatalf("手动选曲未优先选择有录像的难度：%+v, %v", choices, err)
+	}
+	state := a.videoInfo(a.cata, score.Song{SongID: choices[0].SongID, Difficulty: score.DiffRef{Name: choices[0].Difficulties[0]}})
+	if state.URL == "" || state.Status != "download" {
+		t.Fatalf("手动选曲后未带出索引录像：%+v", state)
 	}
 }
