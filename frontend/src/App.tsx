@@ -27,7 +27,7 @@ import { EventsOn } from '../wailsjs/runtime';
 import { score, type app } from '../wailsjs/go/models';
 import { eventText, nameOf, scoreText, type Event } from './format';
 import { noteSongIndex, pendingSongIndexes } from './issues';
-import { videoQueues } from './video';
+import { videoQueues, videoSourceKey } from './video';
 import { clipRangeError, formatClipTime, parseClipTime } from './clip';
 import ThoughtEditor from './ThoughtEditor';
 import Arrangement from './Arrangement';
@@ -121,6 +121,7 @@ function App() {
   const autoVideoPending = useRef(false);
   const stopVideoBatch = useRef(false);
   const videoBusyRef = useRef(false);
+  const videoKey = videoSourceKey(review?.project?.songs || []);
 
   useEffect(() => {
     Status()
@@ -200,7 +201,7 @@ function App() {
     return () => {
       active = false;
     };
-  }, [review?.project]);
+  }, [videoKey]);
 
   useEffect(() => {
     if (!autoVideoPending.current || !review?.project) return;
@@ -573,6 +574,7 @@ function App() {
     setVideoError('');
     try {
       const state = await DownloadVideo(sourceSong);
+      setVideoStates((old) => old.map((item) => item.index === index + 1 ? { ...state, index: index + 1 } : item));
       editSongAt(index, (item) => {
         if (item.song_id !== sourceSong.song_id || (item.difficulty.name && item.difficulty.name !== sourceSong.difficulty.name)) return;
         item.difficulty.name = sourceSong.difficulty.name;
