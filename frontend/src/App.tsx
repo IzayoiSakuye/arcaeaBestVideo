@@ -76,7 +76,8 @@ function App() {
   const [acknowledgedNotes, setAcknowledgedNotes] = useState<number[]>([]);
   const [judgmentTexts, setJudgmentTexts] = useState<Record<string, string>>({});
   const [scoreTexts, setScoreTexts] = useState<Record<number, string>>({});
-  const [jacket, setJacket] = useState('');
+  const [jacket, setJacket] = useState({ key: '', url: '' });
+  const jacketCache = useRef(new Map<string, string>());
   const [project, setProject] = useState<score.Project | null>(null);
   const [thoughtDraft, setThoughtDraft] = useState<ThoughtDraft>(emptyThought);
   const [thoughtID, setThoughtID] = useState<string | null>(null);
@@ -101,6 +102,7 @@ function App() {
   const [previewTime, setPreviewTime] = useState(0);
   const [previewPlaying, setPreviewPlaying] = useState(false);
   const previewRef = useRef<HTMLVideoElement>(null);
+  const [previewSource, setPreviewSource] = useState('');
   const [songIndex, setSongIndex] = useState(0);
   const [onlyProblems, setOnlyProblems] = useState(false);
   const [search, setSearch] = useState('');
@@ -225,6 +227,16 @@ function App() {
   }, [songIndex, videoStates[songIndex]?.preview_url]);
 
   useEffect(() => {
+    const source = videoStates[songIndex]?.preview_url || '';
+    if (!source) {
+      setPreviewSource('');
+      return;
+    }
+    const timer = window.setTimeout(() => setPreviewSource(`${songIndex}\u0000${source}`), 180);
+    return () => window.clearTimeout(timer);
+  }, [songIndex, videoStates[songIndex]?.preview_url]);
+
+  useEffect(() => {
     if (!search.trim()) {
       setChoices([]);
       return;
@@ -250,19 +262,28 @@ function App() {
   useEffect(() => {
     const current = project?.songs[songIndex];
     if (!current?.song_id) {
-      setJacket('');
+      setJacket({ key: '', url: '' });
       return;
     }
     const difficulty =
       current.difficulty.name || review?.project?.songs[songIndex]?.difficulty.name || '';
+    const key = `${current.song_id}\u0000${difficulty}`;
+    const cached = jacketCache.current.get(key);
+    if (cached) {
+      setJacket({ key, url: cached });
+      return;
+    }
     let active = true;
-    setJacket('');
+    setJacket({ key, url: '' });
     Jacket(current.song_id, difficulty)
       .then((value) => {
-        if (active) setJacket(value);
+        if (active) {
+          jacketCache.current.set(key, value);
+          setJacket({ key, url: value });
+        }
       })
       .catch(() => {
-        if (active) setJacket('');
+        if (active) setJacket({ key, url: '' });
       });
     return () => {
       active = false;
@@ -676,6 +697,8 @@ function App() {
   const pendingSongs = pendingSongIndexes(review?.problems || [], notes, acknowledgedNotes, count);
   const availableDiffs = row && row.song_id === song?.song_id ? row.difficulties || [] : [];
   const currentDiff = song?.difficulty.name || (row?.song_id === song?.song_id ? row?.difficulty : '') || '';
+  const jacketKey = `${song?.song_id || ''}\u0000${currentDiff}`;
+  const jacketURL = jacketCache.current.get(jacketKey) || (jacket.key === jacketKey ? jacket.url : '');
   const currentSongVideo = reviewPending ? song?.video : review?.project?.songs[songIndex]?.video || song?.video;
   const currentVideo = videoStates[songIndex];
   const videoLinkChanged = videoLink !== (currentVideo?.url || '');
@@ -1076,10 +1099,10 @@ function App() {
                       成绩信息 <span>#{String(songIndex + 1).padStart(2, '0')}</span>
                     </h2>
                     <div className="song-title">
-                      {jacket ? (
+                      {jacketURL ? (
                         <img
                           className="jacket-placeholder"
-                          src={jacket}
+                          src={jacketURL}
                           alt={row?.title ? `曲绘：${row.title}` : '曲绘'}
                         />
                       ) : (
@@ -1291,7 +1314,7 @@ function App() {
                                 : '未就绪'}
                         </span>
                       </h2>
-                      {currentVideo?.preview_url && !videoLinkChanged ? (
+                      {currentVideo?.preview_url && previewSource === `${songIndex}\u0000${currentVideo.preview_url}` && !videoLinkChanged ? (
                         <video
                           key={`${songIndex}-${currentVideo.preview_url}`}
                           ref={previewRef}
@@ -1327,7 +1350,9 @@ function App() {
                         />
                       ) : (
                         <div className="video-empty">
-                          {currentVideo?.status === 'download'
+                          {currentVideo?.preview_url && !videoLinkChanged
+                            ? '正在加载预览…'
+                            : currentVideo?.status === 'download'
                             ? '可获取录像'
                             : currentVideo?.status === 'invalid'
                               ? '链接无效，请修改'
