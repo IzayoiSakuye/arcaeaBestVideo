@@ -110,9 +110,6 @@ Section
     SetOutPath "$INSTDIR\ocr"
     File /r "..\..\bin\ocr\*"
 
-    SetOutPath "$INSTDIR\tools"
-    File "..\..\bin\tools\ffmpeg.exe"
-    File "..\..\bin\tools\ffprobe.exe"
     SetOutPath $INSTDIR
 
     CreateShortcut "$SMPROGRAMS\${INFO_PRODUCTNAME}.lnk" "$INSTDIR\${PRODUCT_EXECUTABLE}"
