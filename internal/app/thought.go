@@ -135,6 +135,14 @@ func (a *App) ThoughtAudioOptions() ([]ThoughtAudioOption, error) {
 	for i := 1; i <= 7; i++ {
 		kind := fmt.Sprintf("op%d", i)
 		option := ThoughtAudioOption{Kind: kind}
+		if path := opAudioPath(kind); path != "" {
+			media, err := a.ThoughtAudio(path)
+			if err == nil {
+				option.ThoughtMedia, option.Available = media, true
+				out = append(out, option)
+				continue
+			}
+		}
 		for _, ext := range []string{".mp3", ".wav", ".flac", ".m4a", ".ogg"} {
 			path := filepath.Join(a.root, "templates", "audio", kind+ext)
 			if _, err := os.Stat(path); err == nil {
@@ -191,7 +199,9 @@ func (a *App) RenderThought(thought score.Thought) (ThoughtPreview, error) {
 		if thought.Audio.StartMs < 0 || thought.Audio.EndMs <= thought.Audio.StartMs || thought.Audio.EndMs > media.DurationMs+50 {
 			return ThoughtPreview{}, fmt.Errorf("背景音乐截取范围无效")
 		}
-		thought.DurationMs = thought.Audio.EndMs - thought.Audio.StartMs
+		if thought.Audio.Kind == "custom" {
+			thought.DurationMs = thought.Audio.EndMs - thought.Audio.StartMs
+		}
 	}
 	for i, page := range thought.EffectivePages() {
 		for _, image := range page.Images {

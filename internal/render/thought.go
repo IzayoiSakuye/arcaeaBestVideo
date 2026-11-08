@@ -132,8 +132,18 @@ func Thought(ctx context.Context, thought score.Thought, audioPath, templatesDir
 	} else {
 		args = append(args, "-ss", strconv.FormatFloat(float64(thought.Audio.StartMs)/1000, 'f', 3, 64), "-i", audioPath)
 	}
-	args = append(args, "-filter_complex", "[0:v]fps=30,scale=1920:1080,setsar=1,scale=out_range=tv,format=yuv420p,"+videoFade(thought.DurationMs)+"[v]",
-		"-map", "[v]", "-map", "1:a:0", "-t", strconv.FormatFloat(float64(thought.DurationMs)/1000, 'f', 3, 64),
+	filter := "[0:v]fps=30,scale=1920:1080,setsar=1,scale=out_range=tv,format=yuv420p," + videoFade(thought.DurationMs) + "[v]"
+	audioMap := "1:a:0"
+	if strings.HasPrefix(thought.Audio.Kind, "op") {
+		samples := (thought.Audio.EndMs - thought.Audio.StartMs) * 48
+		if samples <= 0 {
+			return "", fmt.Errorf("OP 音频截取范围无效")
+		}
+		filter += fmt.Sprintf(";[1:a]aresample=48000,atrim=end_sample=%d,asetpts=PTS-STARTPTS,aloop=loop=-1:size=%d[a]", samples, samples)
+		audioMap = "[a]"
+	}
+	args = append(args, "-filter_complex", filter,
+		"-map", "[v]", "-map", audioMap, "-t", strconv.FormatFloat(float64(thought.DurationMs)/1000, 'f', 3, 64),
 		"-c:v", "libx264", "-preset", Preset, "-crf", strconv.Itoa(CRF), "-pix_fmt", "yuv420p", "-color_range", "tv",
 		"-g", strconv.Itoa(GOP), "-keyint_min", strconv.Itoa(GOP), "-sc_threshold", "0",
 		"-c:a", "aac", "-b:a", "192k", "-ar", "48000", "-ac", "2", output+".part.mp4")

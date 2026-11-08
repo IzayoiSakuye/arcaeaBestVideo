@@ -127,4 +127,15 @@ func TestThoughtRendersTimedPages(t *testing.T) {
 	if err != nil || !validThoughtSegment(silentInfo, 1000) {
 		t.Fatalf("静音片段参数错误：%+v，%v", silentInfo, err)
 	}
+	thought.Audio = score.ThoughtAudio{Kind: "op1", StartMs: 500, EndMs: 1000}
+	thought.DurationMs = 2000
+	thought.Pages = []score.ThoughtPage{{Text: "循环感想"}}
+	looped, err := Thought(context.Background(), thought, audio, templateDir, workDir, detected.FFmpeg, detected.FFprobe, detected.Edge)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pcm, err := exec.Command(detected.FFmpeg, "-v", "error", "-ss", "1.5", "-i", looped, "-map", "0:a:0", "-t", "0.1", "-f", "s16le", "-").Output()
+	if err != nil || len(pcm) == 0 {
+		t.Fatalf("OP 循环后半段缺少音频：%v", err)
+	}
 }

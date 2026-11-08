@@ -83,9 +83,12 @@ func (a *App) StartRender(project *score.Project, output string, replace bool) (
 		return start, err
 	}
 	selected := make(map[int]bool)
+	selectedThoughts := make(map[string]bool)
 	for _, item := range order {
 		if item.Kind == "song" {
 			selected[item.SongIndex] = true
+		} else if item.Kind == "thought" {
+			selectedThoughts[item.ThoughtID] = true
 		}
 	}
 	for _, problem := range review.Problems {
@@ -144,6 +147,25 @@ func (a *App) StartRender(project *score.Project, output string, replace bool) (
 		return start, fmt.Errorf("部分录像尚未获取，请先配置 yt-dlp 或选择本地文件")
 	}
 	cata, _ := a.catalog()
+	for i := range review.Project.Thoughts {
+		thought := &review.Project.Thoughts[i]
+		if selectedThoughts[thought.ID] && strings.HasPrefix(thought.Audio.Kind, "op") {
+			options, err := a.ThoughtAudioOptions()
+			if err != nil {
+				return start, err
+			}
+			found := false
+			for _, option := range options {
+				if option.Kind == thought.Audio.Kind && option.Available {
+					thought.Audio.Path, found = option.Path, true
+					break
+				}
+			}
+			if !found {
+				return start, fmt.Errorf("所选背景音乐 %s 尚未提供", thought.Audio.Kind)
+			}
+		}
+	}
 	bg, err := resource.LoadBgManifest(filepath.Join(a.dataRoot(), "data", "arcaea-backgrounds.json"))
 	if err != nil {
 		return start, err

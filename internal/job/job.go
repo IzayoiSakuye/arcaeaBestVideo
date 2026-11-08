@@ -128,7 +128,7 @@ func (j *Job) Run(ctx context.Context) (Result, error) {
 			}
 			j.emit(Event{Stage: StageRender, SongIndex: i + 1, Status: StatusRunning, Progress: float64(i) / float64(total), Message: thought.Name})
 			audioPath := thought.Audio.Path
-			if strings.HasPrefix(thought.Audio.Kind, "op") {
+			if strings.HasPrefix(thought.Audio.Kind, "op") && audioPath == "" {
 				audioPath = filepath.Join(j.cfg.Root, "templates", "audio", thought.Audio.Kind+".wav")
 			}
 			if thought.Audio.Kind == "silent" {

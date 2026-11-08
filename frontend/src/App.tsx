@@ -6,6 +6,7 @@ import {
   CheckTool,
   ClearCache,
   CheckResourceUpdate,
+  CheckOPAudioUpdate,
   DownloadVideo,
   Import,
   Jacket,
@@ -20,6 +21,7 @@ import {
   StartRender,
   Status,
   UpdateResources,
+  UpdateOPAudio,
   VideoInfos,
   Version,
 } from '../wailsjs/go/app/App';
@@ -47,6 +49,8 @@ const clearTypes = ['TL', 'NC', 'HC', 'EC', 'FR', 'PM'];
 type LogEntry = Event & { time: string };
 type VideoBatch = { processed: number; total: number; failed: number; running: boolean };
 type ResourceProgress = { downloaded: number; total: number };
+type OPAudioStatus = { audio_version: string; files: { kind: string; size: number; installed: boolean; update_available: boolean }[] };
+type OPAudioProgress = ResourceProgress & { kind: string };
 
 function errorText(error: unknown) {
   return error instanceof Error ? error.message : String(error);
@@ -62,6 +66,12 @@ function App() {
   const [resourceMessage, setResourceMessage] = useState('正在检查资源更新…');
   const [resourceBusy, setResourceBusy] = useState(false);
   const [resourceProgress, setResourceProgress] = useState<ResourceProgress | null>(null);
+  const [opInfo, setOpInfo] = useState<OPAudioStatus | null>(null);
+  const [opMessage, setOpMessage] = useState('');
+  const [opBusy, setOpBusy] = useState('');
+  const [opProgress, setOpProgress] = useState<OPAudioProgress | null>(null);
+  const [checkingResources, setCheckingResources] = useState(false);
+  const [updateFinished, setUpdateFinished] = useState(false);
   const resourceDialog = useRef<HTMLDialogElement>(null);
   const promptedResourceVersion = useRef('');
   const [configSaved, setConfigSaved] = useState(false);
@@ -133,12 +143,7 @@ function App() {
       })
       .catch((error) => setImportError(`环境状态读取失败：${errorText(error)}`));
     Version().then(setVersion).catch(() => setVersion('未知'));
-    CheckResourceUpdate()
-      .then((value) => {
-        setResourceInfo(value);
-        setResourceMessage(value.update_available ? `发现资源版本 ${value.latest_version}` : '资源已是最新版本');
-      })
-      .catch((error) => setResourceMessage(`检查更新失败：${errorText(error)}`));
+    void checkAllResources();
     ThoughtAudioOptions()
       .then(setBgmOptions)
       .catch((error) => setBgmError(errorText(error)))
@@ -159,15 +164,18 @@ function App() {
       }
     });
     const offResource = EventsOn('resource:progress', (value: ResourceProgress) => setResourceProgress(value));
-    return () => { offJob(); offResource(); };
+    const offOP = EventsOn('op:progress', (value: OPAudioProgress) => setOpProgress(value));
+    return () => { offJob(); offResource(); offOP(); };
   }, []);
 
   useEffect(() => {
-    if (page !== 0 || !status || !resourceInfo?.update_available || resourceBusy ||
-      promptedResourceVersion.current === resourceInfo.latest_version) return;
-    promptedResourceVersion.current = resourceInfo.latest_version;
+    const audioAvailable = opInfo?.files.some((file) => file.update_available);
+    const key = `${resourceInfo?.latest_version || ''}/${opInfo?.audio_version || ''}`;
+    if (page !== 0 || !status || resourceBusy || checkingResources || updateFinished ||
+      (!resourceInfo?.update_available && !audioAvailable) || promptedResourceVersion.current === key) return;
+    promptedResourceVersion.current = key;
     resourceDialog.current?.showModal();
-  }, [page, status, resourceInfo, resourceBusy]);
+  }, [page, status, resourceInfo, opInfo, resourceBusy, checkingResources, updateFinished]);
 
   useEffect(() => {
     if (!project) {
@@ -308,22 +316,67 @@ function App() {
   async function refreshStatus() {
     setStatus(await Status());
   }
+  async function checkAllResources() {
+    setCheckingResources(true);
+    const [data, audio] = await Promise.allSettled([CheckResourceUpdate(), CheckOPAudioUpdate()]);
+    if (data.status === 'fulfilled') {
+      setResourceInfo((old) => old?.restart_required ? old : data.value);
+    }
+    if (audio.status === 'fulfilled') {
+      setOpInfo(audio.value);
+    }
+    const available = (data.status === 'fulfilled' && data.value.update_available) ||
+      (audio.status === 'fulfilled' && audio.value.files.some((file) => file.update_available));
+    const errors = [data.status === 'rejected' ? errorText(data.reason) : '',
+      audio.status === 'rejected' ? errorText(audio.reason) : ''].filter(Boolean);
+    setResourceMessage(errors.length ? `检查更新失败：${errors.join('；')}`
+      : available ? '发现可用资源更新' : '资源已是最新版本');
+    setCheckingResources(false);
+  }
   async function updateResources() {
     setResourceBusy(true);
+    setUpdateFinished(false);
     setResourceProgress(null);
+    setOpProgress(null);
     setResourceMessage('正在检查更新…');
+    const failures: string[] = [];
+    let restartRequired = false;
     try {
       const result = await UpdateResources();
       setResourceInfo(result);
-      setResourceMessage(result.restart_required
-        ? `资源 ${result.latest_version} 已安装，重启应用后生效`
-        : '资源已是最新版本');
-      if (!result.restart_required) resourceDialog.current?.close();
+      restartRequired = result.restart_required;
     } catch (error) {
-      setResourceMessage(`资源更新失败：${errorText(error)}；仍可使用原有资源`);
-    } finally {
-      setResourceBusy(false);
+      failures.push(`曲库：${errorText(error)}`);
     }
+    setResourceProgress(null);
+    setOpMessage('正在检查 OP 更新…');
+    try {
+      const audio = await CheckOPAudioUpdate();
+      setOpInfo(audio);
+      const pending = audio.files.filter((file) => file.update_available);
+      for (const [index, file] of pending.entries()) {
+        setOpBusy(file.kind);
+        setOpProgress(null);
+        setOpMessage(`正在更新 ${file.kind.toUpperCase()}（${index + 1}/${pending.length}）`);
+        try {
+          await UpdateOPAudio(file.kind);
+          setOpInfo((old) => old && { ...old, files: old.files.map((item) => item.kind === file.kind ? { ...item, installed: true, update_available: false } : item) });
+        } catch (error) {
+          failures.push(`${file.kind.toUpperCase()}：${errorText(error)}`);
+        }
+      }
+      setBgmOptions(await ThoughtAudioOptions());
+      setBgmError('');
+      setOpMessage(pending.length ? `OP 更新完成：${pending.length - failures.filter((item) => item.startsWith('OP')).length}/${pending.length}` : 'OP 音频已是最新版本');
+    } catch (error) {
+      failures.push(`OP：${errorText(error)}`);
+      setOpMessage(`OP 更新失败：${errorText(error)}`);
+    }
+    setOpBusy('');
+    setResourceBusy(false);
+    setUpdateFinished(true);
+    setResourceMessage(failures.length ? `资源更新失败：${failures.join('；')}；已安装资源可继续使用`
+      : restartRequired ? '资源更新完成，重启应用后生效' : '资源更新完成');
   }
   async function clearCache(includeVideos: boolean) {
     try {
@@ -858,11 +911,15 @@ function App() {
                   <span>已载入 / 数据包共计（首）</span>
                 </div>
                 <div className="rule" />
-                <p>当前资源：{status?.data_version || (status?.data_error ? '未安装' : '应用内置')}；最新资源：{resourceInfo?.latest_version || '—'}</p>
-                <button className="button quiet" disabled={resourceBusy} onClick={updateResources}>
+                <h2>资源更新</h2>
+                <button className="button quiet" disabled={resourceBusy || !!opBusy || checkingResources} onClick={checkAllResources}>
+                  {checkingResources ? '检查中…' : '检查更新'}
+                </button>
+                <button className="button quiet" disabled={resourceBusy || checkingResources} onClick={updateResources}>
                   {resourceBusy ? '更新中…' : '更新资源'}
                 </button>
-                {resourceBusy && resourceProgress && <p>下载中：{(resourceProgress.downloaded / 1048576).toFixed(1)} / {(resourceProgress.total / 1048576).toFixed(1)} MB</p>}
+                {resourceBusy && resourceProgress && !opBusy && <p>下载中：{(resourceProgress.downloaded / 1048576).toFixed(1)} / {(resourceProgress.total / 1048576).toFixed(1)} MB</p>}
+                {resourceBusy && opBusy && <p>{opMessage}{opProgress?.kind === opBusy ? `：${(opProgress.downloaded / 1048576).toFixed(1)} / ${(opProgress.total / 1048576).toFixed(1)} MB` : ''}</p>}
                 {resourceMessage && <div className="notice" role="status">{resourceMessage}</div>}
                 <div className="rule" />
                 <p>清理可重新生成的渲染缓存，不影响已下载录像。</p>
@@ -1715,12 +1772,12 @@ function App() {
       <dialog ref={resourceDialog} className="confirm-dialog" aria-labelledby="resource-update-title" onCancel={(event) => {
         if (resourceBusy) event.preventDefault();
       }}>
-        <h2 id="resource-update-title">{resourceInfo?.restart_required ? '资源更新完成' : '发现资源更新'}</h2>
+        <h2 id="resource-update-title">{updateFinished ? '资源更新结束' : '发现资源更新'}</h2>
         <p>{resourceInfo?.restart_required
           ? '新资源已安装，重启应用后生效。'
-          : `当前版本：${resourceInfo?.current_version || '未安装'}；最新版本：${resourceInfo?.latest_version || '—'}。`}</p>
-        {resourceBusy && !resourceProgress && <p role="status">正在检查更新…</p>}
-        {resourceBusy && resourceProgress && (
+          : `曲库：${resourceInfo?.update_available ? `发现版本 ${resourceInfo.latest_version}` : '已是最新'}；OP：${opInfo?.files.filter((file) => file.update_available).length || 0} 首待更新。`}</p>
+        {resourceBusy && !resourceProgress && !opBusy && <p role="status">正在检查更新…</p>}
+        {resourceBusy && resourceProgress && !opBusy && (
           <div className="resource-download" role="status">
             <span>{resourceProgress.total > 0 && resourceProgress.downloaded >= resourceProgress.total
               ? '下载完成，正在安装…'
@@ -1728,12 +1785,16 @@ function App() {
             <div className="progress-track"><div style={{ width: `${resourceProgress.total > 0 ? Math.min(100, resourceProgress.downloaded / resourceProgress.total * 100) : 0}%` }} /></div>
           </div>
         )}
+        {opBusy && <div className="resource-download" role="status">
+          <span>{opMessage}{opProgress?.kind === opBusy ? `：${(opProgress.downloaded / 1048576).toFixed(1)} / ${(opProgress.total / 1048576).toFixed(1)} MB` : ''}</span>
+          {opProgress?.kind === opBusy && <div className="progress-track"><div style={{ width: `${opProgress.total > 0 ? Math.min(100, opProgress.downloaded / opProgress.total * 100) : 0}%` }} /></div>}
+        </div>}
         {resourceMessage.startsWith('资源更新失败：') && <div className="notice bad" role="alert">{resourceMessage}</div>}
         <div className="confirm-actions">
           <button className="button quiet" disabled={resourceBusy} onClick={() => resourceDialog.current?.close()}>
-            {resourceInfo?.restart_required ? '关闭' : '稍后'}
+            {updateFinished ? '关闭' : '稍后'}
           </button>
-          {!resourceInfo?.restart_required && <button className="button primary" disabled={resourceBusy} onClick={updateResources}>
+          {!updateFinished && <button className="button primary" disabled={resourceBusy} onClick={updateResources}>
             {resourceBusy ? '更新中…' : '更新资源'}
           </button>}
         </div>

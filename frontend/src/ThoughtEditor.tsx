@@ -41,10 +41,10 @@ export default function ThoughtEditor({ draft, saved, options, optionsLoading, o
   const draftVersion = useRef(0);
 
   useEffect(() => {
-    if (draft.audio.kind === 'silent') {
-      setMedia(null);
+    if (draft.audio.kind === 'silent' || draft.audio.kind.startsWith('op')) {
+      if (draft.audio.kind === 'silent') setMedia(null);
       setSilentDuration(formatClipTime(draft.duration_ms / 1000));
-      return;
+      if (draft.audio.kind === 'silent') return;
     }
     const option = options.find((item) => item.kind === draft.audio.kind && item.available);
     if (option) setMedia(option);
@@ -102,8 +102,8 @@ export default function ThoughtEditor({ draft, saved, options, optionsLoading, o
   const railStart = Math.min(start ?? draft.audio.start_ms / 1000, end ?? draft.audio.end_ms / 1000);
   const railEnd = Math.max(start ?? draft.audio.start_ms / 1000, end ?? draft.audio.end_ms / 1000);
   const durationValue = parseClipTime(silentDuration);
-  const durationError = draft.audio.kind === 'silent' && (durationValue === null || durationValue < 1 || durationValue > 600)
-    ? '静音片段时长须为 0:01 到 10:00' : '';
+  const durationError = (draft.audio.kind === 'silent' || draft.audio.kind.startsWith('op')) && (durationValue === null || durationValue < 1 || durationValue > 600)
+    ? '片段时长须为 0:01 到 10:00' : '';
   const formError = !draft.name.trim() ? '请填写片段名称'
     : draft.pages.some((page) => !page.text.trim()) ? '每段感想文字都需要填写'
     : draft.pages.length > 20 ? '最多添加 20 段文字'
@@ -116,7 +116,8 @@ export default function ThoughtEditor({ draft, saved, options, optionsLoading, o
     if (draft.audio.kind === 'silent') return { ...draft, duration_ms: Math.round((durationValue || 0) * 1000) };
     const startMs = Math.round((start || 0) * 1000);
     const endMs = Math.round((end || 0) * 1000);
-    return { ...draft, duration_ms: endMs - startMs, audio: { ...draft.audio, start_ms: startMs, end_ms: endMs } };
+    return { ...draft, duration_ms: draft.audio.kind.startsWith('op') ? Math.round((durationValue || 0) * 1000) : endMs - startMs,
+      audio: { ...draft.audio, start_ms: startMs, end_ms: endMs } };
   }
 
   function change(next: ThoughtDraft) {
@@ -138,7 +139,7 @@ export default function ThoughtEditor({ draft, saved, options, optionsLoading, o
     const endMs = Math.round(endSeconds * 1000);
     setAudioStart(formatClipTime(startSeconds));
     setAudioEnd(formatClipTime(endSeconds));
-    change({ ...draft, duration_ms: Math.max(0, endMs - startMs), audio: { ...draft.audio, start_ms: startMs, end_ms: endMs } });
+    change({ ...draft, duration_ms: draft.audio.kind.startsWith('op') ? draft.duration_ms : Math.max(0, endMs - startMs), audio: { ...draft.audio, start_ms: startMs, end_ms: endMs } });
   }
   async function chooseAudio() {
     setAudioLoading(true);
@@ -216,7 +217,7 @@ export default function ThoughtEditor({ draft, saved, options, optionsLoading, o
           const kind = e.target.value;
           if (kind === 'silent') { setMedia(null); change({ ...draft, audio: { kind, start_ms: 0, end_ms: 0 } }); return; }
           const option = options.find((item) => item.kind === kind && item.available);
-          if (option) { const endMs = Math.min(option.duration_ms, 30000); setMedia(option); setAudioStart('0:00'); setAudioEnd(formatClipTime(endMs / 1000)); change({ ...draft, duration_ms: endMs, audio: { kind, start_ms: 0, end_ms: endMs } }); }
+          if (option) { const endMs = Math.min(option.duration_ms, 30000); setMedia(option); setAudioStart('0:00'); setAudioEnd(formatClipTime(endMs / 1000)); setSilentDuration(formatClipTime(endMs / 1000)); change({ ...draft, duration_ms: endMs, audio: { kind, start_ms: 0, end_ms: endMs } }); }
           else { setMedia(null); change({ ...draft, audio: { kind, start_ms: 0, end_ms: 0 } }); }
         }}>
           <option value="silent">静音</option>
@@ -239,10 +240,10 @@ export default function ThoughtEditor({ draft, saved, options, optionsLoading, o
           <label className="field">结束时间<input value={audioEnd} onChange={(e) => setAudioEnd(e.target.value)} onBlur={() => { const value = parseClipTime(audioEnd); if (value !== null) updateRange(draft.audio.start_ms / 1000, value); }} /></label>
         </div>
       </>}
-      {draft.audio.kind === 'silent' && <label className="field full">静音片段时长
+      {(draft.audio.kind === 'silent' || draft.audio.kind.startsWith('op')) && <label className="field full">片段时长
         <input value={silentDuration} onChange={(e) => setSilentDuration(e.target.value)} onBlur={() => { const value = parseClipTime(silentDuration); if (value !== null) change({ ...draft, duration_ms: Math.round(value * 1000) }); }} />
       </label>}
-      <p className="muted">片段时长：{formatClipTime(seconds)}{draft.audio.kind !== 'silent' ? '（跟随音频截取范围）' : ''}</p>
+      <p className="muted">片段时长：{formatClipTime(seconds)}{draft.audio.kind.startsWith('op') ? '（音频循环播放）' : draft.audio.kind === 'custom' ? '（跟随音频截取范围）' : ''}</p>
       {formError && <div className="notice warn">{formError}</div>}
       {error && <div className="notice bad" role="alert">{error}</div>}
       <div className={`thought-save-status ${savedCurrent ? 'saved' : ''}`} role="status">

@@ -16,6 +16,7 @@ type App struct {
 	dataVersion      string
 	dataDigest       string
 	resourceUpdating bool
+	opUpdating       bool
 	mu               sync.Mutex
 	jobID            string
 	cancel           context.CancelFunc
