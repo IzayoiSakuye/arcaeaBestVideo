@@ -62,6 +62,8 @@ function App() {
   const [resourceMessage, setResourceMessage] = useState('正在检查资源更新…');
   const [resourceBusy, setResourceBusy] = useState(false);
   const [resourceProgress, setResourceProgress] = useState<ResourceProgress | null>(null);
+  const resourceDialog = useRef<HTMLDialogElement>(null);
+  const promptedResourceVersion = useRef('');
   const [configSaved, setConfigSaved] = useState(false);
   const clearCacheDialog = useRef<HTMLDialogElement>(null);
   const [checks, setChecks] = useState<
@@ -159,6 +161,13 @@ function App() {
     const offResource = EventsOn('resource:progress', (value: ResourceProgress) => setResourceProgress(value));
     return () => { offJob(); offResource(); };
   }, []);
+
+  useEffect(() => {
+    if (page !== 0 || !status || !resourceInfo?.update_available || resourceBusy ||
+      promptedResourceVersion.current === resourceInfo.latest_version) return;
+    promptedResourceVersion.current = resourceInfo.latest_version;
+    resourceDialog.current?.showModal();
+  }, [page, status, resourceInfo, resourceBusy]);
 
   useEffect(() => {
     if (!project) {
@@ -309,6 +318,7 @@ function App() {
       setResourceMessage(result.restart_required
         ? `资源 ${result.latest_version} 已安装，重启应用后生效`
         : '资源已是最新版本');
+      if (!result.restart_required) resourceDialog.current?.close();
     } catch (error) {
       setResourceMessage(`资源更新失败：${errorText(error)}；仍可使用原有资源`);
     } finally {
@@ -1700,6 +1710,32 @@ function App() {
             clearCacheDialog.current?.close();
             void clearCache(true);
           }}>确认清理</button>
+        </div>
+      </dialog>
+      <dialog ref={resourceDialog} className="confirm-dialog" aria-labelledby="resource-update-title" onCancel={(event) => {
+        if (resourceBusy) event.preventDefault();
+      }}>
+        <h2 id="resource-update-title">{resourceInfo?.restart_required ? '资源更新完成' : '发现资源更新'}</h2>
+        <p>{resourceInfo?.restart_required
+          ? '新资源已安装，重启应用后生效。'
+          : `当前版本：${resourceInfo?.current_version || '未安装'}；最新版本：${resourceInfo?.latest_version || '—'}。`}</p>
+        {resourceBusy && !resourceProgress && <p role="status">正在检查更新…</p>}
+        {resourceBusy && resourceProgress && (
+          <div className="resource-download" role="status">
+            <span>{resourceProgress.total > 0 && resourceProgress.downloaded >= resourceProgress.total
+              ? '下载完成，正在安装…'
+              : `下载中：${(resourceProgress.downloaded / 1048576).toFixed(1)} / ${(resourceProgress.total / 1048576).toFixed(1)} MB`}</span>
+            <div className="progress-track"><div style={{ width: `${resourceProgress.total > 0 ? Math.min(100, resourceProgress.downloaded / resourceProgress.total * 100) : 0}%` }} /></div>
+          </div>
+        )}
+        {resourceMessage.startsWith('资源更新失败：') && <div className="notice bad" role="alert">{resourceMessage}</div>}
+        <div className="confirm-actions">
+          <button className="button quiet" disabled={resourceBusy} onClick={() => resourceDialog.current?.close()}>
+            {resourceInfo?.restart_required ? '关闭' : '稍后'}
+          </button>
+          {!resourceInfo?.restart_required && <button className="button primary" disabled={resourceBusy} onClick={updateResources}>
+            {resourceBusy ? '更新中…' : '更新资源'}
+          </button>}
         </div>
       </dialog>
       {page !== 5 && page !== 6 && (
