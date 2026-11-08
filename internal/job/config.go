@@ -9,6 +9,7 @@ type Config struct {
 	Output      string
 	Root        string
 	DataDir     string
+	CacheDir    string
 	WorkDir     string
 	ClipsDir    string
 	Force       bool

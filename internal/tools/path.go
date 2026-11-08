@@ -158,6 +158,11 @@ func detectOne(s spec, override string) Status {
 	if try(override, "override") {
 		return st
 	}
+	if exe, err := os.Executable(); err == nil {
+		if try(filepath.Join(filepath.Dir(exe), "tools", s.exe), "bundled") {
+			return st
+		}
+	}
 
 	if dir := toolsDir(); dir != "" {
 		if try(filepath.Join(dir, s.exe), "bundled") {

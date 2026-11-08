@@ -1,5 +1,22 @@
 # Build Directory
 
+## Windows 安装包
+
+在仓库根目录执行。`data/` 是本机生成或从资源发行包安装的产物，不提交 Git；制作安装包前必须确认它已齐备。
+
+```powershell
+wails build
+node scripts/build-ocr.ts
+New-Item -ItemType Directory -Force build/bin/tools | Out-Null
+Copy-Item (Get-Command ffmpeg.exe).Source build/bin/tools/ffmpeg.exe
+Copy-Item (Get-Command ffprobe.exe).Source build/bin/tools/ffprobe.exe
+wails build -nsis
+```
+
+`makensis.exe` 需要位于 PATH。如果 NSIS 安装在 `E:\NSIS`，先在当前 PowerShell 会话执行 `$env:Path = 'E:\NSIS;' + $env:Path`。
+
+安装器收录 `templates/`（不含 OP WAV）、`data/arcaea-catalog.json`、`data/arcaea-backgrounds.json`、256px 曲绘、960px 背景、`build/bin/ocr/` 和 `build/bin/tools/` 中的 FFmpeg/FFprobe。NSIS 缺文件时会直接构建失败。`yt-dlp` 按项目约定不进安装包，用户需要在设置中配置；YouTube 下载还依赖用户机器上的 Node。资源更新和 OP 音频由应用下载到用户缓存目录。发布前在干净 Windows 环境安装并验证导入、资源更新、录像下载和导出。
+
 ## 成绩图文字 OCR（Windows）
 
 构建机需要 Python 3.12 和 Node 26。执行 `wails build` 后运行

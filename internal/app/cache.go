@@ -16,7 +16,7 @@ func (a *App) ClearCache(includeVideos bool) error {
 	if a.jobID != "" || a.videoCancel != nil || a.resourceUpdating || a.opUpdating {
 		return fmt.Errorf("生成或下载进行中，无法清理缓存")
 	}
-	cache := filepath.Join(a.root, ".cache")
+	cache := a.cacheDir()
 	names := []string{"pipeline", "thought"}
 	if includeVideos {
 		names = append(names, "clips")

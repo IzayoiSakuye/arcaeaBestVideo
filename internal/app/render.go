@@ -186,7 +186,7 @@ func (a *App) StartRender(project *score.Project, output string, replace bool) (
 
 	j := job.NewJob(job.Deps{Catalog: cata, Bg: bg, Tools: tls}, job.Config{
 		Project: review.Project, Output: output, Root: a.root, DataDir: filepath.Join(a.dataRoot(), "data"),
-		WorkDir: filepath.Join(a.root, ".cache", "pipeline"), ClipsDir: filepath.Join(a.root, ".cache", "clips"),
+		CacheDir: a.cacheDir(), WorkDir: filepath.Join(a.cacheDir(), "pipeline"), ClipsDir: filepath.Join(a.cacheDir(), "clips"),
 	}, func(ev job.Event) {
 		if ev.Stage == job.StageDone {
 			a.finishRender(start.JobID)

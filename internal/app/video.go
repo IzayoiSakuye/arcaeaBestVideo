@@ -75,7 +75,7 @@ func (a *App) videoInfo(cata *catalog.Catalog, song score.Song) VideoState {
 				}
 			}
 		}
-		if path := resource.VideoCachePath(filepath.Join(a.root, ".cache", "clips"), song.SongID, song.Difficulty.Name, state.URL); fileReady(path) {
+		if path := resource.VideoCachePath(filepath.Join(a.cacheDir(), "clips"), song.SongID, song.Difficulty.Name, state.URL); fileReady(path) {
 			state.Status = "ready"
 			state.PreviewURL = a.previewURL(path)
 		} else {
@@ -91,7 +91,7 @@ func (a *App) videoInfo(cata *catalog.Catalog, song score.Song) VideoState {
 		if state.URL == "" {
 			state.URL, state.OwnerName, state.Status = source.URL, source.OwnerName, "download"
 		}
-		path := resource.VideoCachePath(filepath.Join(a.root, ".cache", "clips"), song.SongID, song.Difficulty.Name, source.URL)
+		path := resource.VideoCachePath(filepath.Join(a.cacheDir(), "clips"), song.SongID, song.Difficulty.Name, source.URL)
 		if fileReady(path) {
 			state.URL, state.OwnerName, state.Status = source.URL, source.OwnerName, "ready"
 			state.PreviewURL = a.previewURL(path)
@@ -99,7 +99,7 @@ func (a *App) videoInfo(cata *catalog.Catalog, song score.Song) VideoState {
 		}
 	}
 	if state.Status != "ready" {
-		if legacy, err := resource.ClipPath(filepath.Join(a.root, ".cache", "clips"), song.SongID, song.Difficulty.Name); err == nil && fileReady(legacy) {
+		if legacy, err := resource.ClipPath(filepath.Join(a.cacheDir(), "clips"), song.SongID, song.Difficulty.Name); err == nil && fileReady(legacy) {
 			state.Status = "legacy"
 			state.PreviewURL = a.previewURL(legacy)
 		}
@@ -277,7 +277,7 @@ func (a *App) DownloadVideo(song score.Song) (VideoState, error) {
 			return state, fmt.Errorf("录像获取已停止：%w", err)
 		}
 		_, fetchedOwner, err := resource.DownloadVideo(ctx, resolved.YtDlp, resolved.FFmpeg, resolved.FFprobe,
-			filepath.Join(a.root, ".cache", "clips"), song.SongID, song.Difficulty.Name, source.URL)
+			filepath.Join(a.cacheDir(), "clips"), song.SongID, song.Difficulty.Name, source.URL)
 		if err == nil {
 			if source.OwnerName == "" {
 				source.OwnerName = fetchedOwner

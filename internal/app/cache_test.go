@@ -36,3 +36,26 @@ func TestClearCachePreservesVideosUnlessRequested(t *testing.T) {
 		t.Fatalf("录像缓存应已删除：%v", err)
 	}
 }
+
+func TestClearCacheUsesWritableCacheDirectory(t *testing.T) {
+	root := t.TempDir()
+	cache := t.TempDir()
+	for _, path := range []string{filepath.Join(root, ".cache", "pipeline", "old"), filepath.Join(cache, "pipeline", "current")} {
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte("test"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	a := &App{root: root, cacheRoot: cache}
+	if err := a.ClearCache(false); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(cache, "pipeline")); !os.IsNotExist(err) {
+		t.Fatalf("用户缓存应被清理：%v", err)
+	}
+	if _, err := os.Stat(filepath.Join(root, ".cache", "pipeline", "old")); err != nil {
+		t.Fatalf("安装目录不应被修改：%v", err)
+	}
+}

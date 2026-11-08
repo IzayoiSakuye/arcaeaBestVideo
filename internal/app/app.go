@@ -12,6 +12,7 @@ import (
 type App struct {
 	ctx              context.Context
 	root             string
+	cacheRoot        string
 	resourceRoot     string
 	dataVersion      string
 	dataDigest       string
@@ -37,10 +38,22 @@ func New() *App {
 		}
 	}
 	a := &App{root: root}
+	if dir, err := os.UserCacheDir(); err == nil {
+		a.cacheRoot = filepath.Join(dir, "rhythm-game-bvideo", "work")
+	} else {
+		a.cacheRoot = filepath.Join(os.TempDir(), "rhythm-game-bvideo", "work")
+	}
 	if store, err := resourceStoreDir(); err == nil {
 		a.resourceRoot, a.dataVersion, a.dataDigest = installedResource(store)
 	}
 	return a
+}
+
+func (a *App) cacheDir() string {
+	if a.cacheRoot != "" {
+		return a.cacheRoot
+	}
+	return filepath.Join(a.root, ".cache")
 }
 
 func findRoot(start string) string {

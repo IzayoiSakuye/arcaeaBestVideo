@@ -64,10 +64,17 @@ func NewJob(deps Deps, cfg Config, emit func(Event)) *Job {
 	return &Job{deps: deps, cfg: cfg, emit: emit}
 }
 
+func (j *Job) cacheDir() string {
+	if j.cfg.CacheDir != "" {
+		return j.cfg.CacheDir
+	}
+	return filepath.Join(j.cfg.Root, ".cache")
+}
+
 // normalize 把所有路径绝对化
 func (j *Job) normalize() error {
 	for _, p := range []*string{
-		&j.cfg.Root, &j.cfg.DataDir, &j.cfg.WorkDir, &j.cfg.ClipsDir, &j.cfg.ProjectPath, &j.cfg.Output,
+		&j.cfg.Root, &j.cfg.DataDir, &j.cfg.CacheDir, &j.cfg.WorkDir, &j.cfg.ClipsDir, &j.cfg.ProjectPath, &j.cfg.Output,
 	} {
 		if *p == "" {
 			continue
@@ -134,7 +141,7 @@ func (j *Job) Run(ctx context.Context) (Result, error) {
 			if thought.Audio.Kind == "silent" {
 				audioPath = ""
 			}
-			seg, err := render.Thought(ctx, thought, audioPath, filepath.Join(j.cfg.Root, "templates"), filepath.Join(j.cfg.Root, ".cache", "thought"), j.deps.Tools.FFmpeg, j.deps.Tools.FFprobe, j.deps.Tools.Edge)
+			seg, err := render.Thought(ctx, thought, audioPath, filepath.Join(j.cfg.Root, "templates"), filepath.Join(j.cacheDir(), "thought"), j.deps.Tools.FFmpeg, j.deps.Tools.FFprobe, j.deps.Tools.Edge)
 			if err != nil {
 				return res, fmt.Errorf("第 %d 个感想生成失败：%w", i+1, err)
 			}

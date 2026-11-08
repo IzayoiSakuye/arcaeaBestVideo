@@ -210,7 +210,7 @@ func (a *App) RenderThought(thought score.Thought) (ThoughtPreview, error) {
 			}
 		}
 	}
-	output, err := render.Thought(a.context(), thought, audioPath, filepath.Join(a.root, "templates"), filepath.Join(a.root, ".cache", "thought"), tls.FFmpeg, tls.FFprobe, tls.Edge)
+	output, err := render.Thought(a.context(), thought, audioPath, filepath.Join(a.root, "templates"), filepath.Join(a.cacheDir(), "thought"), tls.FFmpeg, tls.FFprobe, tls.Edge)
 	if err != nil {
 		return ThoughtPreview{}, err
 	}

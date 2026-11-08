@@ -96,6 +96,25 @@ Section
 
     !insertmacro wails.files
 
+    SetOutPath "$INSTDIR\templates"
+    File /r /x *.wav /x *.pkf "..\..\..\templates\*"
+
+    SetOutPath "$INSTDIR\data"
+    File "..\..\..\data\arcaea-catalog.json"
+    File "..\..\..\data\arcaea-backgrounds.json"
+    SetOutPath "$INSTDIR\data\jackets\256"
+    File "..\..\..\data\jackets\256\*.jpg"
+    SetOutPath "$INSTDIR\data\backgrounds\960"
+    File "..\..\..\data\backgrounds\960\*.jpg"
+
+    SetOutPath "$INSTDIR\ocr"
+    File /r "..\..\bin\ocr\*"
+
+    SetOutPath "$INSTDIR\tools"
+    File "..\..\bin\tools\ffmpeg.exe"
+    File "..\..\bin\tools\ffprobe.exe"
+    SetOutPath $INSTDIR
+
     CreateShortcut "$SMPROGRAMS\${INFO_PRODUCTNAME}.lnk" "$INSTDIR\${PRODUCT_EXECUTABLE}"
     CreateShortCut "$DESKTOP\${INFO_PRODUCTNAME}.lnk" "$INSTDIR\${PRODUCT_EXECUTABLE}"
 

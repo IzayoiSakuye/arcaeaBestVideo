@@ -97,7 +97,7 @@ func (j *Job) renderOne(ctx context.Context, i int, s score.Song) (string, Rende
 	t = time.Now()
 	if err := render.RenderText(ctx, val, j.deps.Tools.Edge,
 		textHTML,
-		filepath.Join(root, ".cache/edge-profile"),
+		filepath.Join(j.cacheDir(), "edge-profile"),
 		textPng); err != nil {
 		return "", d, false, err
 	}
