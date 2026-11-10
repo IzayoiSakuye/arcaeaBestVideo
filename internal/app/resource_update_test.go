@@ -84,7 +84,7 @@ func TestManifestRejectsUnsafePath(t *testing.T) {
 
 func TestReleaseAPIManifestAndProxyArchiveURLs(t *testing.T) {
 	hash := hex.EncodeToString(make([]byte, 32))
-	m := resourceManifest{SchemaVersion: 1, Game: "arcaea", DataVersion: "2026.11.01"}
+	m := resourceManifest{SchemaVersion: 1, Game: "arcaea", DataVersion: "7.1.0"}
 	m.Archive.URL = "https://github.com/owner/repo/releases/download/tag/data.zip"
 	m.Archive.Path = "data.zip"
 	m.Archive.Size = 10
@@ -131,9 +131,30 @@ func TestR2ResourceSource(t *testing.T) {
 		t.Fatalf("默认清单地址 = %s", got)
 	}
 	m := resourceManifest{sourceURL: resourceR2ManifestURL}
-	m.Archive.Path = "data-2026.11.01.zip"
+	m.Archive.Path = "data-v7.1.0.zip"
 	m.Archive.URL = strings.TrimSuffix(resourceR2ManifestURL, "latest.json") + m.Archive.Path
 	if got := resourceArchiveURLs(m); len(got) != 1 || got[0] != m.Archive.URL {
 		t.Fatalf("R2 归档地址 = %v", got)
+	}
+}
+
+func TestResourceGameVersionUpgrade(t *testing.T) {
+	for _, tc := range []struct {
+		old, next string
+	}{
+		{"2026.11.01", "7.1.0"},
+		{"7.1.0", "7.1.0.1"},
+		{"7.1.0.1", "7.1.1"},
+	} {
+		if compareResourceVersion(tc.old, tc.next) >= 0 || compareResourceVersion(tc.next, tc.old) <= 0 {
+			t.Fatalf("版本顺序错误：%s → %s", tc.old, tc.next)
+		}
+	}
+	if !resourceVersionPattern.MatchString("7.1.0") || !resourceVersionPattern.MatchString("7.1.0.1") || resourceVersionPattern.MatchString("7.01.0") {
+		t.Fatal("游戏版本格式校验错误")
+	}
+	m := resourceManifest{DataVersion: "7.1.0"}
+	if !resourceAvailable(m, "2026.11.01", "") {
+		t.Fatal("旧日期版本未检测到更新")
 	}
 }

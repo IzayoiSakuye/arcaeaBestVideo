@@ -30,7 +30,8 @@ const resourceReleaseAPI = "https://api.github.com/repos/IzayoiSakuye/arcaea-b50
 
 var resourceZipProxies = []string{"https://ghfast.top/", "https://gh-proxy.org/"}
 
-var resourceVersionPattern = regexp.MustCompile(`^\d{4}\.\d{2}\.\d{2}(?:\.\d+)?$`)
+var resourceVersionPattern = regexp.MustCompile(`^(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:\.(?:0|[1-9]\d*))?$`)
+var legacyResourceVersionPattern = regexp.MustCompile(`^\d{4}\.\d{2}\.\d{2}(?:\.\d+)?$`)
 
 type resourceManifest struct {
 	SchemaVersion int    `json:"schema_version"`
@@ -100,7 +101,7 @@ func validResourcePath(p string) bool {
 }
 
 func (m resourceManifest) validate() error {
-	if m.SchemaVersion != 1 || m.Game != "arcaea" || !resourceVersionPattern.MatchString(m.DataVersion) {
+	if m.SchemaVersion != 1 || m.Game != "arcaea" || !(resourceVersionPattern.MatchString(m.DataVersion) || legacyResourceVersionPattern.MatchString(m.DataVersion)) {
 		return fmt.Errorf("资源清单版本或游戏不受支持")
 	}
 	u, err := url.Parse(m.Archive.URL)
@@ -254,6 +255,13 @@ func readManifestFromReleaseAPI(ctx context.Context, client *http.Client, endpoi
 }
 
 func compareResourceVersion(a, b string) int {
+	// 旧版日期号必须排在游戏版本号之前，才能从已安装资源升级。
+	if oldA, oldB := legacyResourceVersionPattern.MatchString(a), legacyResourceVersionPattern.MatchString(b); oldA != oldB {
+		if oldA {
+			return -1
+		}
+		return 1
+	}
 	aa, bb := strings.Split(a, "."), strings.Split(b, ".")
 	for i := 0; i < 4; i++ {
 		var x, y int
