@@ -952,10 +952,10 @@ function App() {
                     {importPath
                       ? nameOf(importPath)
                       : importMode === 'image'
-                        ? '选择一张 B50 成绩图'
+                        ? '选择 B50 成绩图'
                         : '选择 JSON 文件'}
                   </strong>
-                  {importMode === 'json' && <small>也可以在下方直接粘贴 JSON</small>}
+                  {importMode === 'json'}
                   <button className="button quiet" onClick={chooseImport}>
                     选择文件
                   </button>
@@ -969,7 +969,7 @@ function App() {
                         setJsonText(event.target.value);
                         setImportPath('');
                       }}
-                      placeholder="在此粘贴成绩 JSON…"
+                      placeholder="在此粘贴成绩 JSON"
                       rows={7}
                     />
                   </label>
@@ -1046,7 +1046,7 @@ function App() {
                     <div className="download-footer">
                       <span>
                         {videoBatch.running
-                          ? `正在逐首获取完整录像${manualCount ? `；${manualCount} 首需手动处理` : ''}`
+                          ? `正在获取曲目完整录像${manualCount ? `；${manualCount} 首需手动处理` : ''}`
                           : stopVideoBatch.current
                             ? `已停止，已处理 ${videoBatch.processed} 首${manualCount ? `；${manualCount} 首需手动处理` : ''}`
                           : videoBatch.total === 0
@@ -1063,7 +1063,7 @@ function App() {
                           disabled={reviewPending || videoBusy || retryableVideos.length === 0}
                           onClick={() => review?.project && void downloadAllVideos(review.project)}
                         >
-                          重新获取未就绪
+                          重新获取
                         </button>
                       )}
                     </div>
@@ -1093,7 +1093,7 @@ function App() {
                 {!videoBusy && !autoVideoPending.current && missingVideos.length > 0 && (
                   <section className="card pending-summary">
                     <h2>
-                      待补录像 <span>{missingVideos.length} 首</span>
+                      待补充录像 <span>{missingVideos.length} 首</span>
                     </h2>
                     <div className="problem-chips">
                       {missingVideos.map((state) => (
@@ -1129,7 +1129,7 @@ function App() {
                       checked={onlyProblems}
                       onChange={(event) => setOnlyProblems(event.target.checked)}
                     />{' '}
-                    只看问题行
+                    只看有问题的曲目
                   </label>
                   <div className="spacer" />
                   <button className="button quiet" onClick={() => stepSong(-1)}>
@@ -1169,7 +1169,7 @@ function App() {
                           <input
                             value={search}
                             onChange={(event) => setSearch(event.target.value)}
-                            placeholder={song.song_id || '搜索歌名或 song_id'}
+                            placeholder={song.song_id || '搜索歌名或id'}
                           />
                         </div>
                         {choices.length > 0 && (
@@ -1340,9 +1340,9 @@ function App() {
                               item.user.comment = event.target.value;
                             })
                           }
-                          placeholder="写下关于这首歌的回忆…"
+                          placeholder="言って"
                         />
-                        <small className="comment-hint">默认 44px，约 36 个汉字/行；文字在面板内垂直居中，行数过多时自动缩小字号，最低 18px。过长仍可能超出画面，请删减文字。回车会保留换行。</small>
+                        <small className="comment-hint">AI酱提醒您：字体大小默认 44px，约 36 字/行；文字在面板内垂直居中，行数过多时支持自动缩小字号，过长仍可能超出画面。回车会保留换行。</small>
                       </label>
                     </div>
                   </section>
@@ -1401,7 +1401,7 @@ function App() {
                             : currentVideo?.status === 'download'
                             ? '可获取录像'
                             : currentVideo?.status === 'invalid'
-                              ? '链接无效，请修改'
+                              ? '链接无效'
                               : '暂无可预览录像'}
                         </div>
                       )}
@@ -1450,7 +1450,7 @@ function App() {
                               }} />
                           </div>
                           <div className="clip-times">
-                            <label className="field">开始时间（分:秒）
+                            <label className="field">开始时间
                               <input type="text" inputMode="decimal" value={clipStartText} placeholder="0:00"
                                 onChange={(event) => {
                                   const value = event.target.value;
@@ -1463,7 +1463,7 @@ function App() {
                                   if (start !== null) setClipStartText(formatClipTime(start));
                                 }} />
                             </label>
-                            <label className="field">结束时间（分:秒）
+                            <label className="field">结束时间
                               <input type="text" inputMode="decimal" value={clipEndText} placeholder="0:10"
                                 onChange={(event) => {
                                   setClipEndText(event.target.value);
@@ -1494,7 +1494,6 @@ function App() {
                           value={videoLink}
                           onChange={(event) => setVideoLink(event.target.value)}
                           disabled={videoBusy}
-                          placeholder="粘贴 B站或 YouTube 视频链接"
                         />
                       </label>
                       {currentVideo?.status === 'missing' && !currentSongVideo?.local_path && currentDiff && (
@@ -1582,7 +1581,7 @@ function App() {
                         ))}
                         {!ownProblems.length &&
                           !ownNotes.some((note) => !acknowledgedNotes.includes(note.index)) && (
-                            <p className="muted">本首暂无待校对问题</p>
+                            <p className="muted">本首暂无问题</p>
                           )}
                       </div>
                     </section>
@@ -1613,7 +1612,7 @@ function App() {
                                 className="button text"
                                 onClick={() => toggleNote(note.index)}
                               >
-                                {acknowledgedNotes.includes(note.index) ? '撤销核对' : '标记已核对'}
+                                {acknowledgedNotes.includes(note.index) ? '撤销核对' : '已核对'}
                               </button>
                             </div>
                           ))}
@@ -1627,7 +1626,7 @@ function App() {
               <section className="card placeholder">
                 <span className="placeholder-symbol">⌑</span>
                 <h2>尚无成绩</h2>
-                <p>请先在「导入图片 / JSON」导入一份成绩。</p>
+                <p>请先在「导入图片 / JSON」选项卡导入成绩。</p>
                 <button className="button primary" onClick={() => setPage(0)}>
                   前往导入
                 </button>
@@ -1641,8 +1640,8 @@ function App() {
                 <div className="output-picker">
                   <div>
                     <span>输出文件</span>
-                    <strong>{output ? nameOf(output) : '尚未选择 MP4 路径'}</strong>
-                    <small title={output}>{output || '开始生成前请选择保存位置'}</small>
+                    <strong>{output ? nameOf(output) : '尚未选择保存位置'}</strong>
+                    <small title={output}>{output || ''}</small>
                   </div>
                   <button className="button quiet" onClick={pickOutput} disabled={active}>
                     选择路径
@@ -1683,7 +1682,7 @@ function App() {
                 </div>
                 {!project && <div className="notice warn">请先导入并校对成绩。</div>}
                 {review && !review.renderable && (
-                  <div className="notice warn">成绩存在 fatal 问题，请先在「识别信息」校对。</div>
+                  <div className="notice warn">成绩存在问题，请在「识别信息」选项卡校对。</div>
                 )}
                 {renderError && (
                   <div className="notice bad" role="alert">
@@ -1704,7 +1703,7 @@ function App() {
                       </div>
                     ))
                   ) : (
-                    <div className="log-empty">生成开始后，这里会显示实际任务事件。</div>
+                    <div className="log-empty">这里可以看到生成进度喵</div>
                   )}
                 </div>
               </aside>
@@ -1717,7 +1716,6 @@ function App() {
                 <div className="completion-icon">✓</div>
                 <span className="eyebrow">RENDER COMPLETE</span>
                 <h2>视频已生成</h2>
-                <p>成片已保存到所选位置。</p>
                 <div className="completed-file">
                   <span>MP4 文件</span>
                   <strong>{nameOf(finished)}</strong>
@@ -1742,7 +1740,6 @@ function App() {
               <section className="card placeholder">
                 <span className="placeholder-symbol">✓</span>
                 <h2>尚无完成的视频</h2>
-                <p>生成成功后，成片信息会显示在这里。</p>
               </section>
             ))}
         </main>

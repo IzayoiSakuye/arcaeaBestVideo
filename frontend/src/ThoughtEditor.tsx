@@ -105,12 +105,12 @@ export default function ThoughtEditor({ draft, saved, options, optionsLoading, o
   const durationError = (draft.audio.kind === 'silent' || draft.audio.kind.startsWith('op')) && (durationValue === null || durationValue < 1 || durationValue > 600)
     ? '片段时长须为 0:01 到 10:00' : '';
   const formError = !draft.name.trim() ? '请填写片段名称'
-    : draft.pages.some((page) => !page.text.trim()) ? '每段感想文字都需要填写'
+    : draft.pages.some((page) => !page.text.trim()) ? '每段感想都要填'
     : draft.pages.length > 20 ? '最多添加 20 段文字'
     : !['silent', 'custom', ...Array.from({ length: 7 }, (_, i) => `op${i + 1}`)].includes(draft.audio.kind) ? '请选择背景音乐'
     : draft.audio.kind !== 'silent' && !media ? '请选择可用的音频文件'
     : audioError || durationError || (seconds / draft.pages.length < 0.5 ? '每段文字至少需要 0.5 秒' : '') ||
-      (seconds > 600 ? '片段时长不能超过 10 分钟' : '') || (overflow ? '有文字超出文字框，请缩短该段文字' : '');
+      (seconds > 600 ? '片段时长不能超过 10 分钟' : '') || (overflow ? '有文字超出文字框，请缩短' : '');
 
   function currentThought(): ThoughtDraft {
     if (draft.audio.kind === 'silent') return { ...draft, duration_ms: Math.round((durationValue || 0) * 1000) };
@@ -192,25 +192,25 @@ export default function ThoughtEditor({ draft, saved, options, optionsLoading, o
     <section className="card thought-editor">
       <h2>感想片段</h2>
       <label className="field full">片段名称
-        <input value={draft.name} onChange={(e) => change({ ...draft, name: e.target.value })} placeholder="这次 B50 的感想" />
+        <input value={draft.name} onChange={(e) => change({ ...draft, name: e.target.value })}  />
       </label>
       <h3>感想文字</h3>
-      <p className="muted">同一画面依次显示各段文字，每段平分片段时长。</p>
+      <p className="muted">依次显示各段文字，片段时长平分。</p>
       {draft.pages.map((page, i) => <div className="thought-page" key={i}>
         <div className="thought-text-row">
           <label className="field full">第 {i + 1} 段 · {formatClipTime((i * seconds) / draft.pages.length)}–{formatClipTime(((i + 1) * seconds) / draft.pages.length)}
-            <textarea rows={3} value={page.text} onChange={(e) => updateText(i, e.target.value)} placeholder="输入感想…" />
+            <textarea rows={3} value={page.text} onChange={(e) => updateText(i, e.target.value)} placeholder="言って" />
           </label>
           {draft.pages.length > 1 && <button className="button quiet" onClick={() => change({ ...draft, pages: draft.pages.filter((_, at) => at !== i) })}>删除段落</button>}
         </div>
-        <div className="thought-actions"><button className="button quiet" disabled={imageLoading || busy} onClick={() => chooseImage(i)}>{imageLoading ? '选择中…' : '为本段添加图片'}</button><span>{page.images.length} 张图片</span></div>
+        <div className="thought-actions"><button className="button quiet" disabled={imageLoading || busy} onClick={() => chooseImage(i)}>{imageLoading ? '选择中…' : '添加图片'}</button></div>
         {page.images.map((image, imageIndex) => <div className="thought-image-row" key={imageIndex}>
           <span title={image.path}>{nameOf(image.path)}</span>
           <label>宽度 <input type="range" min="40" max="1200" value={image.width} onChange={(e) => editPage(i, (item) => { item.images[imageIndex].width = Number(e.target.value); })} /></label>
           <button className="button quiet" onClick={() => editPage(i, (item) => { item.images.splice(imageIndex, 1); })}>移除</button>
         </div>)}
       </div>)}
-      <button className="button quiet" disabled={draft.pages.length >= 20} onClick={() => change({ ...draft, pages: [...draft.pages, { text: '', images: [] }] })}>添加一段文字</button>
+      <button className="button quiet" disabled={draft.pages.length >= 20} onClick={() => change({ ...draft, pages: [...draft.pages, { text: '', images: [] }] })}>添加一段</button>
       <h3>背景音乐</h3>
       <label className="field full">音频来源
         <select value={draft.audio.kind} disabled={optionsLoading || busy} onChange={(e) => {
@@ -225,15 +225,15 @@ export default function ThoughtEditor({ draft, saved, options, optionsLoading, o
           <option value="custom">自定义音频</option>
         </select>
       </label>
-      {optionsLoading && <p className="muted">正在读取 OP 音频信息…</p>}
-      {optionsError && <div className="notice warn">OP 音频读取失败：{optionsError}</div>}
+      {optionsLoading && <p className="muted">正在读取BGM信息…</p>}
+      {optionsError && <div className="notice warn">xBGM读取失败：{optionsError}</div>}
       {draft.audio.kind === 'custom' && <button className="button quiet" disabled={audioLoading || busy} onClick={chooseAudio}>{audioLoading ? '正在读取音频…' : '选择音频文件'}</button>}
       {media && draft.audio.kind !== 'silent' && <>
         <audio className="thought-audio" controls src={media.preview_url} />
-        <div className="clip-range" aria-label="音频截取范围">
+        <div className="clip-range" aria-label="音频范围">
           <div className="clip-range-rail"><div className={`clip-range-selected ${reversedRange ? 'invalid' : ''}`} style={{ left: `${Math.max(0, railStart * 1000 / media.duration_ms) * 100}%`, width: `${Math.max(0, (railEnd - railStart) * 1000 / media.duration_ms) * 100}%` }} /></div>
-          <input className="clip-range-start" type="range" min="0" max={media.duration_ms / 1000} step="0.1" value={draft.audio.start_ms / 1000} aria-label="音频开始时间" onChange={(e) => updateRange(Number(e.target.value), draft.audio.end_ms / 1000)} />
-          <input className="clip-range-end" type="range" min="0" max={media.duration_ms / 1000} step="0.1" value={draft.audio.end_ms / 1000} aria-label="音频结束时间" onChange={(e) => updateRange(draft.audio.start_ms / 1000, Number(e.target.value))} />
+          <input className="clip-range-start" type="range" min="0" max={media.duration_ms / 1000} step="0.1" value={draft.audio.start_ms / 1000} aria-label="开始时间" onChange={(e) => updateRange(Number(e.target.value), draft.audio.end_ms / 1000)} />
+          <input className="clip-range-end" type="range" min="0" max={media.duration_ms / 1000} step="0.1" value={draft.audio.end_ms / 1000} aria-label="结束时间" onChange={(e) => updateRange(draft.audio.start_ms / 1000, Number(e.target.value))} />
         </div>
         <div className="clip-times">
           <label className="field">开始时间<input value={audioStart} onChange={(e) => setAudioStart(e.target.value)} onBlur={() => { const value = parseClipTime(audioStart); if (value !== null) updateRange(value, draft.audio.end_ms / 1000); }} /></label>
@@ -248,8 +248,7 @@ export default function ThoughtEditor({ draft, saved, options, optionsLoading, o
       {error && <div className="notice bad" role="alert">{error}</div>}
       <div className={`thought-save-status ${savedCurrent ? 'saved' : ''}`} role="status">
         {savedCurrent ? `已保存到当前作品：${saved!.name} · ${saved!.pages.length} 段 · ${formatClipTime(saved!.duration_ms / 1000)}`
-          : saved ? '有未保存修改' : '尚未保存到当前作品'}
-        <small>退出应用或重新导入后，本次作品会清空。</small>
+          : saved ? '有未保存修改' : '尚未保存'}
       </div>
       <div className="thought-actions"><button className="button primary" disabled={!!formError || busy || audioLoading || imageLoading || optionsLoading || savedCurrent} onClick={() => onSave(currentThought())}>{savedCurrent ? '已保存' : saved ? '更新片段' : '保存片段'}</button>
         <button className="button quiet" disabled={!!formError || busy || audioLoading || imageLoading || optionsLoading} onClick={render}>{busy ? '正在生成预览…' : '生成预览'}</button></div>
