@@ -401,7 +401,7 @@ function App() {
   }
   async function chooseTool(name: string) {
     try {
-      const path = await PickFile();
+      const path = await PickFile(false);
       if (!path) return;
       setChecks((old) => ({ ...old, [name]: { busy: true } }));
       const result = await SetToolPath(name, path);
@@ -423,7 +423,7 @@ function App() {
   }
   async function chooseImport() {
     try {
-      const path = await PickFile();
+      const path = await PickFile(importMode === 'image');
       if (path) {
         setImportPath(path);
         if (importMode === 'json') setJsonText('');

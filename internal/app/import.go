@@ -11,8 +11,12 @@ import (
 )
 
 // PickFile 弹出手动选择文件的窗口
-func (a *App) PickFile() (string, error) {
-	return runtime.OpenFileDialog(a.context(), runtime.OpenDialogOptions{})
+func (a *App) PickFile(imageOnly bool) (string, error) {
+	opts := runtime.OpenDialogOptions{}
+	if imageOnly {
+		opts.Filters = []runtime.FileFilter{{DisplayName: "图片 (*.png;*.jpg;*.jpeg)", Pattern: "*.png;*.jpg;*.jpeg"}}
+	}
+	return runtime.OpenFileDialog(a.context(), opts)
 }
 
 // Import 导入数据源，分为图片或JSON
