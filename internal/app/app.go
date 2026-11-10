@@ -73,7 +73,7 @@ func (a *App) Startup(ctx context.Context) {
 }
 
 func (a *App) Version() string {
-	return "v0.0.1"
+	return "v1.0.0"
 }
 
 func (a *App) context() context.Context {
