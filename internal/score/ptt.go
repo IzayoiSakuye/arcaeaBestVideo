@@ -20,7 +20,7 @@ const (
 // ClearBonus 用于计算达成类型给予的定数加分
 func ClearBonus(c ClearType) (float64, error) {
 	if !slices.Contains([]ClearType{TL, NC, HC, EC, FR, PM}, c) {
-		return 0.0, fmt.Errorf("invalid ClearType %q", c)
+		return 0.0, fmt.Errorf("无效的通关类型 %q", c)
 	}
 	if c == "TL" {
 		return 0.0, nil
@@ -32,7 +32,7 @@ func ClearBonus(c ClearType) (float64, error) {
 func SinglePTT(constant float64, score int, c ClearType) (float64, error) {
 	bounce, err := ClearBonus(c)
 	if err != nil {
-		return 0.0, fmt.Errorf("ptt calculate error: %v", err)
+		return 0.0, fmt.Errorf("单曲 PTT 计算失败：%w", err)
 	}
 	if score >= 10000000 {
 		return constant + 2.0 + bounce, nil

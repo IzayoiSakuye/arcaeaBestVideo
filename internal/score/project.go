@@ -162,11 +162,11 @@ func DecodeProject(data []byte, source string) (*Project, error) {
 // LoadProject 读取文件+解码
 func LoadProject(path string) (*Project, error) {
 	if path == "" {
-		return nil, fmt.Errorf("score: 需要合法文件路径")
+		return nil, fmt.Errorf("需要合法的成绩文件路径")
 	}
 	content, err := os.ReadFile(path)
 	if err != nil {
-		return nil, fmt.Errorf("score: 无法读取 %s: %w", path, err)
+		return nil, fmt.Errorf("无法读取成绩文件 %s：%w", path, err)
 	}
 	return DecodeProject(content, path)
 }

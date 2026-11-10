@@ -82,7 +82,7 @@ func ValidateBytes(data []byte, source string, cata *catalog.Catalog) (*Resolved
 		return nil, err
 	}
 	if len(proj.Songs) == 0 {
-		return nil, fmt.Errorf("%s: songs 为空，没有可渲染的内容", source)
+		return nil, fmt.Errorf("%s：歌曲列表为空，没有可渲染的内容", source)
 	}
 
 	res := &Resolved{Project: proj}

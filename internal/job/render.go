@@ -22,25 +22,25 @@ func (j *Job) renderOne(ctx context.Context, i int, s score.Song) (string, Rende
 
 	dir := filepath.Join(j.cfg.WorkDir, fmt.Sprintf("%03d-%s", i, s.SongID))
 	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return "", d, false, fmt.Errorf("catalog: project create directory failed: %w", err)
+		return "", d, false, fmt.Errorf("创建渲染目录失败：%w", err)
 	}
 	seg := filepath.Join(dir, fmt.Sprintf("seg_%03d.mp4", i))
 
 	song, ok := j.deps.Catalog.Song(s.SongID)
 	if !ok {
-		return "", d, false, fmt.Errorf("song %s not found", s.SongID)
+		return "", d, false, fmt.Errorf("曲库中找不到歌曲 %s", s.SongID)
 	}
 	chart, ok := j.deps.Catalog.Chart(s.SongID, s.Difficulty.Name)
 	if !ok {
-		return "", d, false, fmt.Errorf("song %s has no chart %s", s.SongID, s.Difficulty.Name)
+		return "", d, false, fmt.Errorf("歌曲 %s 缺少 %s 谱面", s.SongID, s.Difficulty.Name)
 	}
 	jacket, err := j.deps.Catalog.JacketPath(s.SongID, s.Difficulty.Name)
 	if err != nil {
-		return "", d, false, fmt.Errorf("parse jacket path failed: %w", err)
+		return "", d, false, fmt.Errorf("获取曲绘路径失败：%w", err)
 	}
 	bg, err := j.deps.Bg.BgPath(s.SongID, "960")
 	if err != nil {
-		return "", d, false, fmt.Errorf("parse bg path failed: %w", err)
+		return "", d, false, fmt.Errorf("获取背景路径失败：%w", err)
 	}
 	clip, err := j.videoClip(ctx, s, chart)
 	if err != nil {

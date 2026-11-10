@@ -43,5 +43,5 @@ func readJSON(in score.Input) ([]byte, string, error) {
 	if in.Text != "" {
 		return []byte(in.Text), "<粘贴的内容>", nil
 	}
-	return nil, "", fmt.Errorf("importer: 无文件路径或JSON文本")
+	return nil, "", fmt.Errorf("未提供 JSON 文件路径或文本")
 }

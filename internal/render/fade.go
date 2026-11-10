@@ -54,7 +54,7 @@ func FadeAudio(ctx context.Context, ffmpeg, ffprobe, source, dest string, fadeIn
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		os.Remove(part)
-		return "", fmt.Errorf("ffmpeg: %w: %s", err, strings.TrimSpace(string(out)))
+		return "", fmt.Errorf("音频淡化失败：%w，FFmpeg 输出：%s", err, strings.TrimSpace(string(out)))
 	}
 	if _, err := Probe(ctx, ffprobe, part); err != nil {
 		os.Remove(part)

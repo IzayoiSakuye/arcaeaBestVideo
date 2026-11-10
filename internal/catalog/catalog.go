@@ -47,28 +47,28 @@ func (c *Catalog) Chart(songID string, difficulty string) (*Chart, bool) {
 // Load 读取并校验目录文件
 func Load(path string, supportedSchema int) (*Catalog, error) {
 	if path == "" {
-		return nil, fmt.Errorf("catalog: path required")
+		return nil, fmt.Errorf("未提供曲库路径")
 	}
 	content, err := os.ReadFile(path)
 	if err != nil {
-		return nil, fmt.Errorf("catalog: unable to read %s: %w", path, err)
+		return nil, fmt.Errorf("读取曲库 %s 失败：%w", path, err)
 	}
 	var catalog Catalog
 	if err := json.Unmarshal(content, &catalog); err != nil {
-		return nil, fmt.Errorf("catalog: unable to unmarshal %s: %w", path, err)
+		return nil, fmt.Errorf("解析曲库 %s 失败：%w", path, err)
 	}
 
 	if catalog.SchemaVersion != supportedSchema {
-		return nil, fmt.Errorf("catalog: data version is %d, but the app version supported %d", catalog.SchemaVersion, supportedSchema)
+		return nil, fmt.Errorf("曲库数据版本为 %d，应用仅支持版本 %d", catalog.SchemaVersion, supportedSchema)
 	}
 
 	if catalog.Songs == nil || len(catalog.Songs) == 0 {
-		return nil, fmt.Errorf("catalog: no songs found")
+		return nil, fmt.Errorf("曲库中没有歌曲")
 	}
 	for _, song := range catalog.Songs {
 		err := validateSongInfo(song)
 		if err != nil {
-			return nil, fmt.Errorf("catalog: invalid song info: %w", err)
+			return nil, fmt.Errorf("曲库歌曲信息无效：%w", err)
 		}
 	}
 	return &catalog, nil
@@ -77,11 +77,11 @@ func Load(path string, supportedSchema int) (*Catalog, error) {
 // JacketPath 用于快速获取歌曲封面的本地路径
 func (c *Catalog) JacketPath(SongID, diff string) (string, error) {
 	if SongID == "" {
-		return "", fmt.Errorf("catalog: invalid song id")
+		return "", fmt.Errorf("歌曲 ID 无效")
 	}
 	song, ok := c.Song(SongID)
 	if !ok {
-		return "", fmt.Errorf("catalog: unable to find song %s (%s)", SongID, diff)
+		return "", fmt.Errorf("曲库中找不到歌曲 %s（%s）", SongID, diff)
 	}
 	if ch, ok := c.Chart(SongID, diff); ok && usableJacket(ch.Jacket) {
 		return *ch.Jacket.Local256, nil
@@ -89,7 +89,7 @@ func (c *Catalog) JacketPath(SongID, diff string) (string, error) {
 	if usableJacket(song.Jacket) {
 		return *song.Jacket.Local256, nil
 	}
-	return "", fmt.Errorf("catalog: unable to find jacket for song %s (%s)", SongID, diff)
+	return "", fmt.Errorf("找不到歌曲 %s（%s）的曲绘", SongID, diff)
 }
 
 // usableJacket 判断该封面是否可以使用
@@ -103,19 +103,19 @@ func usableJacket(j *Jacket) bool {
 // validateSongInfo 校验一条曲目记录是否可用
 func validateSongInfo(song *Song) error {
 	if song == nil {
-		return errors.New("entry is nil")
+		return errors.New("歌曲记录为空")
 	}
 	if song.TitleNorm == "" {
-		return errors.New("title_norm is empty")
+		return errors.New("规范化曲名 title_norm 为空")
 	}
 	if song.TitleEn == "" && song.TitleJP == "" {
-		return errors.New("both title_en and title_jp are empty")
+		return errors.New("英文曲名 title_en 和日文曲名 title_jp 均为空")
 	}
 	if song.Jacket == nil {
-		return errors.New("jacket is nil")
+		return errors.New("曲绘信息为空")
 	}
 	if song.Charts == nil || len(song.Charts) == 0 {
-		return errors.New("charts is empty")
+		return errors.New("谱面列表为空")
 	}
 	return nil
 }

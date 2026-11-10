@@ -12,18 +12,18 @@ import (
 // LoadBgManifest 用于将bg.json相关数据解析为BgManifest结构体
 func LoadBgManifest(path string) (*BgManifest, error) {
 	if path == "" {
-		return nil, fmt.Errorf("no path provided")
+		return nil, fmt.Errorf("未提供背景清单路径")
 	}
 	b, err := os.ReadFile(path)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read %s bg manifest: %w", path, err)
+		return nil, fmt.Errorf("读取背景清单 %s 失败：%w", path, err)
 	}
 	var r BgManifest
 	if err := json.Unmarshal(b, &r); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal %s bg manifest: %w", path, err)
+		return nil, fmt.Errorf("解析背景清单 %s 失败：%w", path, err)
 	}
 	if len(r.Songs) == 0 {
-		return nil, fmt.Errorf("no songs found in %s", path)
+		return nil, fmt.Errorf("背景清单 %s 中没有歌曲", path)
 	}
 	return &r, nil
 }
@@ -31,13 +31,13 @@ func LoadBgManifest(path string) (*BgManifest, error) {
 // BgPath 用于拼接背景的文件路径
 func (bm *BgManifest) BgPath(songID, size string) (string, error) {
 	if songID == "" || size == "" {
-		return "", fmt.Errorf("songID or size is empty")
+		return "", fmt.Errorf("歌曲 ID 或背景尺寸为空")
 	}
 
 	bgID := bm.Songs[songID].Bg
 	p, ok := bm.Bgs[bgID].Files[size]
 	if !ok {
-		return "", fmt.Errorf("song %s: Bg(%s) %s not exist", songID, size, bgID)
+		return "", fmt.Errorf("歌曲 %s 缺少 %s 尺寸的背景 %s", songID, size, bgID)
 	}
 	return p.Path, nil
 }
@@ -65,12 +65,12 @@ func TemplateFor(src *catalog.VideoSource) bool {
 // ClipPath 找已经下载过的录像缓存
 func ClipPath(workDir, songID, diff string) (string, error) {
 	if workDir == "" || songID == "" || diff == "" {
-		return "", fmt.Errorf("workDir or songID or diff is empty")
+		return "", fmt.Errorf("录像缓存目录、歌曲 ID 或难度为空")
 	}
 
 	p := filepath.Join(workDir, songID+".mp4")
 	if !isFile(p) {
-		return "", fmt.Errorf("%s.mp4(%s) missing record clips", songID, diff)
+		return "", fmt.Errorf("歌曲 %s（%s）的录像缓存缺失（预期文件：%s.mp4）", songID, diff, songID)
 	}
 	return p, nil
 }

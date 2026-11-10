@@ -45,7 +45,7 @@ func BuildBackground(ctx context.Context, ffmpeg, bgPath, dest string) error {
 	tools.HideWindow(cmd)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("build background error: %w (ctx: %v, out=%s)",
+		return fmt.Errorf("生成背景画面失败：%w（任务状态：%v，输出：%s）",
 			err, ctx.Err(), strings.TrimSpace(string(out)))
 	}
 	return nil
@@ -64,10 +64,10 @@ func RenderText(ctx context.Context, values map[string]string, edge, textHTMLPat
 	tools.HideWindow(cmd)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("render text error: %w, output=%s", err, strings.TrimSpace(string(out)))
+		return fmt.Errorf("渲染文字画面失败：%w，输出：%s", err, strings.TrimSpace(string(out)))
 	}
 	if !waitForScreenshot(ctx, dest) {
-		return fmt.Errorf("edge render text error, output=%s", strings.TrimSpace(string(out)))
+		return fmt.Errorf("Edge 未生成文字画面，输出：%s", strings.TrimSpace(string(out)))
 	}
 	return nil
 }
@@ -134,7 +134,7 @@ func Composite(ctx context.Context, l Layers, dest, ffmpeg string) error {
 	tools.HideWindow(cmd)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("ffmpeg: %w (ctx=%v, out=%s)",
+		return fmt.Errorf("FFmpeg 合成片段失败：%w（任务状态：%v，输出：%s）",
 			err, ctx.Err(), strings.TrimSpace(string(out)))
 	}
 	return nil
@@ -204,7 +204,7 @@ func Concat(ctx context.Context, ffmpeg, ffprobe, listFile, outFile string, segs
 			continue
 		}
 		if fingerprint(info) != fingerprint(baseInfo) {
-			return fmt.Errorf("The %dth ffmpeg output mismatch, \n  base %s\n         %s\n  difference %s\n         %s",
+			return fmt.Errorf("第 %d 段视频参数不一致：\n  基准片段 %s\n           %s\n  当前片段 %s\n           %s",
 				i+1, filepath.Base(baseSeg), fingerprint(baseInfo), filepath.Base(seg), fingerprint(info))
 		}
 
@@ -215,13 +215,13 @@ func Concat(ctx context.Context, ffmpeg, ffprobe, listFile, outFile string, segs
 	defer cancel()
 	err := concatList(listFile, segs)
 	if err != nil {
-		return fmt.Errorf("concat list error: %w", err)
+		return fmt.Errorf("生成拼接清单失败：%w", err)
 	}
 	cmd := exec.CommandContext(ctx, ffmpeg, ConcatArgs(listFile, outFile)...)
 	tools.HideWindow(cmd)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("concat error: %w (ctx=%v, out=%s)",
+		return fmt.Errorf("拼接视频失败：%w（任务状态：%v，输出：%s）",
 			err, ctx.Err(), strings.TrimSpace(string(out)))
 	}
 	return nil
@@ -291,9 +291,9 @@ func Probe(ctx context.Context, ffprobe string, file string) (StreamInfo, error)
 	if err != nil {
 		var ee *exec.ExitError
 		if errors.As(err, &ee) {
-			return StreamInfo{}, fmt.Errorf("ffprobe %s failed: %w, stderr=%s", file, err, ee.Stderr)
+			return StreamInfo{}, fmt.Errorf("FFprobe 检测文件 %s 失败：%w，错误输出：%s", file, err, ee.Stderr)
 		}
-		return StreamInfo{}, fmt.Errorf("ffprobe %s failed: %w", file, err)
+		return StreamInfo{}, fmt.Errorf("FFprobe 检测文件 %s 失败：%w", file, err)
 	}
 	if err := json.Unmarshal(out, &raw); err != nil {
 		return StreamInfo{}, fmt.Errorf("解析 ffprobe 输出失败: %w", err)

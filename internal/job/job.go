@@ -81,7 +81,7 @@ func (j *Job) normalize() error {
 		}
 		abs, err := filepath.Abs(*p)
 		if err != nil {
-			return fmt.Errorf("failed to parse filepath.Abs: %w", err)
+			return fmt.Errorf("转换为绝对路径失败：%w", err)
 		}
 		*p = abs
 	}
@@ -92,7 +92,7 @@ func (j *Job) validate() error {
 	for _, rel := range []string{"templates/text.html", "templates/bg16-9.png", "templates/bg4-3.png"} {
 		p := filepath.Join(j.cfg.Root, filepath.FromSlash(rel))
 		if _, err := os.Stat(p); err != nil {
-			return fmt.Errorf("root %s missing %s", j.cfg.Root, rel)
+			return fmt.Errorf("应用目录 %s 缺少 %s", j.cfg.Root, rel)
 		}
 	}
 	return nil
@@ -110,7 +110,7 @@ func (j *Job) Run(ctx context.Context) (Result, error) {
 	}
 	proj, err := j.project()
 	if err != nil {
-		return res, fmt.Errorf("project load failed: %w", err)
+		return res, fmt.Errorf("读取项目失败：%w", err)
 	}
 
 	order, err := proj.EffectivePlayOrder()
@@ -157,7 +157,7 @@ func (j *Job) Run(ctx context.Context) (Result, error) {
 		if err != nil {
 			j.emit(Event{Stage: StageRender, SongIndex: item.SongIndex, SongID: s.SongID,
 				Status: StatusFailed, Err: err.Error()})
-			return res, fmt.Errorf("render song %d failed: %w", item.SongIndex, err)
+			return res, fmt.Errorf("第 %d 首歌曲渲染失败：%w", item.SongIndex, err)
 		}
 		status := StatusDone
 		if skipped {

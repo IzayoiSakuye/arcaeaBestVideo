@@ -38,28 +38,28 @@ func (p *ImageProvider) Name() string { return "b50 成绩图" }
 func (p *ImageProvider) Import(ctx context.Context, in score.Input) (*score.Draft, error) {
 	switch {
 	case in.Path == "":
-		return nil, fmt.Errorf("importer: 需要成绩图路径")
+		return nil, fmt.Errorf("需要成绩图路径")
 	case p.Cata == nil:
-		return nil, fmt.Errorf("importer: 缺少曲库信息")
+		return nil, fmt.Errorf("缺少曲库信息")
 	case p.FFmpeg == "":
-		return nil, fmt.Errorf("importer: 缺少ffmpeg")
+		return nil, fmt.Errorf("缺少 ffmpeg")
 	}
 	img, err := ocr.Load(in.Path)
 	if err != nil {
-		return nil, fmt.Errorf("importer: %w", err)
+		return nil, fmt.Errorf("导入成绩图失败：%w", err)
 	}
 	if err := ocr.CheckSheet(img.Bounds()); err != nil {
-		return nil, fmt.Errorf("importer: %w", err)
+		return nil, fmt.Errorf("导入成绩图失败：%w", err)
 	}
 
 	cells := ocr.Grid()
 	reader, err := ocr.FindSheetReader(p.OCRRoot)
 	if err != nil {
-		return nil, fmt.Errorf("importer: %w", err)
+		return nil, fmt.Errorf("导入成绩图失败：%w", err)
 	}
 	text, err := reader.ReadSheet(ctx, in.Path, cells)
 	if err != nil {
-		return nil, fmt.Errorf("importer: %w", err)
+		return nil, fmt.Errorf("导入成绩图失败：%w", err)
 	}
 	hits, err := p.matchJackets(ctx, img, cells)
 	if err != nil {
@@ -224,7 +224,7 @@ func (p *ImageProvider) matchJackets(ctx context.Context, img image.Image, cells
 
 	for i, err := range errs {
 		if err != nil {
-			return nil, fmt.Errorf("importer: #%d %w", cells[i].Index, err)
+			return nil, fmt.Errorf("第 %d 首成绩图识别失败：%w", cells[i].Index, err)
 		}
 	}
 	return hits, nil
