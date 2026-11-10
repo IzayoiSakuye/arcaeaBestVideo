@@ -782,12 +782,7 @@ function App() {
 
   return (
     <div className="shell">
-      <header className="topbar" />
-      <div className="workspace">
-        <aside className="sidebar">
-          <div className="sidebar-title">
-            制作流程 <span>WORKFLOW</span>
-          </div>
+      <header className="topbar">
           <nav aria-label="制作流程">
             {pages.slice(0, 6).map((label, index) => (
               <button
@@ -796,22 +791,18 @@ function App() {
                 onClick={() => setPage(index)}
                 aria-current={page === index ? 'page' : undefined}
               >
-                <span className="nav-number">{String(index + 1).padStart(2, '0')}</span>
-                <span className="nav-label">
-                  {label}
-                </span>
-                <span className="nav-dot">{page === index ? '●' : '○'}</span>
+                <span className="nav-label">{label}</span>
               </button>
             ))}
+            <button className={`nav-item settings-link ${page === 6 ? 'selected' : ''}`} onClick={() => setPage(6)} aria-current={page === 6 ? 'page' : undefined}>
+              <span aria-hidden="true">⚙</span><span className="nav-label">设置</span>
+            </button>
           </nav>
-          <button className={`nav-item settings-link ${page === 6 ? 'selected' : ''}`} onClick={() => setPage(6)} aria-current={page === 6 ? 'page' : undefined}>
-            <span className="nav-number">⚙</span><span className="nav-label">设置</span>
-          </button>
-        </aside>
+      </header>
+      <div className="workspace">
         <main className="main-area">
           <div className="page-heading">
             <div>
-              <span className="eyebrow">{page === 6 ? 'APPLICATION SETTINGS' : `STEP ${String(page + 1).padStart(2, '0')} / 06`}</span>
               <h1>{pages[page]}</h1>
             </div>
             {page === 2 && count > 0 && <span className="heading-tag">第 {songIndex + 1} / {count} 首</span>}
@@ -820,9 +811,7 @@ function App() {
           {page === 6 && (
             <div className="content-grid">
               <section className="card wide">
-                <h2>
-                  环境设置 <span>工具路径自动保存</span>
-                </h2>
+                <h2>环境设置</h2>
                 <p className="muted">自动检测工具；找不到时点「⋯」选择文件。</p>
                 <div className="tool-list">
                   {toolNames.map((name) => {
