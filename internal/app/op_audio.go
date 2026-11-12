@@ -17,7 +17,7 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
-const opManifestURL = "https://pub-af1517927a52401bb02d6f98bba5199e.r2.dev/arc-data/op-latest.json"
+const opManifestURL = "https://assets.sakuye.dpdns.org/arc-data/op-latest.json"
 
 type opManifest struct {
 	SchemaVersion int      `json:"schema_version"`
@@ -105,7 +105,7 @@ func readOPManifest(ctx context.Context, client *http.Client, endpoint string) (
 		return m, fmt.Errorf("OP 清单解析失败：%w", err)
 	}
 	base, _ := url.Parse(endpoint)
-	if m.SchemaVersion != 1 || m.Game != "arcaea" || m.Resource != "op-audio" || !legacyResourceVersionPattern.MatchString(m.AudioVersion) || len(m.Files) != 7 {
+	if m.SchemaVersion != 1 || m.Game != "arcaea" || m.Resource != "op-audio" || !(resourceVersionPattern.MatchString(m.AudioVersion) || legacyResourceVersionPattern.MatchString(m.AudioVersion)) || len(m.Files) != 7 {
 		return m, fmt.Errorf("OP 清单格式无效")
 	}
 	seen := map[string]bool{}

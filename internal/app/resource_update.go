@@ -25,6 +25,7 @@ import (
 )
 
 const resourceManifestURL = "https://github.com/IzayoiSakuye/arcaea-b50-resources/releases/latest/download/latest.json"
+const resourceCDNManifestURL = "https://assets.sakuye.dpdns.org/arc-data/latest.json"
 const resourceR2ManifestURL = "https://pub-af1517927a52401bb02d6f98bba5199e.r2.dev/arc-data/latest.json"
 const resourceReleaseAPI = "https://api.github.com/repos/IzayoiSakuye/arcaea-b50-resources/releases/latest"
 
@@ -81,7 +82,7 @@ func resourceManifestURLs() []string {
 			urls = append(urls, s)
 		}
 	}
-	return append(urls, resourceR2ManifestURL, resourceReleaseAPI, resourceManifestURL)
+	return append(urls, resourceCDNManifestURL, resourceR2ManifestURL, resourceReleaseAPI, resourceManifestURL)
 }
 
 func resourceHTTPClient() *http.Client {

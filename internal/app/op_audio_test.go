@@ -17,7 +17,7 @@ func TestOPAudioManifestAndInstall(t *testing.T) {
 	copy(wav[8:], "WAVE")
 	hash := sha256.Sum256(wav)
 	var manifest opManifest
-	manifest.SchemaVersion, manifest.Game, manifest.Resource, manifest.AudioVersion = 1, "arcaea", "op-audio", "2026.11.08"
+	manifest.SchemaVersion, manifest.Game, manifest.Resource, manifest.AudioVersion = 1, "arcaea", "op-audio", "7.1.0"
 	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/op-latest.json" {
 			_ = json.NewEncoder(w).Encode(manifest)

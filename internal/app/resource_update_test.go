@@ -129,14 +129,14 @@ func TestReleaseAPIManifestAndProxyArchiveURLs(t *testing.T) {
 
 func TestR2ResourceSource(t *testing.T) {
 	t.Setenv("ARCAEA_RESOURCE_MIRRORS", "")
-	if got := resourceManifestURLs()[0]; got != resourceR2ManifestURL {
+	if got := resourceManifestURLs()[0]; got != resourceCDNManifestURL {
 		t.Fatalf("默认清单地址 = %s", got)
 	}
-	m := resourceManifest{sourceURL: resourceR2ManifestURL}
+	m := resourceManifest{sourceURL: resourceCDNManifestURL}
 	m.Archive.Path = "data-v7.1.0.zip"
 	m.Archive.URL = strings.TrimSuffix(resourceR2ManifestURL, "latest.json") + m.Archive.Path
-	if got := resourceArchiveURLs(m); len(got) != 1 || got[0] != m.Archive.URL {
-		t.Fatalf("R2 归档地址 = %v", got)
+	if got := resourceArchiveURLs(m); len(got) != 2 || got[0] != strings.TrimSuffix(resourceCDNManifestURL, "latest.json")+m.Archive.Path || got[1] != m.Archive.URL {
+		t.Fatalf("资源归档地址 = %v", got)
 	}
 }
 
