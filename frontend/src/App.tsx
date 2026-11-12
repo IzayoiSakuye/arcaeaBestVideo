@@ -773,9 +773,15 @@ function App() {
   const rangeEnd = Math.min(clipEnd ?? 0, videoLength);
   const clipError = videoLength > 0 ? clipRangeError(clipStart, clipEnd, videoLength) : '';
   const clipDuration = clipStart !== null && clipEnd !== null ? Math.max(0, clipEnd - clipStart) : 0;
-  const clipChanged = clipStart !== null && clipEnd !== null &&
-    (Math.round(clipStart * 1000) !== (song?.clip?.start_ms || 0) ||
-      Math.round(clipDuration * 1000) !== (song?.clip?.duration_ms || 10000));
+  function saveClipRange(startText = clipStartText, endText = clipEndText) {
+    const start = parseClipTime(startText);
+    const end = parseClipTime(endText);
+    if (videoLength <= 0 || clipRangeError(start, end, videoLength) || start === null || end === null) return;
+    const startMs = Math.round(start * 1000);
+    const durationMs = Math.round((end - start) * 1000);
+    if (startMs === (song?.clip?.start_ms || 0) && durationMs === (song?.clip?.duration_ms || 10000)) return;
+    editSong((item) => { item.clip = { start_ms: startMs, duration_ms: durationMs }; });
+  }
   const { pending: missingVideos, retryable: retryableVideos, manualCount } = videoQueues(videoStates);
   const doneCount = logs.filter((event) => event.stage === 'render' && ['done', 'skipped'].includes(event.status)).length;
   const active = renderState === 'starting' || renderState === 'running';
@@ -1434,6 +1440,8 @@ function App() {
                             <input aria-label="拖动开始时间" title="开始时间" className="clip-range-start"
                               type="range" min={0} max={videoLength} step={0.1}
                               value={rangeStart}
+                              onPointerUp={() => saveClipRange()}
+                              onBlur={() => saveClipRange()}
                               onChange={(event) => {
                                 const start = Number(event.target.value);
                                 setClipStartText(formatClipTime(start));
@@ -1443,6 +1451,8 @@ function App() {
                             <input aria-label="拖动结束时间" title="结束时间" className="clip-range-end"
                               type="range" min={0} max={videoLength} step={0.1}
                               value={rangeEnd}
+                              onPointerUp={() => saveClipRange()}
+                              onBlur={() => saveClipRange()}
                               onChange={(event) => {
                                 setClipEndText(formatClipTime(Number(event.target.value)));
                                 setPreviewTime(0);
@@ -1461,6 +1471,7 @@ function App() {
                                 }} onBlur={() => {
                                   const start = parseClipTime(clipStartText);
                                   if (start !== null) setClipStartText(formatClipTime(start));
+                                  saveClipRange();
                                 }} />
                             </label>
                             <label className="field">结束时间
@@ -1472,17 +1483,11 @@ function App() {
                                 }} onBlur={() => {
                                   const end = parseClipTime(clipEndText);
                                   if (end !== null) setClipEndText(formatClipTime(end));
+                                  saveClipRange();
                                 }} />
                             </label>
                           </div>
-                          <div className="clip-footer">
-                            <span className={clipError ? 'clip-error' : undefined} role={clipError ? 'alert' : undefined}>{clipError || `预览 ${formatClipTime(clipStart ?? 0)}–${formatClipTime(clipEnd ?? 0)}`}</span>
-                            <button className="button quiet" disabled={Boolean(clipError) || !clipChanged}
-                              onClick={() => editSong((item) => {
-                                if (clipStart === null || clipEnd === null) return;
-                                item.clip = { start_ms: Math.round(clipStart * 1000), duration_ms: Math.round((clipEnd - clipStart) * 1000) };
-                              })}>应用片段</button>
-                          </div>
+                          {clipError && <div className="clip-footer"><span className="clip-error" role="alert">{clipError}</span></div>}
                         </div>
                       )}
                     </section>
