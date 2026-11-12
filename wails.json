@@ -1,7 +1,7 @@
 {
   "$schema": "https://wails.io/schemas/config.v2.json",
-  "name": "rhythm-game-bvideo",
-  "outputfilename": "rhythm-game-bvideo",
+  "name": "arcaea-best-video",
+  "outputfilename": "arcaea-best-video",
   "info": {
     "productVersion": "1.0.0"
   },
