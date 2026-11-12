@@ -19,6 +19,13 @@ func validProject() *score.Project {
 	}
 }
 
+func TestThoughtProgressMessage(t *testing.T) {
+	thought := score.Thought{Name: "片段名", Pages: []score.ThoughtPage{{Text: "第一行\n第二行"}, {Text: "下一段"}}}
+	if got := thoughtProgressMessage(thought); got != "片段名 · 第一行 第二行 · 下一段" {
+		t.Fatalf("感想进度缺少文字：%q", got)
+	}
+}
+
 // Project 非空时不许碰 ProjectPath —— 这是"校对表改完直接渲染"的根
 func TestProjectPrefersInMemory(t *testing.T) {
 	inMem := validProject()

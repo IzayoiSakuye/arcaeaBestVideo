@@ -133,7 +133,8 @@ func (j *Job) Run(ctx context.Context) (Result, error) {
 					break
 				}
 			}
-			j.emit(Event{Stage: StageRender, SongIndex: i + 1, Status: StatusRunning, Progress: float64(i) / float64(total), Message: thought.Name})
+			message := thoughtProgressMessage(thought)
+			j.emit(Event{Stage: StageRender, SongIndex: i + 1, Status: StatusRunning, Progress: float64(i) / float64(total), Message: message})
 			audioPath := thought.Audio.Path
 			if strings.HasPrefix(thought.Audio.Kind, "op") && audioPath == "" {
 				audioPath = filepath.Join(j.cfg.Root, "templates", "audio", thought.Audio.Kind+".wav")
@@ -146,7 +147,7 @@ func (j *Job) Run(ctx context.Context) (Result, error) {
 				return res, fmt.Errorf("第 %d 个感想生成失败：%w", i+1, err)
 			}
 			res.Segments = append(res.Segments, seg)
-			j.emit(Event{Stage: StageRender, SongIndex: i + 1, Status: StatusDone, Message: thought.Name})
+			j.emit(Event{Stage: StageRender, SongIndex: i + 1, Status: StatusDone, Message: message})
 			continue
 		}
 		s := proj.Songs[item.SongIndex-1]
@@ -188,6 +189,14 @@ func (j *Job) Run(ctx context.Context) (Result, error) {
 	res.Concat = time.Since(t)
 	j.emit(Event{Stage: StageDone, Status: StatusDone})
 	return res, nil
+}
+
+func thoughtProgressMessage(thought score.Thought) string {
+	parts := []string{thought.Name}
+	for _, page := range thought.EffectivePages() {
+		parts = append(parts, strings.Join(strings.Fields(page.Text), " "))
+	}
+	return strings.Join(parts, " · ")
 }
 
 // project 负责读取project分流
