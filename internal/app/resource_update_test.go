@@ -7,11 +7,13 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 )
 
@@ -156,5 +158,44 @@ func TestResourceGameVersionUpgrade(t *testing.T) {
 	m := resourceManifest{DataVersion: "7.1.0"}
 	if !resourceAvailable(m, "2026.11.01", "") {
 		t.Fatal("旧日期版本未检测到更新")
+	}
+}
+
+func TestResourceDownloadResumesAfterDisconnect(t *testing.T) {
+	content := bytes.Repeat([]byte("resource-data"), 100)
+	hash := sha256.Sum256(content)
+	for _, supportsRange := range []bool{true, false} {
+		t.Run(fmt.Sprint("range=", supportsRange), func(t *testing.T) {
+			var requests atomic.Int32
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if requests.Add(1) == 1 {
+					w.Header().Set("Content-Length", fmt.Sprint(len(content)))
+					_, _ = w.Write(content[:100])
+					return
+				}
+				if got := r.Header.Get("Range"); got != "bytes=100-" {
+					t.Errorf("续传请求范围 = %q", got)
+				}
+				if supportsRange {
+					w.Header().Set("Content-Range", fmt.Sprintf("bytes 100-%d/%d", len(content)-1, len(content)))
+					w.WriteHeader(http.StatusPartialContent)
+					_, _ = w.Write(content[100:])
+				} else {
+					_, _ = w.Write(content)
+				}
+			}))
+			defer server.Close()
+			m := resourceManifest{DataVersion: "7.1.0"}
+			m.Archive.URL = server.URL + "/data.zip"
+			m.Archive.Size = int64(len(content))
+			m.Archive.SHA256 = hex.EncodeToString(hash[:])
+			archive := filepath.Join(t.TempDir(), "archive.part")
+			if err := downloadResourceArchive(context.Background(), server.Client(), archive, m, nil); err != nil {
+				t.Fatal(err)
+			}
+			if got, err := os.ReadFile(archive); err != nil || !bytes.Equal(got, content) || requests.Load() != 2 {
+				t.Fatalf("下载结果错误：请求 %d 次，读取错误 %v", requests.Load(), err)
+			}
+		})
 	}
 }

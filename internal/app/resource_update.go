@@ -428,46 +428,96 @@ func resourceArchiveURLs(m resourceManifest) []string {
 func downloadResourceArchive(ctx context.Context, client *http.Client, archive string, m resourceManifest, progress func(int64, int64)) error {
 	var failures []string
 	for _, source := range resourceArchiveURLs(m) {
-		if err := downloadResourceArchiveFrom(ctx, client, source, archive, m, progress); err == nil {
-			return nil
-		} else {
-			failures = append(failures, err.Error())
+		var err error
+		for attempt := 0; attempt < 3; attempt++ {
+			if err = downloadResourceArchiveFrom(ctx, client, source, archive, m, progress); err == nil {
+				return nil
+			}
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
 		}
+		failures = append(failures, err.Error())
 	}
 	return fmt.Errorf("资源包下载失败：%s", strings.Join(failures, "；"))
 }
 
 func downloadResourceArchiveFrom(ctx context.Context, client *http.Client, source, archive string, m resourceManifest, progress func(int64, int64)) error {
+	f, err := os.OpenFile(archive, os.O_CREATE|os.O_RDWR, 0o644)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	info, err := f.Stat()
+	if err != nil {
+		return err
+	}
+	if info.Size() > m.Archive.Size {
+		if err := f.Truncate(0); err != nil {
+			return err
+		}
+	}
+	if _, err := f.Seek(0, io.SeekStart); err != nil {
+		return err
+	}
+	h := sha256.New()
+	downloaded, err := io.Copy(h, f)
+	if err != nil {
+		return err
+	}
+	if downloaded == m.Archive.Size && strings.EqualFold(hex.EncodeToString(h.Sum(nil)), m.Archive.SHA256) {
+		return nil
+	}
+	if downloaded == m.Archive.Size {
+		if err := f.Truncate(0); err != nil {
+			return err
+		}
+		if _, err := f.Seek(0, io.SeekStart); err != nil {
+			return err
+		}
+		downloaded = 0
+		h.Reset()
+	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, source, nil)
 	if err != nil {
 		return err
+	}
+	if downloaded > 0 {
+		req.Header.Set("Range", fmt.Sprintf("bytes=%d-", downloaded))
 	}
 	res, err := client.Do(req)
 	if err != nil {
 		return err
 	}
 	defer res.Body.Close()
-	if res.StatusCode != http.StatusOK {
+	if res.StatusCode == http.StatusPartialContent {
+		var start, end, total int64
+		if n, err := fmt.Sscanf(res.Header.Get("Content-Range"), "bytes %d-%d/%d", &start, &end, &total); err != nil || n != 3 || start != downloaded || end < start || end >= total || total != m.Archive.Size {
+			return fmt.Errorf("资源包续传范围无效")
+		}
+	} else if res.StatusCode == http.StatusOK {
+		// 来源不支持 Range 时重新下载，不能将完整响应接在旧文件后面。
+		if err := f.Truncate(0); err != nil {
+			return err
+		}
+		if _, err := f.Seek(0, io.SeekStart); err != nil {
+			return err
+		}
+		downloaded = 0
+		h.Reset()
+	} else {
 		return fmt.Errorf("下载资源失败：HTTP %d", res.StatusCode)
 	}
-	f, err := os.Create(archive)
-	if err != nil {
-		return err
-	}
-	h := sha256.New()
 	buf := make([]byte, 128<<10)
-	var downloaded int64
 	lastProgress := time.Time{}
 	for {
 		n, readErr := res.Body.Read(buf)
 		if n > 0 {
 			downloaded += int64(n)
 			if downloaded > m.Archive.Size {
-				f.Close()
 				return fmt.Errorf("资源包超过清单声明的大小")
 			}
 			if _, err := f.Write(buf[:n]); err != nil {
-				f.Close()
 				return err
 			}
 			h.Write(buf[:n])
@@ -478,13 +528,12 @@ func downloadResourceArchiveFrom(ctx context.Context, client *http.Client, sourc
 		}
 		if readErr != nil {
 			if readErr != io.EOF {
-				f.Close()
 				return readErr
 			}
 			break
 		}
 	}
-	if err := f.Close(); err != nil {
+	if err := f.Sync(); err != nil {
 		return err
 	}
 	if progress != nil {
