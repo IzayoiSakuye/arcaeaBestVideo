@@ -12,20 +12,20 @@
 
 ## 快速开始 
 
-- **获取安装器：**可以从右侧[Releases](https://github.com/IzayoiSakuye/arcaeaBestVideo/releases)页面下载最新installer，根据安装器提示完成安装（基础资源预计占用约 195MB，还需要保留下载谱面预览的空间）
-- **准备运行环境：**
+- **获取安装器**：可以从右侧[Releases](https://github.com/IzayoiSakuye/arcaeaBestVideo/releases)页面下载最新installer，根据安装器提示完成安装（基础资源预计占用约 195MB，还需要保留下载谱面预览的空间）
+- **准备运行环境**：
   - 下载[FFmpeg和FFprobe](https://ffmpeg.org/download.html)，用于视频渲染与校验
   - 下载[yt-dlp](https://github.com/yt-dlp/yt-dlp)，用于从流媒体下载视频
   - Edge浏览器，用于构建画面
 
-- **设置运行环境：**启动生成器，首次进入会按照指引进入设置页面，在此处填写上方下载工具的可执行文件路径，参考路径：
+- **设置运行环境**：启动生成器，首次进入会按照指引进入设置页面，在此处填写上方下载工具的可执行文件路径，参考路径：
   - FFmpeg：`ffmpeg-<version>-full_build\bin\ffmpeg.exe`
   - FFprobe：`ffmpeg-<version>-full_build\bin\ffprobe.exe`
   - yt-dlp：`yt-dlp.exe`
   - Edge：`C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe`
 
-- **获取更新资源：**通过安装器下载的生成器会自带一份对应版本发布时的最新资源，若有资源更新，可以通过设置页面手动更新，或自动检测更新。
-- **生成第一份视频：**从最左侧开始，根据引导导入图片，填写信息，等待生成即可~
+- **获取更新资源**：通过安装器下载的生成器会自带一份对应版本发布时的最新资源，若有资源更新，可以通过设置页面手动更新，或自动检测更新。
+- **生成第一份视频**：从最左侧开始，根据引导导入图片，填写信息，等待生成即可~
 
 ## 生成器使用方法
 
