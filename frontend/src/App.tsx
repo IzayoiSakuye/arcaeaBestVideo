@@ -818,7 +818,6 @@ function App() {
             <div className="content-grid">
               <section className="card wide">
                 <h2>环境设置</h2>
-                <p className="muted">自动检测工具；找不到时点「⋯」选择文件。</p>
                 <div className="tool-list">
                   {toolNames.map((name) => {
                     const found = status?.tools?.find((tool) => tool.Name === name);
@@ -826,7 +825,6 @@ function App() {
                     return (
                       <div className="tool-row" key={name}>
                         <div className="tool-identity">
-                          <span className="tool-icon">{name === 'edge' ? 'E' : '⌘'}</span>
                           <div>
                             <strong>{name === 'edge' ? 'Microsoft Edge' : name}</strong>
                             <small>
