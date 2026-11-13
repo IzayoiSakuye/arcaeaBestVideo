@@ -134,10 +134,30 @@ func (a *App) CheckOPAudioUpdate() (OPAudioStatus, error) {
 	}
 	for _, f := range m.Files {
 		kind := strings.TrimSuffix(filepath.Base(f.Path), ".wav")
-		_, err := os.Stat(filepath.Join(dir, kind+"-"+strings.ToLower(f.SHA256)+".wav"))
-		status.Files = append(status.Files, OPAudioFileStatus{Kind: kind, Size: f.Size, Installed: opAudioPath(kind) != "", UpdateAvailable: err != nil})
+		cached := filepath.Join(dir, kind+"-"+strings.ToLower(f.SHA256)+".wav")
+		bundled := filepath.Join(a.root, "templates", "audio", kind+".wav")
+		current := opAudioFileMatches(cached, f) || opAudioFileMatches(bundled, f)
+		_, bundledErr := os.Stat(bundled)
+		status.Files = append(status.Files, OPAudioFileStatus{Kind: kind, Size: f.Size, Installed: opAudioPath(kind) != "" || bundledErr == nil, UpdateAvailable: !current})
 	}
 	return status, nil
+}
+
+func opAudioFileMatches(path string, f opFile) bool {
+	file, err := os.Open(path)
+	if err != nil {
+		return false
+	}
+	defer file.Close()
+	info, err := file.Stat()
+	if err != nil || !info.Mode().IsRegular() || info.Size() != f.Size {
+		return false
+	}
+	h := sha256.New()
+	if _, err := io.Copy(h, file); err != nil {
+		return false
+	}
+	return strings.EqualFold(hex.EncodeToString(h.Sum(nil)), f.SHA256)
 }
 
 func installOPAudio(ctx context.Context, client *http.Client, dir string, f opFile, progress func(int64, int64)) error {

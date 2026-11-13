@@ -59,3 +59,21 @@ func TestOPAudioManifestAndInstall(t *testing.T) {
 		t.Fatal("跨来源下载地址未被拒绝")
 	}
 }
+
+func TestOPAudioFileMatches(t *testing.T) {
+	wav := append([]byte("RIFF"), make([]byte, 40)...)
+	copy(wav[8:], "WAVE")
+	hash := sha256.Sum256(wav)
+	file := filepath.Join(t.TempDir(), "op1.wav")
+	if err := os.WriteFile(file, wav, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	entry := opFile{Size: int64(len(wav)), SHA256: hex.EncodeToString(hash[:])}
+	if !opAudioFileMatches(file, entry) {
+		t.Fatal("打包音频应匹配清单")
+	}
+	entry.SHA256 = hex.EncodeToString(make([]byte, 32))
+	if opAudioFileMatches(file, entry) {
+		t.Fatal("哈希不符的打包音频不能视为已更新")
+	}
+}

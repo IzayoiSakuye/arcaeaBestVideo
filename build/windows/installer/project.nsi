@@ -98,7 +98,7 @@ Section
     !insertmacro wails.files
 
     SetOutPath "$INSTDIR\templates"
-    File /r /x *.wav /x *.pkf "..\..\..\templates\*"
+    File /r /x *.pkf "..\..\..\templates\*"
 
     SetOutPath "$INSTDIR\data"
     File "..\..\..\data\arcaea-catalog.json"
