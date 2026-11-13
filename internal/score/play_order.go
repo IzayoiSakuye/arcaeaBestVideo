@@ -2,12 +2,12 @@ package score
 
 import "fmt"
 
-// EffectivePlayOrder 保留未编排项目的原始成绩顺序
+// EffectivePlayOrder 未编排时按 B50 到 B1 播放
 func (p *Project) EffectivePlayOrder() ([]PlayItem, error) {
 	if p.PlayOrder == nil {
 		order := make([]PlayItem, len(p.Songs))
 		for i := range p.Songs {
-			order[i] = PlayItem{Kind: "song", SongIndex: i + 1}
+			order[i] = PlayItem{Kind: "song", SongIndex: len(p.Songs) - i}
 		}
 		return order, nil
 	}

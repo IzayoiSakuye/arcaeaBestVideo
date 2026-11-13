@@ -5,7 +5,7 @@ import "testing"
 func TestEffectivePlayOrder(t *testing.T) {
 	p := &Project{Songs: make([]Song, 2), Thoughts: []Thought{{ID: "memo"}}}
 	order, err := p.EffectivePlayOrder()
-	if err != nil || len(order) != 2 || order[0].SongIndex != 1 || order[1].SongIndex != 2 {
+	if err != nil || len(order) != 2 || order[0].SongIndex != 2 || order[1].SongIndex != 1 {
 		t.Fatalf("默认顺序：%v, %v", order, err)
 	}
 	p.PlayOrder = []PlayItem{{Kind: "thought", ThoughtID: "memo"}, {Kind: "song", SongIndex: 2}}

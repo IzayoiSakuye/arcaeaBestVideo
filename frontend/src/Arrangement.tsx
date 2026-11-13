@@ -7,11 +7,12 @@ type Props = { project: score.Project; rows: app.ReviewRow[]; onChange: (order: 
 export default function Arrangement({ project, rows, onChange }: Props) {
   const [dropAt, setDropAt] = useState<number | null>(null);
   const [dragged, setDragged] = useState<string | null>(null);
-  const order: Item[] = project.play_order ?? project.songs.map((_, i) => ({ kind: 'song', song_index: i + 1 }));
+  const defaultOrder = () => project.songs.map((_, i) => ({ kind: 'song', song_index: project.songs.length - i }));
+  const order: Item[] = project.play_order ?? defaultOrder();
   const usedSongs = new Set(order.filter((item) => item.kind === 'song').map((item) => item.song_index));
   const usedThoughts = new Set(order.filter((item) => item.kind === 'thought').map((item) => item.thought_id));
   const title = (item: Item) => item.kind === 'song'
-    ? `#${project.songs.length - (item.song_index || 1) + 1} ${rows[(item.song_index || 1) - 1]?.title || project.songs[(item.song_index || 1) - 1]?.song_id || '待校对曲目'}`
+    ? `#${item.song_index} ${rows[(item.song_index || 1) - 1]?.title || project.songs[(item.song_index || 1) - 1]?.song_id || '待校对曲目'}`
     : project.thoughts?.find((thought) => thought.id === item.thought_id)?.name || '感想片段';
   function insert(raw: string, at: number) {
     try {
@@ -61,7 +62,7 @@ export default function Arrangement({ project, rows, onChange }: Props) {
   }
   const remove = (index: number) => onChange(order.filter((_, i) => i !== index));
   return <section className="arrangement">
-    <div className="card arrange-main" onDragOver={(event) => allow(event, order.length)} onDrop={(event) => drop(event, order.length)}><div className="arrange-heading"><h2>最终播放顺序 <span>{order.length} 段</span></h2><button className="button quiet" onClick={() => onChange(project.songs.map((_, i) => ({ kind: 'song', song_index: i + 1 })))}>重置顺序</button></div><p className="muted">拖动或输入序号调整顺序。</p>
+    <div className="card arrange-main" onDragOver={(event) => allow(event, order.length)} onDrop={(event) => drop(event, order.length)}><div className="arrange-heading"><h2>最终播放顺序 <span>{order.length} 段</span></h2><button className="button quiet" onClick={() => onChange(defaultOrder())}>重置顺序</button></div><p className="muted">拖动或输入序号调整顺序。</p>
       {order.map((item, index) => <div className={`arrange-row${dropAt === index ? ' arrange-drop-before' : ''}${dropAt === index + 1 ? ' arrange-drop-after' : ''}`} key={`${item.kind}-${item.song_index || item.thought_id}-${index}`} draggable onDragStart={(event) => drag(event, { from: index }, title(item))} onDragEnd={finishDrag} onDragOver={(event) => { const after = event.clientY > event.currentTarget.getBoundingClientRect().top + event.currentTarget.clientHeight / 2; allow(event, index + Number(after)); }} onDrop={(event) => { const after = event.clientY > event.currentTarget.getBoundingClientRect().top + event.currentTarget.clientHeight / 2; drop(event, index + Number(after)); }}>
         <input className="arrange-number" type="number" min="1" max={order.length} defaultValue={index + 1} aria-label={`${title(item)}的播放序号`} onBlur={(event) => { moveTo(index, event.currentTarget.value); event.currentTarget.value = String(index + 1); }} onKeyDown={(event) => { if (event.key === 'Enter') event.currentTarget.blur(); }} />
         <span className="arrange-handle" aria-hidden="true">⋮⋮</span><span className="arrange-title">{title(item)}</span>
