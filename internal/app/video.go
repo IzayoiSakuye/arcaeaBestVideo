@@ -62,10 +62,13 @@ func (a *App) VideoInfos(project *score.Project) ([]VideoState, error) {
 		}
 		a.mu.Lock()
 		if task := a.videoTasks[videoSourceKey(song.SongID, song.Difficulty.Name)]; task != nil {
-			if song.Video == nil || videoIdentity(song) == task.Source {
+			if song.Video == nil || videoIdentity(song) == task.Source || sameLocalVideo(song, task.Song) {
 				a.refreshVideoTaskLocked(task)
 				state = task.State
-				if !score.ClipConfirmed(song) || task.Song.Clip == nil || task.Song.Clip.ConfirmedKey != song.Clip.ConfirmedKey {
+				sameRange := song.Clip != nil && task.Song.Clip != nil && song.Clip.ConfirmedKey != "" && song.Clip.ConfirmedKey == task.Song.Clip.ConfirmedKey && song.Clip.StartMs == task.Song.Clip.StartMs && song.Clip.DurationMs == task.Song.Clip.DurationMs
+				// 文件不可用时保留已保存选段的标记，素材仍失败且不可生成。
+				confirmed := score.ClipConfirmed(song) || sameLocalVideo(song, task.Song) && !fileReady(song.Video.LocalPath) && state.Confirmed
+				if !confirmed || !sameRange {
 					state.Confirmed, state.MaterialReady = false, false
 					if state.Status == "ready" {
 						state.Status = "preview"

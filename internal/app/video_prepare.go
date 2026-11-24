@@ -60,6 +60,9 @@ func (a *App) videoMaterialPath(song score.Song) string {
 
 // refreshVideoTaskLocked 不让已丢失的磁盘素材继续复用旧就绪状态。
 func (a *App) refreshVideoTaskLocked(task *videoTask) {
+	if a.refreshLocalVideoTaskLocked(task) {
+		return
+	}
 	state := &task.State
 	missing := false
 	if state.PreviewReady {
@@ -133,6 +136,9 @@ func (a *App) prepareVideo(song score.Song, expectedID string) (VideoState, erro
 			return state, err
 		}
 		song.Video = &video
+	}
+	if song.Video.LocalPath != "" && !fileReady(song.Video.LocalPath) {
+		return a.unavailableLocalVideo(song, expectedID, state)
 	}
 	key, source := videoSourceKey(song.SongID, song.Difficulty.Name), videoIdentity(song)
 	if source == "" {
@@ -243,6 +249,11 @@ func (a *App) prepareVideo(song score.Song, expectedID string) (VideoState, erro
 		return a.failVideo(key, state.RequestID, prepareCtx.Err()), prepareCtx.Err()
 	}
 	a.mu.Lock()
+	if song.Video.LocalPath != "" && (!fileReady(song.Video.LocalPath) || videoIdentity(song) != source) {
+		a.mu.Unlock()
+		err = fmt.Errorf("本地录像在准备期间已改变，请重新准备并确认选段")
+		return a.failVideo(key, state.RequestID, err), err
+	}
 	if current := a.videoTasks[key]; current == task && a.jobID == "" && prepareCtx.Err() == nil {
 		task.Cancel = nil
 		task.Source, task.Song = videoIdentity(song), song
@@ -265,6 +276,7 @@ func (a *App) failVideo(key, id string, err error) VideoState {
 	task := a.videoTasks[key]
 	var state VideoState
 	if task != nil && task.State.RequestID == id {
+		a.refreshVideoTaskLocked(task)
 		if task.State.Status != "cancelled" {
 			task.State.Status = "failed"
 		}
@@ -299,10 +311,19 @@ func (a *App) ConfirmVideoRange(song score.Song, clip score.ClipRange) (VideoSel
 	if old == nil || old.State.RequestID != state.RequestID {
 		return VideoSelection{}, fmt.Errorf("录像来源已改变，请重新选段")
 	}
+	if old.Song.Video.LocalPath != "" {
+		a.refreshVideoTaskLocked(old)
+		if !old.State.PreviewReady {
+			return VideoSelection{}, fmt.Errorf("本地录像已不可用或已改变，请重新准备后确认选段")
+		}
+	}
 	video := *old.Song.Video
 	song.Video = &video
 	song.Clip = &score.ClipRange{StartMs: clip.StartMs, DurationMs: clip.DurationMs}
 	song.Clip.ConfirmedKey = score.ClipKey(song)
+	if song.Clip.ConfirmedKey == "" {
+		return VideoSelection{}, fmt.Errorf("录像来源无效，请重新准备后确认选段")
+	}
 	if old.Song.Clip != nil && old.Song.Clip.ConfirmedKey == song.Clip.ConfirmedKey {
 		return VideoSelection{Song: song, State: old.State}, nil
 	}
