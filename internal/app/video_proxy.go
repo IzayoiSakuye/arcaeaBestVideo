@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -89,7 +90,18 @@ func serveRemotePreview(w http.ResponseWriter, r *http.Request, p *remotePreview
 		return
 	}
 	defer response.Body.Close()
-	if response.StatusCode != http.StatusOK && response.StatusCode != http.StatusPartialContent && response.StatusCode != http.StatusRequestedRangeNotSatisfiable {
+	if response.StatusCode == http.StatusRequestedRangeNotSatisfiable {
+		if size, ok := strings.CutPrefix(response.Header.Get("Content-Range"), "bytes */"); ok {
+			if _, err := strconv.ParseUint(size, 10, 64); err == nil {
+				w.Header().Set("Content-Range", "bytes */"+size)
+			}
+		}
+		w.Header().Set("Cache-Control", "no-store")
+		w.Header().Set("Content-Length", "0")
+		w.WriteHeader(http.StatusRequestedRangeNotSatisfiable)
+		return
+	}
+	if response.StatusCode != http.StatusOK && response.StatusCode != http.StatusPartialContent {
 		http.Error(w, "上游预览暂不可用", http.StatusBadGateway)
 		return
 	}
