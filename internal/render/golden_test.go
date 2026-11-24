@@ -54,9 +54,23 @@ func TestGoldenCommands(t *testing.T) {
 				Clip: ins[0], BG: ins[1], Jacket: ins[2],
 				Template: ins[3], Text: ins[4], Win: Templates[wide].Win,
 			}, last(c.Argv))
-			// 历史捕获不含新增转场；只剥离这一处有意变更，其他参数仍逐字对拍。
+			if len(got) < 5 || got[3] != "-ss" || got[4] != "0.000" {
+				t.Fatalf("%s: 必须显式丢弃零点前的关键帧预卷", c.Name)
+			}
+			got = append(got[:3], got[5:]...)
+			// 单独断言新增预卷和音频滤镜契约，其余参数继续与历史捕获逐字对拍。
 			for i, arg := range got {
 				got[i] = strings.Replace(arg, ","+videoFade(SecPerSong*1000)+"[v]", "[v]", 1)
+				if arg == "-filter_complex" {
+					const audio = ";[0:a]asetpts=PTS-STARTPTS,anull[a]"
+					if !strings.HasSuffix(got[i+1], audio) {
+						t.Fatalf("%s: 音频必须从零计时并映射滤镜输出", c.Name)
+					}
+					got[i+1] = strings.TrimSuffix(got[i+1], audio)
+				}
+				if arg == "-map" && i+1 < len(got) && got[i+1] == "[a]" {
+					got[i+1] = "0:a:0"
+				}
 			}
 
 		case strings.HasPrefix(c.Name, "render-text"):

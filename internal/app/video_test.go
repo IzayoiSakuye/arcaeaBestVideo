@@ -15,10 +15,17 @@ import (
 
 func TestCancelVideoDownload(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
-	a := &App{videoCancel: cancel}
+	a := &App{videoTasks: map[string]*videoTask{
+		"active": {Cancel: cancel, State: VideoState{Status: "downloading"}},
+		"queued": {State: VideoState{Status: "queued"}},
+		"ready":  {State: VideoState{Status: "ready", MaterialReady: true}},
+	}}
 	a.CancelVideoDownload()
 	if ctx.Err() != context.Canceled {
 		t.Fatal("应停止当前录像获取")
+	}
+	if a.videoTasks["active"].State.Status != "cancelled" || a.videoTasks["queued"].State.Status != "cancelled" || !a.videoTasks["ready"].State.MaterialReady {
+		t.Fatal("取消整个队列应停止等待项并保留有效素材")
 	}
 }
 
