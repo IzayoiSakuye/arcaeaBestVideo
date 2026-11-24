@@ -53,21 +53,17 @@ func (a *App) VideoInfos(project *score.Project) ([]VideoState, error) {
 		state.PreviewReady = state.PreviewURL != ""
 		if score.ClipConfirmed(song) {
 			state.Confirmed = true
-			path := song.Video.LocalPath
-			if path == "" {
-				path = resource.VideoCachePath(filepath.Join(a.cacheDir(), "clips"), song.SongID, song.Difficulty.Name, song.Video.URL)
-				if strings.HasPrefix(song.Video.URL, "https://www.bilibili.com/") {
-					path = resource.RangeCachePath(filepath.Join(a.cacheDir(), "clips"), song.SongID, song.Difficulty.Name, song.Video.URL, song.Clip.StartMs, song.Clip.DurationMs)
-				}
-			}
-			state.MaterialReady = fileReady(path)
+			state.MaterialReady = fileReady(a.videoMaterialPath(song))
 			if state.MaterialReady {
 				state.Status = "ready"
+			} else if state.Status == "ready" {
+				state.Status = "preview"
 			}
 		}
 		a.mu.Lock()
 		if task := a.videoTasks[videoSourceKey(song.SongID, song.Difficulty.Name)]; task != nil {
 			if song.Video == nil || videoIdentity(song) == task.Source {
+				a.refreshVideoTaskLocked(task)
 				state = task.State
 				if !score.ClipConfirmed(song) || task.Song.Clip == nil || task.Song.Clip.ConfirmedKey != song.Clip.ConfirmedKey {
 					state.Confirmed, state.MaterialReady = false, false

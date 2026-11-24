@@ -44,6 +44,44 @@ func videoIdentity(song score.Song) string {
 	return score.ClipKey(copy)
 }
 
+func (a *App) videoMaterialPath(song score.Song) string {
+	if song.Video == nil {
+		return ""
+	}
+	if song.Video.LocalPath != "" {
+		return song.Video.LocalPath
+	}
+	dir := filepath.Join(a.cacheDir(), "clips")
+	if strings.HasPrefix(song.Video.URL, "https://www.bilibili.com/") && song.Clip != nil {
+		return resource.RangeCachePath(dir, song.SongID, song.Difficulty.Name, song.Video.URL, song.Clip.StartMs, song.Clip.DurationMs)
+	}
+	return resource.VideoCachePath(dir, song.SongID, song.Difficulty.Name, song.Video.URL)
+}
+
+// refreshVideoTaskLocked 不让已丢失的磁盘素材继续复用旧就绪状态。
+func (a *App) refreshVideoTaskLocked(task *videoTask) {
+	state := &task.State
+	missing := false
+	if state.PreviewReady {
+		token := strings.TrimSuffix(strings.TrimPrefix(state.PreviewURL, "/preview/"), filepath.Ext(state.PreviewURL))
+		if a.remotePreviews[token] == nil && !fileReady(a.previews[token]) {
+			state.PreviewReady = false
+			state.PreviewURL, state.PreviewAudioURL = "", ""
+			missing = true
+		}
+	}
+	if state.MaterialReady && !fileReady(a.videoMaterialPath(task.Song)) {
+		state.MaterialReady = false
+		missing = true
+	}
+	if missing {
+		state.DownloadedBytes, state.TotalBytes, state.Progress = 0, 0, -1
+		if state.Status == "ready" || state.Status == "preview" {
+			state.Status, state.Error = "failed", "录像素材已丢失或不可用，请重新准备或重试"
+		}
+	}
+}
+
 func (a *App) beginCacheUse() func() {
 	a.mu.Lock()
 	a.cacheUsers++
@@ -105,10 +143,13 @@ func (a *App) prepareVideo(song score.Song, expectedID string) (VideoState, erro
 		a.mu.Unlock()
 		return VideoState{}, fmt.Errorf("素材任务已改变")
 	}
-	if previous := a.videoTasks[key]; previous != nil && previous.Source == source && previous.State.Status != "failed" && previous.State.Status != "cancelled" {
-		state = previous.State
-		a.mu.Unlock()
-		return state, nil
+	if previous := a.videoTasks[key]; previous != nil && previous.Source == source {
+		a.refreshVideoTaskLocked(previous)
+		if previous.State.Status != "failed" && previous.State.Status != "cancelled" {
+			state = previous.State
+			a.mu.Unlock()
+			return state, nil
+		}
 	}
 	if a.jobID != "" {
 		a.mu.Unlock()
@@ -389,6 +430,7 @@ func (a *App) RetryVideoPreparation(songID, difficulty, requestID string) (Video
 		a.mu.Unlock()
 		return VideoState{}, fmt.Errorf("素材任务已改变")
 	}
+	a.refreshVideoTaskLocked(task)
 	state := task.State
 	if a.jobID != "" {
 		a.mu.Unlock()
