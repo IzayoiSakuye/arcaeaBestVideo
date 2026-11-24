@@ -166,6 +166,16 @@ type ThoughtPreview struct {
 
 // RenderThought 是渲染感想片段的逻辑
 func (a *App) RenderThought(thought score.Thought) (ThoughtPreview, error) {
+	release := a.beginCacheUse()
+	defer release()
+	a.mu.Lock()
+	if a.thoughtBusy || a.jobID != "" {
+		a.mu.Unlock()
+		return ThoughtPreview{}, fmt.Errorf("已有视频正在生成")
+	}
+	a.thoughtBusy = true
+	a.mu.Unlock()
+	defer func() { a.mu.Lock(); a.thoughtBusy = false; a.mu.Unlock() }()
 	overrides, err := loadToolPaths()
 	if err != nil {
 		return ThoughtPreview{}, err

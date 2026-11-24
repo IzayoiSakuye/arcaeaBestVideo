@@ -106,6 +106,17 @@ func (a *App) StartRender(project *score.Project, output string, replace bool) (
 	if strings.ToLower(filepath.Ext(output)) != ".mp4" {
 		return start, fmt.Errorf("输出文件必须为 .mp4")
 	}
+	if within(a.cacheDir(), output) {
+		return start, fmt.Errorf("不能把成片写入可清理的缓存目录")
+	}
+	for _, song := range review.Project.Songs {
+		if song.Video != nil && song.Video.LocalPath != "" {
+			path, err := filepath.Abs(song.Video.LocalPath)
+			if err == nil && strings.EqualFold(path, output) {
+				return start, fmt.Errorf("成片不能覆盖本地录像来源")
+			}
+		}
+	}
 	for _, dataDir := range []string{filepath.Join(a.root, "data"), filepath.Join(a.dataRoot(), "data")} {
 		if rel, err := filepath.Rel(dataDir, output); err == nil && filepath.IsLocal(rel) {
 			return start, fmt.Errorf("不能把视频写入只读数据目录：%s", output)
@@ -124,27 +135,15 @@ func (a *App) StartRender(project *score.Project, output string, replace bool) (
 	if err != nil {
 		return start, err
 	}
-	videoStates, err := a.VideoInfos(review.Project)
-	if err != nil {
-		return start, err
-	}
-	var missing []string
-	needDownload := false
-	for _, state := range videoStates {
-		if !selected[state.Index] {
+	release := a.beginCacheUse()
+	defer release()
+	for i, song := range review.Project.Songs {
+		if !selected[i+1] {
 			continue
 		}
-		if state.Status == "missing" || state.Status == "invalid" {
-			missing = append(missing, fmt.Sprintf("%d", state.Index))
-		} else if state.Status == "download" {
-			needDownload = true
+		if _, _, err := resource.VideoMaterial(a.context(), tls.FFprobe, filepath.Join(a.cacheDir(), "clips"), song); err != nil {
+			return start, fmt.Errorf("第 %d 首：%w", i+1, err)
 		}
-	}
-	if len(missing) > 0 {
-		return start, fmt.Errorf("以下曲目缺少或填错录像来源：第 %s 首，请在识别信息页指定链接或本地文件", strings.Join(missing, "、"))
-	}
-	if needDownload && tls.YtDlp == "" {
-		return start, fmt.Errorf("部分录像尚未获取，请先配置 yt-dlp 或选择本地文件")
 	}
 	cata, _ := a.catalog()
 	for i := range review.Project.Thoughts {
@@ -175,9 +174,20 @@ func (a *App) StartRender(project *score.Project, output string, replace bool) (
 	}
 
 	a.mu.Lock()
-	if a.cancel != nil {
+	if a.cancel != nil || a.videoWorker || a.videoCancel != nil || a.thoughtBusy {
 		a.mu.Unlock()
-		return start, fmt.Errorf("已有渲染任务正在运行")
+		return start, fmt.Errorf("已有生成或素材获取任务正在运行")
+	}
+	for i, song := range review.Project.Songs {
+		if !selected[i+1] {
+			continue
+		}
+		if task := a.videoTasks[videoSourceKey(song.SongID, song.Difficulty.Name)]; task != nil {
+			if task.Source != videoIdentity(song) || task.Song.Clip != nil && task.Song.Clip.ConfirmedKey != song.Clip.ConfirmedKey {
+				a.mu.Unlock()
+				return start, fmt.Errorf("第 %d 首来源或范围已改变，请刷新工程后再生成", i+1)
+			}
+		}
 	}
 	ctx, cancel := context.WithCancel(a.context())
 	start = RenderStart{JobID: fmt.Sprintf("%d", time.Now().UnixNano()), Output: output}
