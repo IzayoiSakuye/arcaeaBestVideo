@@ -4,6 +4,7 @@ import { score, type app } from '../wailsjs/go/models';
 import { clipRangeError, formatClipTime, parseClipTime } from './clip';
 import { nameOf } from './format';
 import { sameThought, type ThoughtDraft } from './thought';
+import { PreviewMedia, retainPreview } from './PreviewMedia';
 
 type Props = {
   draft: ThoughtDraft;
@@ -39,28 +40,40 @@ export default function ThoughtEditor({ draft, saved, options, optionsLoading, o
   const frameRef = useRef<HTMLIFrameElement>(null);
   const dragRef = useRef<{ page: number; image: number; x: number; y: number; clientX: number; clientY: number } | null>(null);
   const draftVersion = useRef(0);
+  const mounted = useRef(true);
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false; draftVersion.current++; }; }, []);
 
   useEffect(() => {
+    let current = true;
+    setAudioLoading(false);
     if (draft.audio.kind === 'silent' || draft.audio.kind.startsWith('op')) {
       if (draft.audio.kind === 'silent') setMedia(null);
       setSilentDuration(formatClipTime(draft.duration_ms / 1000));
       if (draft.audio.kind === 'silent') return;
     }
+    setMedia(null);
     const option = options.find((item) => item.kind === draft.audio.kind && item.available);
     if (option) setMedia(option);
     else if (draft.audio.kind === 'custom' && draft.audio.path) {
       setAudioLoading(true);
-      ThoughtAudio(draft.audio.path).then(setMedia).catch((e) => setError(errorText(e))).finally(() => setAudioLoading(false));
+      ThoughtAudio(draft.audio.path).then((value) => { if (current) setMedia(value); }).catch((e) => { if (current) setError(errorText(e)); }).finally(() => { if (current) setAudioLoading(false); });
     }
     setAudioStart(formatClipTime(draft.audio.start_ms / 1000));
     setAudioEnd(formatClipTime(draft.audio.end_ms / 1000));
+    return () => { current = false; };
   }, [draft.audio.kind, draft.audio.path, options]);
   const imagePaths = draft.pages.flatMap((page) => page.images.map((image) => image.path)).join('\u0000');
   useEffect(() => {
+    let current = true;
     for (const path of imagePaths.split('\u0000').filter(Boolean)) {
-      if (!imageURLs[path]) ThoughtImage(path).then((item) => setImageURLs((old) => ({ ...old, [path]: item.preview_url }))).catch((e) => setError(errorText(e)));
+      if (!imageURLs[path]) ThoughtImage(path).then((item) => { if (current) setImageURLs((old) => ({ ...old, [path]: item.preview_url })); }).catch((e) => setError(errorText(e)));
     }
+    return () => { current = false; };
   }, [imagePaths]);
+  useEffect(() => {
+    const releases = imagePaths.split("\u0000").map((path) => imageURLs[path]).filter(Boolean).map(retainPreview);
+    return () => releases.forEach((release) => release());
+  }, [imagePaths, imageURLs]);
   useEffect(() => {
     if (!stageRef.current) return;
     const observer = new ResizeObserver(([entry]) => setStageWidth(entry.contentRect.width));
@@ -145,7 +158,7 @@ export default function ThoughtEditor({ draft, saved, options, optionsLoading, o
     setAudioLoading(true);
     try {
       const item = await PickThoughtAudio();
-      if (!item.path) return;
+      if (!item.path || !mounted.current) return;
       const endMs = Math.min(item.duration_ms, 30000);
       setMedia(item);
       setAudioStart('0:00');
@@ -158,7 +171,7 @@ export default function ThoughtEditor({ draft, saved, options, optionsLoading, o
     setImageLoading(true);
     try {
       const item = await PickThoughtImage();
-      if (!item.path) return;
+      if (!item.path || !mounted.current) return;
       setImageURLs((old) => ({ ...old, [item.path]: item.preview_url }));
       editPage(pageIndex, (page) => { page.images.push({ path: item.path, x: 1250, y: 420, width: 360 }); });
       setPreviewTime((pageIndex + 0.5) * seconds / draft.pages.length);
@@ -173,7 +186,7 @@ export default function ThoughtEditor({ draft, saved, options, optionsLoading, o
     try {
       const thought = currentThought();
       const result = await RenderThought(new score.Thought(thought));
-      if (version === draftVersion.current) setPreviewURL(result.preview_url);
+      if (mounted.current && version === draftVersion.current) setPreviewURL(result.preview_url);
     } catch (e) { setError(errorText(e)); }
     finally { setBusy(false); }
   }
@@ -229,7 +242,7 @@ export default function ThoughtEditor({ draft, saved, options, optionsLoading, o
       {optionsError && <div className="notice warn">xBGM读取失败：{optionsError}</div>}
       {draft.audio.kind === 'custom' && <button className="button quiet" disabled={audioLoading || busy} onClick={chooseAudio}>{audioLoading ? '正在读取音频…' : '选择音频文件'}</button>}
       {media && draft.audio.kind !== 'silent' && <>
-        <audio className="thought-audio" controls src={media.preview_url} />
+        <PreviewMedia kind="audio" className="thought-audio" src={media.preview_url} />
         <div className="clip-range" aria-label="音频范围">
           <div className="clip-range-rail"><div className={`clip-range-selected ${reversedRange ? 'invalid' : ''}`} style={{ left: `${Math.max(0, railStart * 1000 / media.duration_ms) * 100}%`, width: `${Math.max(0, (railEnd - railStart) * 1000 / media.duration_ms) * 100}%` }} /></div>
           <input className="clip-range-start" type="range" min="0" max={media.duration_ms / 1000} step="0.1" value={draft.audio.start_ms / 1000} aria-label="开始时间" onChange={(e) => updateRange(Number(e.target.value), draft.audio.end_ms / 1000)} />
@@ -266,7 +279,7 @@ export default function ThoughtEditor({ draft, saved, options, optionsLoading, o
       <label className="field full">查看时间：{formatClipTime(previewTime)} / {formatClipTime(seconds)}
         <input type="range" min="0" max={Math.max(seconds - 0.01, 0)} step="0.1" value={Math.min(previewTime, seconds)} onChange={(e) => setPreviewTime(Number(e.target.value))} />
       </label>
-      {previewURL && <><h3>生成结果</h3><video className="thought-video" controls src={previewURL} /></>}
+      {previewURL && <><h3>生成结果</h3><PreviewMedia kind="video" className="thought-video" src={previewURL} /></>}
     </aside>
   </div>;
 }
