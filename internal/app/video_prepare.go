@@ -138,6 +138,7 @@ func (a *App) prepareVideo(song score.Song, expectedID string) (VideoState, erro
 	if source == "" {
 		return state, fmt.Errorf("录像来源无效")
 	}
+	confirmed := score.ClipConfirmed(song)
 	a.mu.Lock()
 	if expectedID != "" && (a.videoTasks[key] == nil || a.videoTasks[key].State.RequestID != expectedID) {
 		a.mu.Unlock()
@@ -145,7 +146,8 @@ func (a *App) prepareVideo(song score.Song, expectedID string) (VideoState, erro
 	}
 	if previous := a.videoTasks[key]; previous != nil && previous.Source == source {
 		a.refreshVideoTaskLocked(previous)
-		if previous.State.Status != "failed" && previous.State.Status != "cancelled" {
+		sameRange := previous.Song.Clip == nil && !confirmed || confirmed && previous.Song.Clip != nil && previous.Song.Clip.ConfirmedKey == song.Clip.ConfirmedKey
+		if sameRange && previous.State.Status != "failed" && previous.State.Status != "cancelled" {
 			state = previous.State
 			a.mu.Unlock()
 			return state, nil
@@ -161,7 +163,12 @@ func (a *App) prepareVideo(song score.Song, expectedID string) (VideoState, erro
 	if old := a.videoTasks[key]; old != nil && old.Cancel != nil {
 		old.Cancel()
 	}
-	song.Clip = nil
+	// 同来源失效恢复保留有效确认，换源或修改范围仍须重新保存。
+	if !confirmed {
+		song.Clip = nil
+	}
+	state.Confirmed, state.MaterialReady = confirmed, false
+	state.PreviewReady = state.PreviewURL != ""
 	state.RequestID, state.SongID, state.Difficulty = fmt.Sprintf("%d", time.Now().UnixNano()), song.SongID, song.Difficulty.Name
 	state.Index, state.Progress = song.Index, -1
 	state.Status, state.Error = "preparing", ""
@@ -182,11 +189,18 @@ func (a *App) prepareVideo(song score.Song, expectedID string) (VideoState, erro
 			path = resource.VideoCachePath(filepath.Join(a.cacheDir(), "clips"), song.SongID, song.Difficulty.Name, song.Video.URL)
 		}
 		info, probeErr := render.Probe(prepareCtx, tls.FFprobe, path)
-		if probeErr != nil || info.Width <= 0 || info.DurationMs <= 0 || info.SampleRate == "" {
+		if probeErr != nil || info.Width <= 0 || info.DurationMs <= 0 || info.SampleRate == "" || confirmed && (song.Clip.StartMs > info.DurationMs || song.Clip.DurationMs > info.DurationMs-song.Clip.StartMs) {
 			err = fmt.Errorf("录像无法读取，请重新获取或选择本地文件")
 			return a.failVideo(key, state.RequestID, err), err
 		}
 		state.PreviewURL, state.DurationMs, state.PreviewReady, state.Status = a.previewURL(path), info.DurationMs, true, "preview"
+		if confirmed {
+			if strings.HasPrefix(song.Video.URL, "https://www.bilibili.com/") {
+				state.Status = "queued"
+			} else {
+				state.MaterialReady, state.Status, state.Progress = true, "ready", 1
+			}
+		}
 		if state.OwnerName == "" {
 			state.OwnerName = resource.CachedVideoOwner(path)
 		}
@@ -216,6 +230,12 @@ func (a *App) prepareVideo(song score.Song, expectedID string) (VideoState, erro
 		}
 		state.PreviewURL, state.PreviewAudioURL = a.remotePreviewURLs(song.Video.URL, tls.YtDlp, streams)
 		state.DurationMs, state.OwnerName, state.PreviewReady, state.Status = streams.DurationMs, streams.Owner, true, "preview"
+		if confirmed && score.ClipConfirmed(song) {
+			state.Status = "queued"
+		} else {
+			song.Clip = nil
+			state.Confirmed = false
+		}
 	} else {
 		state.Status = "queued"
 	}
