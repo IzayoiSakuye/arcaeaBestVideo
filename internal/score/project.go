@@ -52,8 +52,9 @@ type VideoRef struct {
 }
 
 type ClipRange struct {
-	StartMs    int `json:"start_ms"`
-	DurationMs int `json:"duration_ms"`
+	StartMs      int    `json:"start_ms"`
+	DurationMs   int    `json:"duration_ms"`
+	ConfirmedKey string `json:"confirmed_key,omitempty"`
 }
 
 type ThoughtImage struct {
