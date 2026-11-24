@@ -117,11 +117,19 @@ func (j *Job) Run(ctx context.Context) (Result, error) {
 	if err != nil {
 		return res, err
 	}
+	if j.cfg.Limit > 0 && len(order) > j.cfg.Limit {
+		order = order[:j.cfg.Limit]
+	}
+	for _, item := range order {
+		if item.Kind == "song" {
+			if _, _, err := resource.VideoMaterial(ctx, j.deps.Tools.FFprobe, j.cfg.ClipsDir, proj.Songs[item.SongIndex-1]); err != nil {
+				return res, fmt.Errorf("第 %d 首尚不可生成：%w", item.SongIndex, err)
+			}
+		}
+	}
 	total := len(order)
 	for i, item := range order {
-		if j.cfg.Limit > 0 && i >= j.cfg.Limit {
-			break
-		}
+		fade := render.AudioFade{In: i > 0, Out: i < total-1}
 		if err := ctx.Err(); err != nil {
 			return res, err
 		}
@@ -142,7 +150,7 @@ func (j *Job) Run(ctx context.Context) (Result, error) {
 			if thought.Audio.Kind == "silent" {
 				audioPath = ""
 			}
-			seg, err := render.Thought(ctx, thought, audioPath, filepath.Join(j.cfg.Root, "templates"), filepath.Join(j.cacheDir(), "thought"), j.deps.Tools.FFmpeg, j.deps.Tools.FFprobe, j.deps.Tools.Edge)
+			seg, err := render.Thought(ctx, thought, audioPath, filepath.Join(j.cfg.Root, "templates"), filepath.Join(j.cacheDir(), "thought"), j.deps.Tools.FFmpeg, j.deps.Tools.FFprobe, j.deps.Tools.Edge, fade)
 			if err != nil {
 				return res, fmt.Errorf("第 %d 个感想生成失败：%w", i+1, err)
 			}
@@ -154,7 +162,7 @@ func (j *Job) Run(ctx context.Context) (Result, error) {
 		j.emit(Event{Stage: StageRender, SongIndex: item.SongIndex, SongID: s.SongID,
 			Status: StatusRunning, Progress: float64(i) / float64(total)})
 
-		seg, d, skipped, err := j.renderOne(ctx, item.SongIndex, s)
+		seg, d, skipped, err := j.renderOne(ctx, item.SongIndex, s, fade)
 		if err != nil {
 			j.emit(Event{Stage: StageRender, SongIndex: item.SongIndex, SongID: s.SongID,
 				Status: StatusFailed, Err: err.Error()})
@@ -169,15 +177,6 @@ func (j *Job) Run(ctx context.Context) (Result, error) {
 		}
 		j.emit(Event{Stage: StageRender, SongIndex: item.SongIndex, SongID: s.SongID, Status: status})
 		res.Segments = append(res.Segments, seg)
-	}
-	if len(res.Segments) > 1 {
-		for i, seg := range res.Segments {
-			faded, err := render.FadeAudio(ctx, j.deps.Tools.FFmpeg, j.deps.Tools.FFprobe, seg, filepath.Join(j.cfg.WorkDir, fmt.Sprintf("fade_%03d.mp4", i)), i > 0, i < len(res.Segments)-1)
-			if err != nil {
-				return res, fmt.Errorf("第 %d 段音频转场失败：%w", i+1, err)
-			}
-			res.Segments[i] = faded
-		}
 	}
 
 	j.emit(Event{Stage: StageConcat, Status: StatusRunning})

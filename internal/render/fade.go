@@ -26,6 +26,24 @@ func videoFade(durationMs int) string {
 	return fmt.Sprintf("fade=t=in:st=0:d=%.3f,fade=t=out:st=%.3f:d=%.3f", fade, seconds-fade, fade)
 }
 
+type AudioFade struct {
+	In  bool `json:"in"`
+	Out bool `json:"out"`
+}
+
+func audioFade(durationMs int, fade AudioFade) string {
+	seconds := float64(durationMs) / 1000
+	d := fadeSeconds(durationMs)
+	filters := []string{"anull"}
+	if fade.In {
+		filters = append(filters, fmt.Sprintf("afade=t=in:st=0:d=%.3f", d))
+	}
+	if fade.Out {
+		filters = append(filters, fmt.Sprintf("afade=t=out:st=%.3f:d=%.3f", seconds-d, d))
+	}
+	return strings.Join(filters, ",")
+}
+
 // FadeAudio 只重编码音轨，保留已渲染的视频和无损拼接参数
 func FadeAudio(ctx context.Context, ffmpeg, ffprobe, source, dest string, fadeIn, fadeOut bool) (string, error) {
 	info, err := Probe(ctx, ffprobe, source)

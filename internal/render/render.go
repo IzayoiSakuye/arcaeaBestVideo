@@ -158,12 +158,12 @@ func CompositeArgs(l Layers, dest string) []string {
 		"[4:v]format=rgba[tx]",
 		"[o3][tx]overlay=0:0:format=auto,scale=out_range=tv,format=yuv420p,setsar=1," + videoFade(durationMs) + "[v]",
 	}, ";")
+	filter += ";[0:a]asetpts=PTS-STARTPTS," + audioFade(durationMs, l.AudioFade) + "[a]"
 	args := []string{
 		"-y", "-v", "error",
 	}
-	if l.StartMs > 0 {
-		args = append(args, "-ss", strconv.FormatFloat(float64(l.StartMs)/1000, 'f', 3, 64))
-	}
+	// 即使从零读取，也让 FFmpeg 丢弃区间文件中的关键帧预卷。
+	args = append(args, "-ss", strconv.FormatFloat(float64(l.StartMs)/1000, 'f', 3, 64))
 	args = append(args, "-i", l.Clip)
 	duration := strconv.Itoa(SecPerSong)
 	if l.DurationMs > 0 {
@@ -176,7 +176,7 @@ func CompositeArgs(l Layers, dest string) []string {
 		"-loop", "1", "-framerate", "30", "-i", l.Text,
 		"-filter_complex", filter,
 		"-map", "[v]",
-		"-map", "0:a:0",
+		"-map", "[a]",
 		"-c:a", "aac", "-b:a", "192k", "-ar", "48000", "-ac", "2",
 		"-t", duration,
 		"-c:v", "libx264",

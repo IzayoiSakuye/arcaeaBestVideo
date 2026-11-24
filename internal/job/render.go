@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"rhythm-game-bvideo/internal/catalog"
@@ -15,7 +16,11 @@ import (
 )
 
 // renderOne 渲染单首歌片段
-func (j *Job) renderOne(ctx context.Context, i int, s score.Song) (string, RenderPhaseDuration, bool, error) {
+func (j *Job) renderOne(ctx context.Context, i int, s score.Song, fades ...render.AudioFade) (string, RenderPhaseDuration, bool, error) {
+	var fade render.AudioFade
+	if len(fades) > 0 {
+		fade = fades[0]
+	}
 	var d RenderPhaseDuration
 	root := j.cfg.Root
 	dataRoot := filepath.Dir(j.cfg.DataDir)
@@ -50,12 +55,12 @@ func (j *Job) renderOne(ctx context.Context, i int, s score.Song) (string, Rende
 	if err != nil {
 		return "", d, false, err
 	}
-	startMs, durationMs := 0, render.SecPerSong*1000
-	if s.Clip != nil {
-		startMs, durationMs = s.Clip.StartMs, s.Clip.DurationMs
-		if startMs < 0 || durationMs < 1000 || info.DurationMs <= 0 || startMs > info.DurationMs || durationMs > info.DurationMs-startMs+50 {
-			return "", d, false, fmt.Errorf("第 %d 首片段超出录像时长，请重新选择起点和展示时长", i)
-		}
+	startMs, durationMs := s.Clip.StartMs, s.Clip.DurationMs
+	if s.Video.LocalPath == "" && strings.HasPrefix(s.Video.URL, "https://www.bilibili.com/") {
+		startMs = 0
+	}
+	if startMs < 0 || durationMs < 1000 || startMs > info.DurationMs || durationMs > info.DurationMs-startMs+100 {
+		return "", d, false, fmt.Errorf("第 %d 首片段超出素材时长，请重新准备素材", i)
 	}
 	width, height := info.Width, info.Height
 	tpl := render.Templates[resource.TemplateFor(&catalog.VideoSource{VideoWidth: &width, VideoHeight: &height})]
@@ -74,10 +79,11 @@ func (j *Job) renderOne(ctx context.Context, i int, s score.Song) (string, Rende
 		TextHash:      fmt.Sprintf("%x", sha256.Sum256(textSource)),
 		Win:           tpl.Win,
 		Value:         val,
-		RenderVersion: "video-fade-1s",
+		RenderVersion: "seg-av-fade-v2",
+		AudioFade:     fade,
 	}
-	if s.User.Comment != "" {
-		in.RenderVersion = "video-fade-1s-comment-fix"
+	if stat, err := os.Stat(clip); err == nil {
+		in.ClipSize, in.ClipModified = stat.Size(), stat.ModTime().UnixNano()
 	}
 	if s.Clip != nil {
 		in.StartMs, in.DurationMs = startMs, durationMs
@@ -109,12 +115,16 @@ func (j *Job) renderOne(ctx context.Context, i int, s score.Song) (string, Rende
 		Clip: clip, BG: bgPng,
 		Jacket:   filepath.Join(dataRoot, filepath.FromSlash(jacket)),
 		Template: filepath.Join(root, tpl.Source),
-		Text:     textPng, Win: tpl.Win, StartMs: in.StartMs, DurationMs: in.DurationMs,
+		Text:     textPng, Win: tpl.Win, StartMs: in.StartMs, DurationMs: in.DurationMs, AudioFade: fade,
 	}, tmp, j.deps.Tools.FFmpeg); err != nil {
 		os.Remove(tmp)
 		return "", d, false, err
 	}
 	d.Composite = time.Since(t)
+	if info, err := render.Probe(ctx, j.deps.Tools.FFprobe, tmp); err != nil || info.PixFmt != "yuv420p" || info.DurationMs < durationMs-100 || info.DurationMs > durationMs+100 {
+		os.Remove(tmp)
+		return "", d, false, fmt.Errorf("片段产物参数或时长无效：%v", err)
+	}
 
 	if err := os.Rename(tmp, seg); err != nil {
 		return "", d, false, err
