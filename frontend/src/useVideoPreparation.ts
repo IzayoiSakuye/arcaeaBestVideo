@@ -33,7 +33,8 @@ export function useVideoPreparation(project: score.Project | null, identity: str
     if (project) VideoInfos(project).then((states) => {
       if (current !== session.current || !current.alive) return;
       querying = false;
-      const snapshot = states.map((state) => ({ ...(queryEvents.filter((event) => event.request_id === state.request_id && songKey(event) === songKey(state) && event.url === state.url).at(-1) || state), index: state.index, confirmed: state.confirmed, material_ready: state.material_ready }));
+      // 查询期间同任务的最新事件包含完整状态，只沿用查询中的歌曲索引。
+      const snapshot = states.map((state) => ({ ...(queryEvents.filter((event) => event.request_id === state.request_id && songKey(event) === songKey(state) && event.url === state.url).at(-1) || state), index: state.index }));
       current.states = mergeVideoSnapshot(snapshot, current.states);
       publish(current);
     }).catch((reason) => { if (current === session.current && current.alive) setError(String(reason)); });
