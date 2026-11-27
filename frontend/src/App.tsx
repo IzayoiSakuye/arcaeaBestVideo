@@ -110,6 +110,7 @@ function App() {
   const [cacheInfo, setCacheInfo] = useState<app.CacheState | null>(null);
   const [songIndex, setSongIndex] = useState(0);
   const [songJumpDraft, setSongJumpDraft] = useState<string | null>(null);
+  const songJumpPointer = useRef(false);
   const [clipDrafts, setClipDrafts] = useState<Record<string, { start: string; end: string }>>({});
   const draftSong = project?.songs[songIndex];
   const draftKey = `${projectEpoch}:${songIndex}:${videoSourceKey(draftSong ? [draftSong] : [])}`;
@@ -767,6 +768,12 @@ function App() {
     setSongJumpDraft(null);
     if (value !== null && /^\d+$/.test(value) && Number(value) >= 1 && Number(value) <= count) requestSong(Number(value) - 1);
   }
+  function navigateSong(direction: number) {
+    // 指针按下后的失焦已提交数字目标，本次点击不再相邻跳转。
+    if (songJumpPointer.current) { songJumpPointer.current = false; return; }
+    if (direction > 0 && songIndex === count - 1) requestSong(count);
+    else stepSong(direction);
+  }
   function finishPreviewScrub() {
     const elapsed = previewScrub.current;
     if (elapsed === null) return;
@@ -1074,10 +1081,10 @@ function App() {
                     只看有问题的曲目
                   </label>
                   <div className="spacer" />
-                  <button className="button quiet" onClick={() => stepSong(-1)}>
+                  <button className="button quiet" onPointerDown={() => { songJumpPointer.current = songJumpDraft !== null; }} onKeyDown={() => { songJumpPointer.current = false; }} onClick={() => navigateSong(-1)}>
                     ← 上一首
                   </button>
-                  <button className="button quiet" disabled={clipSaving || (songIndex === count - 1 && active)} onClick={() => songIndex === count - 1 ? requestSong(count) : stepSong(1)}>
+                  <button className="button quiet" disabled={clipSaving || (songIndex === count - 1 && active)} onPointerDown={() => { songJumpPointer.current = songJumpDraft !== null; }} onKeyDown={() => { songJumpPointer.current = false; }} onClick={() => navigateSong(1)}>
                     {songIndex === count - 1 ? '新增歌曲 →' : '下一首 →'}
                   </button>
                 </div>
