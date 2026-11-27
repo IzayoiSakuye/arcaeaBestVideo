@@ -763,10 +763,11 @@ function App() {
       setSwitchTarget(index); switchDialog.current?.showModal();
     } else switchSong(index);
   }
+  const songJumpTarget = songJumpDraft !== null && /^\d+$/.test(songJumpDraft) ? Number(songJumpDraft) - 1 : -1;
+  const canJumpSong = songJumpTarget >= 0 && songJumpTarget < count && songJumpTarget !== songIndex;
   function commitSongJump() {
-    const value = songJumpDraft;
     setSongJumpDraft(null);
-    if (value !== null && /^\d+$/.test(value) && Number(value) >= 1 && Number(value) <= count) requestSong(Number(value) - 1);
+    if (canJumpSong) requestSong(songJumpTarget);
   }
   function navigateSong(direction: number) {
     // 指针按下后的失焦已提交数字目标，本次点击不再相邻跳转。
@@ -1081,10 +1082,10 @@ function App() {
                     只看有问题的曲目
                   </label>
                   <div className="spacer" />
-                  <button className="button quiet" onPointerDown={() => { songJumpPointer.current = songJumpDraft !== null; }} onKeyDown={() => { songJumpPointer.current = false; }} onClick={() => navigateSong(-1)}>
+                  <button className="button quiet" onPointerDown={() => { songJumpPointer.current = canJumpSong; }} onKeyDown={() => { songJumpPointer.current = false; }} onClick={() => navigateSong(-1)}>
                     ← 上一首
                   </button>
-                  <button className="button quiet" disabled={clipSaving || (songIndex === count - 1 && active)} onPointerDown={() => { songJumpPointer.current = songJumpDraft !== null; }} onKeyDown={() => { songJumpPointer.current = false; }} onClick={() => navigateSong(1)}>
+                  <button className="button quiet" disabled={clipSaving || (songIndex === count - 1 && active)} onPointerDown={() => { songJumpPointer.current = canJumpSong; }} onKeyDown={() => { songJumpPointer.current = false; }} onClick={() => navigateSong(1)}>
                     {songIndex === count - 1 ? '新增歌曲 →' : '下一首 →'}
                   </button>
                 </div>
