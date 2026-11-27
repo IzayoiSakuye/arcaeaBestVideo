@@ -13,17 +13,27 @@ function bootstrap() {
   const listeners = new Map();
   const clone = (value) => structuredClone(value);
   const calls = [];
-  const songs = [1, 2].map((index) => ({ index, song_id: `qa${index}`, difficulty: { name: 'FTR', constant: 10 },
+  const editing = location.search.includes('editing');
+  const songs = (editing ? Array.from({ length: 50 }, (_, i) => i + 1) : [1, 2]).map((index) => ({ index, song_id: `qa${index}`, difficulty: { name: 'FTR', constant: 10 },
     score: { achievement: 99, rank: 'EX', pure: 100, far: 0, lost: 0 }, user: { comment: '' },
     video: { url: `https://www.bilibili.com/video/BV1op4y1W7M2?p=${index}`, owner_name: 'QA 发布者' },
     clip: { start_ms: 0, duration_ms: 1000, confirmed_key: `saved${index}` } }));
   const project = { schema_version: 1, game: 'arcaea', player: { name: 'QA' }, source: { type: 'manual' },
     defaults: { clips: { start_ms: 0, duration_ms: 1000 } }, songs, thoughts: [], play_order: songs.map((song) => ({ kind: 'song', song_index: song.index })) };
+  if (editing) { songs[0].clip = undefined; songs[11].clip = undefined; songs[0].video.url = 'https://www.youtube.com/watch?v=qa1'; }
   const states = songs.map((song) => ({ index: song.index, song_id: song.song_id, difficulty: 'FTR', url: song.video.url,
     request_id: `${100 + song.index}`, status: song.index === 1 ? 'failed' : 'ready', error: song.index === 1 ? 'QA 缓存丢失' : '',
     preview_ready: true, preview_url: `/preview/${song.index}.mp4`, preview_audio_url: `/preview/${song.index}.m4a`,
     duration_ms: 3000, owner_name: 'QA 发布者', confirmed: true, material_ready: song.index === 2, progress: -1 }));
+  if (editing) {
+    for (const state of states) { state.confirmed = Boolean(songs[state.index - 1].clip); state.material_ready = state.confirmed; state.status = state.confirmed ? 'ready' : 'preview'; state.error = ''; }
+    states[11].duration_ms = 15000;
+    Object.assign(states[0], { status: 'downloading', preview_ready: false, progress: 0.1 });
+  }
   const qa = window.qa = { calls, project, states, previewCount: 1, emit(name, value) { for (const cb of listeners.get(name) || []) cb(clone(value)); } };
+  qa.dialogOpens = 0;
+  const showModal = HTMLDialogElement.prototype.showModal;
+  HTMLDialogElement.prototype.showModal = function () { qa.dialogOpens++; return showModal.call(this); };
   const functions = {
     Status: () => ({ tools: [], song_count: 2 }), Version: () => 'qa',
     CheckResourceUpdate: () => ({ update_available: false }), CheckOPAudioUpdate: () => ({ files: [] }), ThoughtAudioOptions: () => [],
@@ -59,15 +69,17 @@ function bootstrap() {
   window.runtime = { EventsOnMultiple(name, callback) { const set = listeners.get(name) || new Set(); set.add(callback); listeners.set(name, set); return () => set.delete(callback); } };
 }
 
-test(process.env.QA_QUERY_RACE ? '查询返回前到达的完成事件必须解除素材门禁' : '真实组件：重试、旧事件、进度、确认、切歌、清理和生成门禁', { timeout: 60000 }, async () => {
+test(process.env.QA_EDITING ? '真实组件：数字提交、下载中导航与草稿保留、长列表布局' : process.env.QA_QUERY_RACE ? '查询返回前到达的完成事件必须解除素材门禁' : '真实组件：重试、旧事件、进度、确认、切歌、清理和生成门禁', { timeout: 60000 }, async () => {
   const directory = await mkdtemp(join(tmpdir(), 'arcb9-ui-'));
   const frontend = resolve(import.meta.dirname);
   const server = createServer(async (request, response) => {
     try {
       const path = new URL(request.url, 'http://localhost').pathname;
+      if (path === '/qa-font' && process.env.QA_FONT) { response.setHeader('Content-Type', 'font/collection'); response.end(await readFile(process.env.QA_FONT)); return; }
       const file = join(frontend, 'dist', path === '/' ? 'index.html' : path);
       let body = await readFile(file);
       if (path === '/') body = Buffer.from(body.toString().replace('<head>', `<head><script>(${bootstrap.toString()})();</script>`));
+      if (path === '/' && process.env.QA_FONT) body = Buffer.from(body.toString().replace('</head>', '<style>@font-face{font-family:QA;src:url(/qa-font)}:root{font-family:QA,sans-serif}</style></head>'));
       response.setHeader('Content-Type', path.endsWith('.js') ? 'text/javascript' : path.endsWith('.css') ? 'text/css' : 'text/html');
       response.end(body);
     } catch { response.writeHead(404); response.end(); }
@@ -105,17 +117,106 @@ test(process.env.QA_QUERY_RACE ? '查询返回前到达的完成事件必须解�
       assert.equal(await evaluate(`(() => { const button = [...document.querySelectorAll('button')].find((b) => (b.querySelector('.nav-label')?.textContent || b.textContent).trim() === ${JSON.stringify(text)}); if (!button || button.disabled) return false; button.click(); return true; })()`), true, `按钮不可达：${text}`);
       await delay(50);
     };
-    await send('Page.navigate', { url: `http://127.0.0.1:${server.address().port}/${process.env.QA_QUERY_RACE ? '?race=1' : ''}` });
+    await send('Page.navigate', { url: `http://127.0.0.1:${server.address().port}/${process.env.QA_EDITING ? '?editing=1' : process.env.QA_QUERY_RACE ? '?race=1' : ''}` });
     await until(`!!document.querySelector('.nav-item')`);
     await click('JSON 导入');
     await evaluate(`(() => { const input = document.querySelector('textarea'); Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set.call(input, '{}'); input.dispatchEvent(new Event('input', { bubbles: true })); })()`);
     await click('导入');
     await until(`window.qa.calls.some((call) => call.name === 'VideoInfos')`);
+    if (process.env.QA_EDITING) {
+      const input = async (selector, value) => {
+        await evaluate(`(() => { const input = document.querySelector(${JSON.stringify(selector)}); input.focus(); input.select(); })()`);
+        if (value) await send('Input.insertText', { text: value });
+        else { await send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Backspace', windowsVirtualKeyCode: 8 }); await send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Backspace', windowsVirtualKeyCode: 8 }); }
+      };
+      const jump = '.review-toolbar input[type=number]';
+      const enter = async () => {
+        await send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13 });
+        await send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13 });
+      };
+      const at = (index) => until(`document.querySelector('.heading-tag')?.textContent === '第 ${index} / 50 首'`);
+      const generateDisabled = `[...document.querySelectorAll('button')].find((b) => b.textContent.trim() === '开始生成').disabled`;
+      await click('识别信息'); await at(1);
+      await input(jump, '1'); await input(jump, '12');
+      assert.equal(await evaluate(`document.querySelector('.heading-tag').textContent`), '第 1 / 50 首');
+      assert.equal(await evaluate(`!!document.querySelector('dialog[open]')`), false);
+      await enter(); await at(12);
+      assert.equal(await evaluate(`window.qa.calls.filter((c) => ['ConfirmVideoRange', 'CancelVideoPreparation'].includes(c.name)).length`), 0);
+      for (const value of ['', '0', '51', '12']) {
+        await input(jump, value); await enter(); await at(12);
+        assert.equal(await evaluate(`document.querySelector('${jump}').value`), '12');
+        assert.equal(await evaluate(`!!document.querySelector('dialog[open]')`), false);
+      }
+      await input(jump, '5'); await input(jump, '50');
+      assert.equal(await evaluate(`document.querySelector('.heading-tag').textContent`), '第 12 / 50 首');
+      const opens = await evaluate('window.qa.dialogOpens');
+      await enter(); await until(`!!document.querySelector('dialog[open]')`);
+      assert.equal(await evaluate('window.qa.dialogOpens'), opens + 1);
+      await click('继续编辑'); await at(12);
+      assert.equal(await evaluate(`document.querySelector('${jump}').value`), '12');
+      await input(jump, '50'); await evaluate(`document.querySelector('${jump}').blur()`);
+      await click('应用并切换'); await at(50);
+      assert.equal(await evaluate(`window.qa.calls.filter((c) => c.name === 'ConfirmVideoRange').at(-1).args[0].song_id`), 'qa12');
+      await input(jump, '1'); await enter(); await at(1);
+      assert.equal(await evaluate(`document.querySelector('.video-empty').textContent`), '下载素材中');
+      await input('.clip-times label:nth-child(2) input', '0:02');
+      await input('.right-stack > .video-card:nth-child(2) .field input', 'https://www.youtube.com/watch?v=qa-draft');
+      await click('下一首 →'); await click('继续编辑'); await at(1);
+      await click('下一首 →'); await click('保留草稿并切换'); await at(2);
+      await click('生成视频'); await click('选择路径');
+      assert.equal(await evaluate(generateDisabled), true, '保留草稿不能绕过生成确认');
+      await click('识别信息');
+      await input(jump, '1'); await enter(); await at(1);
+      assert.equal(await evaluate(`document.querySelector('.right-stack > .video-card:nth-child(2) .field input').value`), 'https://www.youtube.com/watch?v=qa-draft');
+      await input('.right-stack > .video-card:nth-child(2) .field input', 'https://www.youtube.com/watch?v=qa1');
+      assert.equal(await evaluate(`document.querySelector('.clip-times label:nth-child(2) input').value`), '0:02');
+      assert.equal(await evaluate(`window.qa.calls.filter((c) => c.name === 'ConfirmVideoRange' && c.args[0].song_id === 'qa1').length`), 0);
+      await evaluate(`Object.assign(window.qa.states[0], { status: 'preview', preview_ready: true, confirmed: false }); window.qa.emit('video:event', window.qa.states[0])`);
+      await until(`[...document.querySelectorAll('button')].some((b) => b.textContent.trim() === '应用片段' && !b.disabled)`);
+      await click('应用片段');
+      await until(`window.qa.calls.some((c) => c.name === 'ConfirmVideoRange' && c.args[0].song_id === 'qa1')`);
+      await click('下一首 →'); await at(2);
+      await evaluate(`document.querySelector('[aria-label="片段预览进度"]').scrollIntoView({ block: 'center' })`);
+      const slider = await evaluate(`(() => { const r = document.querySelector('[aria-label="片段预览进度"]').getBoundingClientRect(); return { x: r.x + r.width * 0.8, y: r.y + r.height / 2 }; })()`);
+      await send('Input.dispatchMouseEvent', { type: 'mousePressed', ...slider, button: 'left', clickCount: 1 });
+      await evaluate(`const video = document.querySelector('.video-card video'); video.currentTime = 0.1; video.dispatchEvent(new Event('timeupdate'));`);
+      assert.ok(await evaluate(`Number(document.querySelector('[aria-label="片段预览进度"]').value) >= 0.6`), '拖动中旧 timeupdate 不得拉回滑条');
+      await send('Input.dispatchMouseEvent', { type: 'mouseReleased', ...slider, button: 'left', clickCount: 1 });
+      assert.ok(await evaluate(`document.querySelector('.video-card video').currentTime >= 0.6`), '松开后提交用户目标');
+      await click('生成视频'); await click('选择路径'); await until(`!(${generateDisabled})`);
+      assert.equal(await evaluate(`document.querySelectorAll('.material-row').length`), 0);
+      await evaluate(`Object.assign(window.qa.states[0], { status: 'failed', material_ready: false, error: '已应用素材下载失败' }); window.qa.emit('video:event', window.qa.states[0])`);
+      await until(`!!document.querySelector('.material-status')`);
+      assert.equal(await evaluate(generateDisabled), true);
+      assert.match(await evaluate(`document.querySelector('.material-status').textContent`), /已应用素材下载失败/);
+      assert.equal(await evaluate(`document.querySelectorAll('.material-row').length`), 0);
+      await click('重试');
+      assert.equal(await evaluate(`window.qa.calls.filter((c) => c.name === 'RetryVideoPreparation').at(-1).args[0]`), 'qa1');
+      for (const width of [1600, 1280, 800, 480]) {
+        await evaluate(`for (const state of window.qa.states) { Object.assign(state, { confirmed: false, material_ready: false }); window.qa.emit('video:event', state); }`);
+        await send('Emulation.setDeviceMetricsOverride', { width, height: 900, deviceScaleFactor: 1, mobile: false });
+        await until(`document.querySelectorAll('.material-row').length === 50`);
+        const layout = await evaluate(`(() => { const panel = document.querySelector('.material-summary'), log = document.querySelector('.log-card'), main = document.querySelector('.content-grid > section'); const a = panel.getBoundingClientRect(), b = log.getBoundingClientRect(), c = main.getBoundingClientRect(); return { overflow: document.documentElement.scrollWidth > innerWidth || panel.scrollWidth > panel.clientWidth, count: document.querySelectorAll('.material-summary').length, above: a.bottom <= b.top, side: a.left >= c.right, scroll: panel.scrollHeight > panel.clientHeight }; })()`);
+        assert.equal(layout.overflow, false, `横向溢出：${width}`);
+        assert.equal(layout.count, 1); assert.equal(layout.above, true); assert.equal(layout.scroll, true);
+        if (width > 1150) assert.equal(layout.side, true);
+        await evaluate(`document.querySelector('.main-area').scrollTop = 0; document.querySelector('.material-summary').scrollTop = 0`);
+        if (process.env.QA_SCREENSHOT) {
+          await evaluate('document.fonts.ready');
+          const screenshot = await send('Page.captureScreenshot');
+          await writeFile(process.env.QA_SCREENSHOT.replace('.png', `-${width}.png`), Buffer.from(screenshot.result.data, 'base64'));
+        }
+      }
+      await click('设置');
+      assert.doesNotMatch(await evaluate('document.body.innerText'), /缓存：|素材 .* MB · 渲染/);
+      console.log('PASS：12/50 延迟提交、Enter 不重复、失焦提交、取消/空值/越界/当前条目、下载中导航、链接与范围草稿保留、确认回写与生成门禁、已应用失败重试、50条列表四种窗口布局');
+      return;
+    }
     if (process.env.QA_QUERY_RACE) {
       await until(`typeof window.qa.resolveQuery === 'function'`);
       await evaluate(`Object.assign(window.qa.states[0], { status: 'ready', material_ready: true, progress: 1, error: '' }); window.qa.emit('video:event', window.qa.states[0]); window.qa.resolveQuery()`);
       await click('生成视频');
-      await until(`!!document.querySelector('.material-row')`);
+      await until(`!!document.querySelector('.material-summary')`);
       await click('选择路径');
       console.log(await evaluate(`document.querySelector('.material-summary').innerText`));
       if (process.env.QA_SCREENSHOT) {
@@ -126,7 +227,7 @@ test(process.env.QA_QUERY_RACE ? '查询返回前到达的完成事件必须解�
       return;
     }
     await click('生成视频');
-    await until(`!!document.querySelector('.material-row')`);
+    await until(`!!document.querySelector('.material-summary')`);
     await click('选择路径');
     assert.equal(await evaluate(`[...document.querySelectorAll('button')].find((b) => b.textContent.trim() === '开始生成').disabled`), true);
     await click('重试');
@@ -134,7 +235,7 @@ test(process.env.QA_QUERY_RACE ? '查询返回前到达的完成事件必须解�
     assert.equal(await evaluate(`document.querySelector('progress').hasAttribute('value')`), false);
     await evaluate(`window.qa.emit('video:event', { ...window.qa.states[0], request_id: '101', status: 'failed', error: '过期失败' })`);
     await delay(50);
-    assert.equal(await evaluate(`document.querySelector('.material-row').innerText.includes('过期失败')`), false);
+    assert.equal(await evaluate(`document.querySelector('.material-summary').innerText.includes('过期失败')`), false);
     await click('取消');
     await until(`!![...document.querySelectorAll('button')].find((b) => b.textContent.trim() === '重试')`);
     await click('重试');
@@ -148,8 +249,8 @@ test(process.env.QA_QUERY_RACE ? '查询返回前到达的完成事件必须解�
     await click('下一首 →');
     await until(`!!document.querySelector('dialog[open]')`);
     await click('继续编辑');
-    await click('保存 / 应用片段');
-    await until(`document.querySelector('.clip-footer')?.textContent.includes('已保存')`);
+    await click('应用片段');
+    await until(`[...document.querySelectorAll('button')].find((b) => b.textContent.trim() === '应用片段')?.disabled && window.qa.calls.some((call) => call.name === 'ConfirmVideoRange')`);
     assert.equal(await evaluate(`window.qa.calls.filter((call) => call.name === 'ConfirmVideoRange').at(-1).args[1].duration_ms`), 2000);
     await click('下一首 →');
     await until(`document.querySelector('.song-title')?.textContent.includes('qa2')`);
@@ -165,6 +266,8 @@ test(process.env.QA_QUERY_RACE ? '查询返回前到达的完成事件必须解�
     await click('生成视频');
     await click('开始生成');
     assert.equal(await evaluate(`window.qa.calls.filter((call) => call.name === 'StartRender').at(-1).args[0].songs[0].clip.duration_ms`), 2000);
+    assert.equal(await evaluate(`window.qa.calls.filter((call) => call.name === 'StartRender').at(-1).args[0].songs[0].clip.confirmed_key`), 'new-saved');
+    assert.equal(await evaluate(`window.qa.calls.filter((call) => call.name === 'StartRender').at(-1).args[0].songs[0].video.owner_name`), 'QA 发布者');
     await evaluate(`window.qa.emit('job:event', { stage: 'done', status: 'done' })`);
     await until(`document.body.innerText.includes('视频已生成')`);
     assert.match(await evaluate(`document.querySelector('.completed-file').innerText`), /result.mp4/);

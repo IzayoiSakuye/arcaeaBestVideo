@@ -60,12 +60,12 @@ class Media extends EventTarget {
 }
 const tick = () => new Promise((resolve) => setImmediate(resolve));
 
-test('双流统一暂停、缓冲、恢复、拖动、循环、静音，并在错误或卸载时停止', async () => {
+test('双流统一暂停、缓冲、恢复、拖动、循环，并在错误或卸载时停止', async () => {
   const video = new Media();
   const audio = new Media();
   let error = '';
   let waiting = false;
-  const controls = { start: 10, end: 20, invalid: false, volume: 0.4, muted: false,
+  const controls = { start: 10, end: 20, invalid: false,
     onTime() {}, onPlaying() {}, onError(value) { error = value; } };
   const stop = connectMedia(video, audio, () => controls, (value) => { waiting = value; });
   try {
@@ -74,7 +74,7 @@ test('双流统一暂停、缓冲、恢复、拖动、循环、静音，并在�
     assert.equal(audio.currentTime, 10);
     assert.equal(video.muted, true);
     assert.equal(audio.muted, false);
-    assert.equal(audio.volume, 0.4);
+    assert.equal(audio.volume, 1);
     assert.equal(audio.paused, false);
     video.pause(); await tick();
     assert.equal(audio.paused, true);
@@ -104,7 +104,7 @@ test('双流统一暂停、缓冲、恢复、拖动、循环、静音，并在�
 });
 
 test('只有一路媒体时仍能播放；音频未缓冲时不能单独播放视频', async () => {
-  const controls = { start: 0, end: 10, invalid: false, volume: 1, muted: false, onTime() {}, onPlaying() {}, onError() {} };
+  const controls = { start: 0, end: 10, invalid: false, onTime() {}, onPlaying() {}, onError() {} };
   const video = new Media();
   const stopSingle = connectMedia(video, null, () => controls, () => {});
   try { await video.play(); await tick(); assert.equal(video.paused, false); assert.equal(video.muted, false); }
@@ -113,4 +113,51 @@ test('只有一路媒体时仍能播放；音频未缓冲时不能单独播放�
   const stopPair = connectMedia(video, audio, () => controls, () => {});
   try { await video.play(); await tick(); assert.equal(video.paused, true); assert.equal(audio.paused, true); }
   finally { stopPair(); }
+});
+
+
+test('拖动和未完成的 seek 不发布旧进度、不循环、不纠偏；暂停可定位到片段终点', async (t) => {
+  t.mock.timers.enable({ apis: ['setInterval'] });
+  const video = new Media();
+  const audio = new Media();
+  const times = [];
+  const controls = { start: 10, end: 11, invalid: false, scrubbing: false,
+    onTime(value) { times.push(value); }, onPlaying() {}, onError() {} };
+  const stop = connectMedia(video, audio, () => controls, () => {});
+  try {
+    await video.play(); await tick();
+    controls.scrubbing = true;
+    times.length = 0;
+    video.currentTime = 11;
+    audio.currentTime = 10;
+    video.emit('timeupdate'); t.mock.timers.tick(500);
+    assert.deepEqual(times, []);
+    assert.equal(video.currentTime, 11);
+    assert.equal(audio.currentTime, 10);
+    controls.scrubbing = false;
+    video.currentTime = 10.8; video.seeking = true; video.emit('seeking'); await tick();
+    times.length = 0;
+    video.emit('timeupdate'); t.mock.timers.tick(500);
+    assert.deepEqual(times, []);
+    assert.equal(video.currentTime, 10.8);
+    video.seeking = false; audio.seeking = true; video.emit('seeked');
+    assert.deepEqual(times, []);
+    audio.seeking = false; audio.emit('seeked'); await tick();
+    assert.equal(video.currentTime, 10.8);
+    assert.equal(audio.currentTime, 10.8);
+    assert.ok(Math.abs(times.at(-1) - 0.8) < 0.001);
+    assert.equal(video.paused, false);
+    video.currentTime = 10.9; video.emit('timeupdate');
+    assert.ok(times.at(-1) > 0.8);
+    video.pause(); await tick();
+    video.currentTime = 11; video.emit('timeupdate'); video.emit('seeked');
+    assert.equal(video.currentTime, 11);
+    assert.equal(audio.currentTime, 11);
+    assert.equal(times.at(-1), 1);
+    await video.play(); await tick();
+    assert.equal(video.currentTime, 10);
+    video.currentTime = 11; video.paused = true; video.emit('ended'); await tick();
+    assert.equal(video.currentTime, 10);
+    assert.equal(audio.currentTime, 10);
+  } finally { stop(); }
 });
