@@ -9,7 +9,7 @@ import test from 'node:test';
 import { build } from 'vite';
 
 // 真实 Chromium 媒体事件；不替代 Windows WebView2 和线上取流验收。
-async function checkPlayback(connectMedia) {
+async function checkPlayback(connectMedia, edge, modes) {
   const assert = (condition, message) => { if (!condition) throw Error(message); };
   const delay = (ms) => new Promise((done) => setTimeout(done, ms));
   const until = async (check) => {
@@ -17,18 +17,58 @@ async function checkPlayback(connectMedia) {
     throw Error('等待媒体状态超时');
   };
   const passed = [];
-  for (const mode of ['local', 'slow']) {
+  for (const mode of modes) {
     const video = document.createElement('video');
     const audio = document.createElement('audio');
     document.body.append(video, audio);
     const times = [];
     let error = '';
-    const controls = { start: 1, end: 2, invalid: false, scrubbing: false,
+    const controls = { start: 1, end: 2, invalid: false, scrubbing: false, muted: false, volume: 1,
       onTime(value) { times.push(value); }, onPlaying() {}, onError(value) { error = value; } };
     const stop = connectMedia(video, audio, () => controls, () => {});
     try {
       video.src = `/${mode}/video.mp4`; audio.src = `/${mode}/audio.wav`;
       await until(() => video.readyState >= 3 && audio.readyState >= 3);
+      if (edge) {
+        const snapshot = () => JSON.stringify({ video: video.currentTime, audio: audio.currentTime, videoPaused: video.paused, audioPaused: audio.paused, error });
+        if (edge === 'endpoint') {
+          controls.start = 4; controls.end = video.duration;
+          video.currentTime = 4;
+          await until(() => !video.seeking);
+          await video.play();
+          await delay(1800);
+          assert(!video.paused && !audio.paused, `${mode}: 选区终点等于媒体末尾时必须继续循环 ${snapshot()}`);
+        } else if (edge === 'hold') {
+          await video.play(); await until(() => video.currentTime > 1.2);
+          controls.scrubbing = true;
+          await delay(4500);
+          controls.scrubbing = false; video.currentTime = 1.6;
+          await delay(400);
+          assert(!video.paused && !audio.paused, `${mode}: 长按跨循环边界后松开必须恢复播放 ${snapshot()}`);
+        } else if (edge === 'buffer-same') {
+          await video.play(); await until(() => video.currentTime > 1.2);
+          controls.scrubbing = true;
+          audio.dispatchEvent(new Event('waiting'));
+          await delay(50);
+          assert(video.paused && audio.paused, `${mode}: 缓冲应同时暂停 ${snapshot()}`);
+          const target = video.currentTime;
+          audio.dispatchEvent(new Event('canplay'));
+          controls.scrubbing = false; video.currentTime = target;
+          await delay(400);
+          assert(!video.paused && !audio.paused, `${mode}: 缓冲后松开到相同时间必须恢复 ${snapshot()}`);
+        } else if (edge === 'repeated') {
+          await video.play(); await until(() => video.currentTime > 1.2); video.pause();
+          for (const target of [1, 1.9, 1.1, 2, 1.4, 1.8]) {
+            controls.scrubbing = true; const count = times.length;
+            video.dispatchEvent(new Event('timeupdate')); await delay(120);
+            assert(times.length === count, `${mode}: 连续拖动不得发布旧进度`);
+            controls.scrubbing = false; video.currentTime = target;
+            await until(() => !video.seeking && !audio.seeking);
+            assert(Math.abs(video.currentTime - target) < 0.04 && Math.abs(audio.currentTime - target) < 0.04, `${mode}: 连续拖动终点不一致 ${snapshot()}`);
+          }
+        } else throw Error(`未知边界用例：${edge}`);
+        passed.push(mode); continue;
+      }
       await video.play();
       await until(() => times.some((value) => value > 0.2));
       video.pause(); await delay(50);
@@ -47,6 +87,9 @@ async function checkPlayback(connectMedia) {
       video.currentTime = 2;
       await until(() => !video.seeking && !audio.seeking);
       assert(video.currentTime === 2, `${mode}: 暂停时终点不能被循环拉回`);
+      audio.dispatchEvent(new Event('canplay'));
+      await delay(200);
+      assert(video.paused && audio.paused && video.currentTime === 2, `${mode}: 主动暂停后 seek 和缓冲事件不得恢复播放`);
       times.length = 0;
       await video.play();
       await until(() => times.some((value) => value > 0.75));
@@ -64,7 +107,7 @@ async function checkPlayback(connectMedia) {
   return passed;
 }
 
-test('真实媒体：一秒选区、双流 seek 和循环，普通及延迟分块响应', { timeout: 45000 }, async () => {
+test(`真实媒体：${process.env.QA_MEDIA_EDGE || '一秒选区、双流 seek 和循环'}，普通及延迟分块响应`, { timeout: 45000 }, async () => {
   const directory = await mkdtemp(join(tmpdir(), 'media-playback-'));
   let browser;
   let server;
@@ -83,7 +126,7 @@ test('真实媒体：一秒选区、双流 seek 和循环，普通及延迟分�
     const bundle = await build({ configFile: false, root: frontend, logLevel: 'silent', plugins: [{
       name: 'media-playback-test', resolveId: (id) => id === entry ? entry : undefined,
       load: (id) => id === entry ? `import { connectMedia } from ${JSON.stringify(join(frontend, 'src/media.ts'))};
-        (${checkPlayback.toString()})(connectMedia).then(passed => fetch('/result', { method: 'POST', body: JSON.stringify({ passed }) })).catch(error => fetch('/result', { method: 'POST', body: JSON.stringify({ error: error.stack }) }));` : undefined,
+        (${checkPlayback.toString()})(connectMedia, ${JSON.stringify(process.env.QA_MEDIA_EDGE || '')}, ${JSON.stringify(process.env.QA_MEDIA_MODE ? [process.env.QA_MEDIA_MODE] : ['local', 'slow'])}).then(passed => fetch('/result', { method: 'POST', body: JSON.stringify({ passed }) })).catch(error => fetch('/result', { method: 'POST', body: JSON.stringify({ error: error.stack }) }));` : undefined,
     }], build: { write: false, rollupOptions: { input: entry } } });
     const script = bundle.output.find((item) => item.type === 'chunk').code;
     const files = { 'video.mp4': await readFile(join(directory, 'video.mp4')), 'audio.wav': await readFile(join(directory, 'audio.wav')) };
@@ -122,7 +165,7 @@ test('真实媒体：一秒选区、双流 seek 和循环，普通及延迟分�
       new Promise((_, reject) => { timer = setTimeout(() => reject(Error('媒体断言超时')), 35000); }),
     ]);
     assert.equal(result.error, undefined, result.error);
-    assert.deepEqual(result.passed, ['local', 'slow']);
+    assert.deepEqual(result.passed, process.env.QA_MEDIA_MODE ? [process.env.QA_MEDIA_MODE] : ['local', 'slow']);
   } finally {
     clearTimeout(timer); for (const transfer of transfers) clearInterval(transfer);
     if (browser && browser.exitCode === null && browser.signalCode === null) { browser.kill('SIGTERM'); await once(browser, 'exit'); }

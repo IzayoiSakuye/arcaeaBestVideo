@@ -20,6 +20,7 @@ function bootstrap() {
     clip: { start_ms: 0, duration_ms: 1000, confirmed_key: `saved${index}` } }));
   const project = { schema_version: 1, game: 'arcaea', player: { name: 'QA' }, source: { type: 'manual' },
     defaults: { clips: { start_ms: 0, duration_ms: 1000 } }, songs, thoughts: [], play_order: songs.map((song) => ({ kind: 'song', song_index: song.index })) };
+  if (location.search.includes('order')) project.play_order = [{ kind: 'song', song_index: 2 }];
   if (editing) { songs[0].clip = undefined; songs[11].clip = undefined; songs[0].video.url = 'https://www.youtube.com/watch?v=qa1'; }
   const states = songs.map((song) => ({ index: song.index, song_id: song.song_id, difficulty: 'FTR', url: song.video.url,
     request_id: `${100 + song.index}`, status: song.index === 1 ? 'failed' : 'ready', error: song.index === 1 ? 'QA 缓存丢失' : '',
@@ -31,6 +32,7 @@ function bootstrap() {
     Object.assign(states[0], { status: 'downloading', preview_ready: false, progress: 0.1 });
   }
   const qa = window.qa = { calls, project, states, previewCount: 1, emit(name, value) { for (const cb of listeners.get(name) || []) cb(clone(value)); } };
+  qa.cache = { rendering: false, downloading: false, in_use: false };
   qa.dialogOpens = 0;
   const showModal = HTMLDialogElement.prototype.showModal;
   HTMLDialogElement.prototype.showModal = function () { qa.dialogOpens++; return showModal.call(this); };
@@ -38,7 +40,7 @@ function bootstrap() {
     Status: () => ({ tools: [], song_count: 2 }), Version: () => 'qa',
     CheckResourceUpdate: () => ({ update_available: false }), CheckOPAudioUpdate: () => ({ files: [] }), ThoughtAudioOptions: () => [],
     Import: () => ({ Project: clone(project), Notes: [] }),
-    Review: (value) => ({ project: clone(value), renderable: true, problems: [], rows: value.songs.map((song) => ({ song_id: song.song_id, title: song.song_id, difficulty: 'FTR', difficulties: ['FTR'], problems: [] })) }),
+    Review: (value) => ({ project: clone(value), renderable: true, problems: [], rows: value.songs.map((song) => ({ song_id: song.song_id, title: location.search.includes('long') ? '超长标题LongTitle'.repeat(18) + song.song_id : song.song_id, difficulty: 'FTR', difficulties: ['FTR'], problems: [] })) }),
     VideoInfos: () => {
       const snapshot = clone(states);
       return location.search.includes('race') ? new Promise((resolve) => { qa.resolveQuery = () => resolve(snapshot); }) : snapshot;
@@ -57,7 +59,7 @@ function bootstrap() {
       return { song: saved, state: clone(state) };
     },
     ReleasePreview: () => { qa.previewCount = 0; },
-    CacheInfo: () => ({ preview_count: qa.previewCount, video_bytes: 20, render_bytes: 10, total_bytes: 30, rendering: false, downloading: false, in_use: false }),
+    CacheInfo: () => ({ preview_count: qa.previewCount, video_bytes: 20, render_bytes: 10, total_bytes: 30, ...qa.cache }),
     ClearCache: () => { if (qa.previewCount) throw Error('缓存正在预览'); },
     StartRender: () => ({ job_id: 'qa-job', output: '/qa/result.mp4' }),
   };
@@ -117,12 +119,36 @@ test(process.env.QA_EDITING ? '真实组件：数字提交、下载中导航与�
       assert.equal(await evaluate(`(() => { const button = [...document.querySelectorAll('button')].find((b) => (b.querySelector('.nav-label')?.textContent || b.textContent).trim() === ${JSON.stringify(text)}); if (!button || button.disabled) return false; button.click(); return true; })()`), true, `按钮不可达：${text}`);
       await delay(50);
     };
-    await send('Page.navigate', { url: `http://127.0.0.1:${server.address().port}/${process.env.QA_EDITING ? '?editing=1' : process.env.QA_QUERY_RACE ? '?race=1' : ''}` });
+    await send('Page.navigate', { url: `http://127.0.0.1:${server.address().port}/${process.env.QA_EDITING ? '?editing=1' : process.env.QA_QUERY_RACE ? '?race=1' : process.env.QA_ORDER ? '?order=1' : '?qa=1'}${process.env.QA_LONG_TITLES ? '&long=1' : ''}` });
     await until(`!!document.querySelector('.nav-item')`);
     await click('JSON 导入');
     await evaluate(`(() => { const input = document.querySelector('textarea'); Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set.call(input, '{}'); input.dispatchEvent(new Event('input', { bubbles: true })); })()`);
     await click('导入');
     await until(`window.qa.calls.some((call) => call.name === 'VideoInfos')`);
+    if (process.env.QA_ORDER) {
+      await click('生成视频'); await click('选择路径');
+      const disabled = `[...document.querySelectorAll('button')].find(b=>b.textContent.trim()==='开始生成').disabled`;
+      await until(`!(${disabled})`);
+      await evaluate(`Object.assign(window.qa.states[1],{status:'failed',material_ready:false,error:'编排内缓存失效'}); window.qa.emit('video:event',window.qa.states[1]);`);
+      await until(disabled);
+      await evaluate(`Object.assign(window.qa.states[1],{status:'ready',material_ready:true,error:''}); window.qa.emit('video:event',window.qa.states[1]);`);
+      await until(`!(${disabled})`);
+      console.log('PASS：未编排歌曲的失败不阻止生成，编排内素材失效会撤销 ready，恢复后重新允许生成');
+      return;
+    }
+    if (process.env.QA_LAYOUT_ONLY) {
+      await click('生成视频');
+      await evaluate(`for (const state of window.qa.states) { Object.assign(state, { confirmed: false, material_ready: false }); window.qa.emit('video:event', state); }`);
+      for (const width of [1600, 1280, 800, 480]) {
+        await send('Emulation.setDeviceMetricsOverride', { width, height: 900, deviceScaleFactor: 1, mobile: false });
+        await delay(100);
+        await evaluate('document.fonts.ready');
+        console.log('布局：', width, await evaluate(`JSON.stringify({overflow:document.documentElement.scrollWidth>innerWidth, nav:[...document.querySelectorAll('.nav-item')].map(b=>({text:b.textContent, width:b.clientWidth, scroll:b.scrollWidth}))})`));
+        const screenshot = await send('Page.captureScreenshot');
+        await writeFile(process.env.QA_SCREENSHOT.replace('.png', '-' + width + '.png'), Buffer.from(screenshot.result.data, 'base64'));
+      }
+      return;
+    }
     if (process.env.QA_EDITING) {
       const input = async (selector, value) => {
         await evaluate(`(() => { const input = document.querySelector(${JSON.stringify(selector)}); input.focus(); input.select(); })()`);
@@ -137,6 +163,36 @@ test(process.env.QA_EDITING ? '真实组件：数字提交、下载中导航与�
       const at = (index) => until(`document.querySelector('.heading-tag')?.textContent === '第 ${index} / 50 首'`);
       const generateDisabled = `[...document.querySelectorAll('button')].find((b) => b.textContent.trim() === '开始生成').disabled`;
       await click('识别信息'); await at(1);
+      if (process.env.QA_NAV_CLICK) {
+        const target = process.env.QA_NAV_TARGET || '12';
+        const label = process.env.QA_NAV_CLICK === 'previous' ? '← 上一首' : '下一首 →';
+        await input(jump, target);
+        const point = await evaluate(`(() => { const b = [...document.querySelectorAll('button')].find(b => b.textContent.trim() === ${JSON.stringify(label)}); b.scrollIntoView({block:'center'}); const r=b.getBoundingClientRect(); return {x:r.x+r.width/2,y:r.y+r.height/2}; })()`);
+        await send('Input.dispatchMouseEvent', { type: 'mousePressed', ...point, button: 'left', clickCount: 1 });
+        await send('Input.dispatchMouseEvent', { type: 'mouseReleased', ...point, button: 'left', clickCount: 1 });
+        await delay(100);
+        console.log(`失焦并点击${label}：`, await evaluate(`JSON.stringify({heading:document.querySelector('.heading-tag')?.textContent, dialog:document.querySelector('dialog[open]')?.innerText, calls:window.qa.calls.filter(c=>['ConfirmVideoRange','CancelVideoPreparation'].includes(c.name))})`));
+        if (process.env.QA_SCREENSHOT) { const shot = await send('Page.captureScreenshot'); await writeFile(process.env.QA_SCREENSHOT, Buffer.from(shot.result.data, 'base64')); }
+        assert.equal(await evaluate(`!!document.querySelector('dialog[open]')`), false, '下载中无修改：输入失焦并点击下一首只能切换一次，不能在跳转后再次触发未保存提示');
+        assert.equal(await evaluate(`document.querySelector('.heading-tag').textContent`), `第 ${target} / 50 首`);
+        // 下一次独立手势仍应导航；同一次数字提交也不能绕过真实修改保护。
+        await input(jump, '1'); await enter();
+        if (target === '12') { await until(`!!document.querySelector('dialog[open]')`); await click('应用并切换'); }
+        await at(1);
+        await input('.clip-times label:nth-child(2) input', '0:02');
+        const opens = await evaluate('window.qa.dialogOpens');
+        await input(jump, target);
+        await send('Input.dispatchMouseEvent', { type: 'mousePressed', ...point, button: 'left', clickCount: 1 });
+        await send('Input.dispatchMouseEvent', { type: 'mouseReleased', ...point, button: 'left', clickCount: 1 });
+        await until(`!!document.querySelector('dialog[open]')`);
+        assert.equal(await evaluate('window.qa.dialogOpens'), opens + 1);
+        assert.equal(await evaluate(`document.querySelector('.heading-tag').textContent`), '第 1 / 50 首');
+        await click('继续编辑');
+        assert.equal(await evaluate(`document.querySelector('${jump}').value`), '1');
+        assert.equal(await evaluate(`document.querySelector('.clip-times label:nth-child(2) input').value`), '0:02');
+        console.log('PASS：后续独立导航可用，真实修改只触发一次保护，取消后输入和草稿保留');
+        return;
+      }
       await input(jump, '1'); await input(jump, '12');
       assert.equal(await evaluate(`document.querySelector('.heading-tag').textContent`), '第 1 / 50 首');
       assert.equal(await evaluate(`!!document.querySelector('dialog[open]')`), false);
@@ -192,6 +248,14 @@ test(process.env.QA_EDITING ? '真实组件：数字提交、下载中导航与�
       assert.equal(await evaluate(`document.querySelectorAll('.material-row').length`), 0);
       await click('重试');
       assert.equal(await evaluate(`window.qa.calls.filter((c) => c.name === 'RetryVideoPreparation').at(-1).args[0]`), 'qa1');
+      assert.equal(await evaluate(generateDisabled), true, '重试排队期间仍禁止生成');
+      await click('取消');
+      await until(`document.querySelector('.material-status')?.textContent.includes('已取消')`);
+      assert.equal(await evaluate(generateDisabled), true, '已应用但取消下载仍禁止生成');
+      await click('重试');
+      await evaluate(`Object.assign(window.qa.states[0], { status: 'ready', material_ready: true, error: '' }); window.qa.emit('video:event', window.qa.states[0])`);
+      await until(`!(${generateDisabled})`);
+      assert.equal(await evaluate(`document.querySelectorAll('.material-row').length`), 0);
       for (const width of [1600, 1280, 800, 480]) {
         await evaluate(`for (const state of window.qa.states) { Object.assign(state, { confirmed: false, material_ready: false }); window.qa.emit('video:event', state); }`);
         await send('Emulation.setDeviceMetricsOverride', { width, height: 900, deviceScaleFactor: 1, mobile: false });
@@ -262,6 +326,13 @@ test(process.env.QA_EDITING ? '真实组件：数字提交、下载中导航与�
     await evaluate(`window.qa.previewCount = 1`);
     await until(`[...document.querySelectorAll('button')].find((b) => b.textContent.trim() === '清理渲染缓存').disabled`);
     assert.equal(await evaluate(`[...document.querySelectorAll('button')].find((b) => b.textContent.trim() === '清理全部缓存').disabled`), true);
+    for (const flag of ['downloading', 'rendering', 'in_use']) {
+      await evaluate(`window.qa.previewCount = 0; window.qa.cache = {rendering:false,downloading:false,in_use:false,${flag}:true}`);
+      await until(`[...document.querySelectorAll('button')].find(b=>b.textContent.trim()==='清理渲染缓存').disabled`);
+      assert.equal(await evaluate(`[...document.querySelectorAll('button')].find(b=>b.textContent.trim()==='清理全部缓存').disabled`), true, `${flag} 时禁止清理`);
+    }
+    await evaluate(`window.qa.cache = {rendering:false,downloading:false,in_use:false}`);
+    await until(`![...document.querySelectorAll('button')].find(b=>b.textContent.trim()==='清理渲染缓存').disabled`);
     console.log('PASS：真实组件保存回写、未保存切歌提醒、署名、预览释放和清理互斥');
     await click('生成视频');
     await click('开始生成');
