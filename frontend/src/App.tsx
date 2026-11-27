@@ -102,13 +102,14 @@ function App() {
   const [projectEpoch, setProjectEpoch] = useState(0);
   const lifecycle = useRef(0);
   const sourceChangeSeq = useRef(0);
-  const [videoLink, setVideoLink] = useState('');
+  const [videoLinkDrafts, setVideoLinkDrafts] = useState<Record<string, string>>({});
   const [videoError, setVideoError] = useState('');
   const [clipSaving, setClipSaving] = useState(false);
   const [switchTarget, setSwitchTarget] = useState<number | null>(null);
   const switchDialog = useRef<HTMLDialogElement>(null);
   const [cacheInfo, setCacheInfo] = useState<app.CacheState | null>(null);
   const [songIndex, setSongIndex] = useState(0);
+  const [songJumpDraft, setSongJumpDraft] = useState<string | null>(null);
   const [clipDrafts, setClipDrafts] = useState<Record<string, { start: string; end: string }>>({});
   const draftSong = project?.songs[songIndex];
   const draftKey = `${projectEpoch}:${songIndex}:${videoSourceKey(draftSong ? [draftSong] : [])}`;
@@ -119,6 +120,7 @@ function App() {
   const latestEdit = useRef({ project, draftKey, clipStartText, clipEndText });
   latestEdit.current = { project, draftKey, clipStartText, clipEndText };
   const [previewTime, setPreviewTime] = useState(0);
+  const previewScrub = useRef<number | null>(null);
   const [previewPlaying, setPreviewPlaying] = useState(false);
   const previewRef = useRef<HTMLVideoElement>(null);
   const [onlyProblems, setOnlyProblems] = useState(false);
@@ -138,6 +140,9 @@ function App() {
   const videoKey = videoSourceKey(project?.songs || []);
   const videos = useVideoPreparation(review?.project || null, videoKey, projectEpoch);
   const videoStates = videos.states;
+  const currentVideoURL = videoStates.find((state) => state.index === songIndex + 1)?.url || '';
+  const videoLink = videoLinkDrafts[draftKey] ?? currentVideoURL;
+  const setVideoLink = (value: string) => setVideoLinkDrafts((old) => ({ ...old, [draftKey]: value }));
   const videoBusy = videos.busy;
   const attempted = useRef(new Set<string>());
 
@@ -214,7 +219,6 @@ function App() {
   }, [project?.songs]);
 
   useEffect(() => {
-    setVideoLink(videoStates.find((state) => state.index === songIndex + 1)?.url || '');
     setVideoError('');
   }, [songIndex, projectEpoch, videoStates.find((state) => state.index === songIndex + 1)?.url]);
 
@@ -233,7 +237,8 @@ function App() {
     }
   }, [page, songIndex, reviewPending, review?.project, videoStates.map((state) => `${state.index}:${state.url}:${state.request_id}`).join('|')]);
 
-  useEffect(() => { setPreviewTime(0); setPreviewPlaying(false); }, [songIndex, page, projectEpoch]);
+  useEffect(() => { setPreviewTime(0); setPreviewPlaying(false); previewScrub.current = null; }, [songIndex, page, projectEpoch]);
+  useEffect(() => { setSongJumpDraft(null); }, [songIndex, projectEpoch]);
 
   useEffect(() => {
     if (page !== 6) return;
@@ -452,7 +457,7 @@ function App() {
       setSongIndex(0);
       setReview(null);
       setReviewPending(true);
-      setVideoLink('');
+      setVideoLinkDrafts({});
       setVideoError('');
       setFinished('');
       setOutput('');
@@ -716,7 +721,7 @@ function App() {
     const item = project.songs[index - 1];
     const key = `${projectEpoch}:${index - 1}:${videoSourceKey(item ? [item] : [])}`;
     const draft = clipDrafts[key];
-    return !item?.clip?.confirmed_key || !state?.confirmed || !state.material_ready || Boolean(draft && !clipSaved(item.clip, parseClipTime(draft.start), parseClipTime(draft.end)));
+    return !item?.clip?.confirmed_key || !state?.confirmed || !state.material_ready || Boolean(draft && !clipSaved(item.clip, parseClipTime(draft.start), parseClipTime(draft.end))) || (videoLinkDrafts[key] !== undefined && videoLinkDrafts[key] !== (state?.url || ''));
   }) : [];
   async function saveClipRange() {
     const selected = review?.project?.songs[songIndex];
@@ -745,12 +750,37 @@ function App() {
     } catch (error) { if (epoch === lifecycle.current) setVideoError(errorText(error)); return false; }
     finally { if (epoch === lifecycle.current) setClipSaving(false); }
   }
-  function requestSong(index: number) {
-    if (index === songIndex || clipSaving) return;
-    if (song && !savedClip) { setSwitchTarget(index); switchDialog.current?.showModal(); }
-    else if (index === count) addBlankSong();
+  const clipChanged = clipStart !== (song?.clip?.start_ms || 0) / 1000 || clipEnd !== ((song?.clip?.start_ms || 0) + (song?.clip?.duration_ms || 10000)) / 1000;
+  const canApplyClip = Boolean(currentVideo?.preview_ready) && !videoLinkChanged;
+  function switchSong(index: number) {
+    if (index === count) addBlankSong();
     else { setSongIndex(index); setSearch(''); }
   }
+  function requestSong(index: number) {
+    if (index === songIndex || index < 0 || index > count || clipSaving) return;
+    if (song && !savedClip && (currentVideo?.preview_ready || clipChanged || videoLinkChanged)) {
+      setSwitchTarget(index); switchDialog.current?.showModal();
+    } else switchSong(index);
+  }
+  function commitSongJump() {
+    const value = songJumpDraft;
+    setSongJumpDraft(null);
+    if (value !== null && /^\d+$/.test(value) && Number(value) >= 1 && Number(value) <= count) requestSong(Number(value) - 1);
+  }
+  function finishPreviewScrub() {
+    const elapsed = previewScrub.current;
+    if (elapsed === null) return;
+    previewScrub.current = null;
+    if (previewRef.current && clipStart !== null) previewRef.current.currentTime = clipStart + elapsed;
+  }
+  function appliedVideo(state: app.VideoState) {
+    const item = project?.songs[state.index - 1];
+    const key = `${projectEpoch}:${state.index - 1}:${videoSourceKey(item ? [item] : [])}`;
+    const draft = clipDrafts[key];
+    return Boolean(item?.clip?.confirmed_key && state.confirmed && (!draft || clipSaved(item.clip, parseClipTime(draft.start), parseClipTime(draft.end))) && (videoLinkDrafts[key] === undefined || videoLinkDrafts[key] === state.url));
+  }
+  const unappliedVideos = videoStates.filter((state) => !appliedVideo(state));
+  const appliedPendingVideos = videoStates.filter((state) => appliedVideo(state) && !state.material_ready);
   const doneCount = logs.filter((event) => event.stage === 'render' && ['done', 'skipped'].includes(event.status)).length;
   const active = renderState === 'starting' || renderState === 'running';
 
@@ -886,7 +916,6 @@ function App() {
                 <p>清理可重新生成的渲染缓存，不影响已下载录像。</p>
                 <button className="button quiet" disabled={cacheBusy || active || !cacheInfo || cacheInfo.rendering || cacheInfo.downloading || cacheInfo.in_use || cacheInfo.preview_count > 0} onClick={() => clearCache(false)}>清理渲染缓存</button>
                 <button className="button quiet" disabled={cacheBusy || active || !cacheInfo || cacheInfo.rendering || cacheInfo.downloading || cacheInfo.in_use || cacheInfo.preview_count > 0} onClick={() => clearCacheDialog.current?.showModal()}>清理全部缓存</button>
-                <p>缓存：{cacheInfo ? `素材 ${(cacheInfo.video_bytes / 1048576).toFixed(1)} MB · 渲染 ${(cacheInfo.render_bytes / 1048576).toFixed(1)} MB · 共 ${(cacheInfo.total_bytes / 1048576).toFixed(1)} MB` : '正在读取…'}</p>
                 {(active || cacheInfo?.rendering || cacheInfo?.downloading || cacheInfo?.in_use || Boolean(cacheInfo?.preview_count)) && <p className="muted">生成、下载或预览正在占用缓存，请结束后清理。</p>}
                 {cacheMessage && <div className="notice">{cacheMessage}</div>}
               </aside>
@@ -1029,11 +1058,10 @@ function App() {
                       type="number"
                       min={1}
                       max={count}
-                      value={songIndex + 1}
-                      onChange={(event) => {
-                        const value = Number(event.target.value);
-                        if (value >= 1 && value <= count) requestSong(value - 1);
-                      }}
+                      value={songJumpDraft ?? String(songIndex + 1)}
+                      onChange={(event) => setSongJumpDraft(event.target.value)}
+                      onBlur={commitSongJump}
+                      onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); event.currentTarget.blur(); } }}
                     />
                     {count} 首
                   </label>
@@ -1271,7 +1299,7 @@ function App() {
                       {currentVideo?.preview_ready && currentVideo.preview_url && !videoLinkChanged ? (
                         <VideoPreview key={`${projectEpoch}:${songIndex}:${currentVideo.preview_url}:${currentVideo.preview_audio_url || ''}`}
                           videoRef={previewRef} src={currentVideo.preview_url} audioSrc={currentVideo.preview_audio_url}
-                          start={clipStart} end={clipEnd} invalid={Boolean(clipError)} onTime={setPreviewTime}
+                          start={clipStart} end={clipEnd} invalid={Boolean(clipError)} scrubbing={previewScrub} onTime={setPreviewTime}
                           onPlaying={setPreviewPlaying} onError={setVideoError} />
                       ) : <div className="video-empty">{currentVideo?.status === 'ready' && !currentVideo.material_ready ? '可预览，待确认' : videoStatusText[currentVideo?.status || 'missing']}</div>}
                       {videoLength > 0 && !videoLinkChanged && (
@@ -1286,10 +1314,13 @@ function App() {
                             <input aria-label="片段预览进度" type="range" min={0} max={clipDuration} step={0.1}
                               disabled={Boolean(clipError)}
                               value={Math.min(previewTime, clipDuration)}
+                              onPointerDown={(event) => { previewScrub.current = previewTime; event.currentTarget.setPointerCapture(event.pointerId); }}
+                              onPointerUp={finishPreviewScrub} onPointerCancel={finishPreviewScrub} onLostPointerCapture={finishPreviewScrub}
                               onChange={(event) => {
                                 const elapsed = Number(event.target.value);
                                 setPreviewTime(elapsed);
-                                if (previewRef.current && clipStart !== null) previewRef.current.currentTime = clipStart + elapsed;
+                                if (previewScrub.current !== null) previewScrub.current = elapsed;
+                                else if (previewRef.current && clipStart !== null) previewRef.current.currentTime = clipStart + elapsed;
                               }} />
                             <span>{formatClipTime(Math.min(previewTime, clipDuration))} / {formatClipTime(clipDuration)}</span>
                           </div>
@@ -1344,8 +1375,7 @@ function App() {
                                 }} />
                             </label>
                           </div>
-                          <div className="clip-footer" role="status">{savedClip ? '已保存' : '尚未保存'}{savedClip && currentVideo?.material_ready ? ' · 素材准备完成' : savedClip ? ' · 素材后台准备中，可继续编辑其他歌曲' : ''}</div>
-                          <button className="button primary" disabled={clipSaving || reviewPending || active || Boolean(clipError) || savedClip} onClick={() => { void saveClipRange(); }}>{clipSaving ? '保存中…' : '保存 / 应用片段'}</button>
+                          <button className="button primary" disabled={clipSaving || reviewPending || active || Boolean(clipError) || savedClip} onClick={() => { void saveClipRange(); }}>{clipSaving ? '应用中…' : '应用片段'}</button>
                           {clipError && <div className="clip-footer"><span className="clip-error" role="alert">{clipError}</span></div>}
                         </div>
                       )}
@@ -1500,20 +1530,6 @@ function App() {
           {page === 4 && (
             <div className="content-grid">
               <section className="card wide">
-                {videoStates.length > 0 && <section className="material-summary">
-                  <h2>素材准备 <span>{videoStates.filter((state) => state.material_ready).length} / {project?.songs.length || 0} 首就绪</span></h2>
-                  {videoStates.map((state) => <div className="material-row" key={`${state.song_id}:${state.difficulty}`}>
-                    <strong>#{state.index} {review?.rows[state.index - 1]?.title || state.song_id} · {state.difficulty}</strong>
-                    <span>{state.status === 'ready' && !state.material_ready ? '可预览，待确认' : videoStatusText[state.status] || state.status} · {state.confirmed ? '已保存' : '待确认'}</span>
-                    {['preparing', 'queued', 'downloading'].includes(state.status) && <progress aria-label={`第 ${state.index} 首素材进度`} max="1" value={state.progress < 0 ? undefined : state.progress} />}
-                    {state.error && <span className="clip-error">{state.error}</span>}
-                    {['failed', 'cancelled'].includes(state.status) && state.request_id && <button className="button quiet" disabled={active} onClick={() => { void changeVideoTask(state, true); }}>重试</button>}
-                    {['preparing', 'queued', 'downloading'].includes(state.status) && state.request_id && <button className="button quiet" disabled={active} onClick={() => { void changeVideoTask(state, false); }}>取消</button>}
-                    <button className="button text" onClick={() => jumpProblem(state.index)}>回编辑</button>
-                  </div>)}
-                </section>}
-                {(videoError || videos.error) && <p className="notice bad" role="alert">{videoError || videos.error}</p>}
-                {materialBlockers.length > 0 && <div className="notice warn">以下歌曲尚未确认或素材未就绪：{materialBlockers.map((index) => <button className="button text" key={index} onClick={() => jumpProblem(index)}>#{index} {review?.rows[index - 1]?.title || project?.songs[index - 1]?.song_id}</button>)}</div>}
                 <h2>生成任务</h2>
                 <div className="output-picker">
                   <div>
@@ -1568,22 +1584,46 @@ function App() {
                   </div>
                 )}
               </section>
-              <aside className="card log-card">
-                <h2>
-                  运行记录 <span>{logs.length}</span>
-                </h2>
-                <div className="log-list" role="log" aria-live="polite">
-                  {logs.length ? (
-                    logs.map((event, index) => (
-                      <div className={`log-entry ${event.status}`} key={index}>
-                        <time>{event.time}</time>
-                        <span>{eventText(event)}</span>
-                      </div>
-                    ))
-                  ) : (
-                    <div className="log-empty">这里可以看到生成进度喵</div>
-                  )}
-                </div>
+              <aside className="right-stack">
+                {videoStates.length > 0 && <section className="card material-summary">
+                  <h2>素材准备 <span>{videoStates.filter((state) => state.material_ready).length} / {project?.songs.length || 0} 首就绪</span></h2>
+                  {unappliedVideos.length > 0 && <p className="muted">未应用片段：{unappliedVideos.length} 首</p>}
+                  {unappliedVideos.map((state) => <div className="material-row" key={`${state.song_id}:${state.difficulty}`}>
+                    <strong>#{state.index} {review?.rows[state.index - 1]?.title || state.song_id} · {state.difficulty}</strong>
+                    <span>{state.status === 'ready' && !state.material_ready ? '可预览' : videoStatusText[state.status] || state.status}</span>
+                    {['preparing', 'queued', 'downloading'].includes(state.status) && <progress aria-label={`第 ${state.index} 首素材进度`} max="1" value={state.progress < 0 ? undefined : state.progress} />}
+                    {state.error && <span className="clip-error">{state.error}</span>}
+                    {['failed', 'cancelled'].includes(state.status) && state.request_id && <button className="button quiet" disabled={active} onClick={() => { void changeVideoTask(state, true); }}>重试</button>}
+                    {['preparing', 'queued', 'downloading'].includes(state.status) && state.request_id && <button className="button quiet" disabled={active} onClick={() => { void changeVideoTask(state, false); }}>取消</button>}
+                    <button className="button text" onClick={() => jumpProblem(state.index)}>去编辑</button>
+                  </div>)}
+                  {!unappliedVideos.length && <p className="muted">所有片段已应用。</p>}
+                  {appliedPendingVideos.map((state) => <div className="material-status" key={`${state.song_id}:${state.difficulty}`}>
+                    <span>已应用 #{state.index} · {videoStatusText[state.status] || state.status}{state.error ? `：${state.error}` : ''}</span>
+                    {['preparing', 'queued', 'downloading'].includes(state.status) && <progress aria-label={`第 ${state.index} 首素材进度`} max="1" value={state.progress < 0 ? undefined : state.progress} />}
+                    {['failed', 'cancelled'].includes(state.status) && state.request_id && <button className="button quiet" disabled={active} onClick={() => { void changeVideoTask(state, true); }}>重试</button>}
+                    {['preparing', 'queued', 'downloading'].includes(state.status) && state.request_id && <button className="button quiet" disabled={active} onClick={() => { void changeVideoTask(state, false); }}>取消</button>}
+                    <button className="button text" onClick={() => jumpProblem(state.index)}>去编辑</button>
+                  </div>)}
+                </section>}
+                {(videoError || videos.error) && <p className="notice bad" role="alert">{videoError || videos.error}</p>}
+                <section className="card log-card">
+                  <h2>
+                    运行记录 <span>{logs.length}</span>
+                  </h2>
+                  <div className="log-list" role="log" aria-live="polite">
+                    {logs.length ? (
+                      logs.map((event, index) => (
+                        <div className={`log-entry ${event.status}`} key={index}>
+                          <time>{event.time}</time>
+                          <span>{eventText(event)}</span>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="log-empty">这里可以看到生成进度喵</div>
+                    )}
+                  </div>
+                </section>
               </aside>
             </div>
           )}
@@ -1623,12 +1663,12 @@ function App() {
         </main>
       </div>
       <dialog ref={switchDialog} className="confirm-dialog" aria-labelledby="unsaved-clip-title" onCancel={(event) => { if (clipSaving) event.preventDefault(); else setSwitchTarget(null); }}>
-        <h2 id="unsaved-clip-title">当前片段尚未保存</h2><p>请先保存当前范围，再切换歌曲。初始前 10 秒也需要确认。</p>
+        <h2 id="unsaved-clip-title">当前片段尚未应用</h2><p>{canApplyClip ? '当前片段有未应用的范围，请应用后切换歌曲。' : '当前修改尚未应用。可以保留草稿并切换，返回后继续编辑。'}</p>
         {(videoError || videos.error) && <p className="notice bad" role="alert">{videoError || videos.error}</p>}
         <div className="action-line"><button className="button quiet" disabled={clipSaving} onClick={() => { setSwitchTarget(null); switchDialog.current?.close(); }}>继续编辑</button>
-          <button className="button primary" disabled={clipSaving || reviewPending || Boolean(clipError) || videoLinkChanged} onClick={async () => {
-            if (await saveClipRange()) { const next = switchTarget; setSwitchTarget(null); switchDialog.current?.close(); if (next === count) addBlankSong(); else if (next !== null) setSongIndex(next); }
-          }}>{clipSaving ? '保存中…' : '保存并切换'}</button></div>
+          <button className="button primary" disabled={clipSaving || (canApplyClip && (reviewPending || Boolean(clipError)))} onClick={async () => {
+            if (!canApplyClip || await saveClipRange()) { const next = switchTarget; setSwitchTarget(null); switchDialog.current?.close(); if (next !== null) switchSong(next); }
+          }}>{clipSaving ? '应用中…' : canApplyClip ? '应用并切换' : '保留草稿并切换'}</button></div>
       </dialog>
       <dialog ref={clearCacheDialog} className="confirm-dialog" aria-labelledby="clear-cache-title">
         <h2 id="clear-cache-title">清理全部缓存？</h2>
