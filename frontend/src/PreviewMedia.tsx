@@ -35,35 +35,26 @@ export function PreviewMedia({ src, kind, className }: { src: string; kind: 'vid
 
 type Props = {
   src: string; audioSrc?: string; start: number | null; end: number | null; invalid: boolean;
-  videoRef: RefObject<HTMLVideoElement | null>;
+  videoRef: RefObject<HTMLVideoElement | null>; scrubbing: RefObject<number | null>;
   onTime: (seconds: number) => void; onPlaying: (playing: boolean) => void; onError: (error: string) => void;
 };
 
-export default function VideoPreview({ src, audioSrc, start, end, invalid, videoRef, onTime, onPlaying, onError }: Props) {
+export default function VideoPreview({ src, audioSrc, start, end, invalid, videoRef, scrubbing, onTime, onPlaying, onError }: Props) {
   const audioRef = useRef<HTMLAudioElement>(null);
-  const [muted, setMuted] = useState(false);
-  const [volume, setVolume] = useState(1);
-  const latest = useRef({ start, end, invalid, onTime, onPlaying, onError, muted, volume });
-  latest.current = { start, end, invalid, onTime, onPlaying, onError, muted, volume };
-  const waiting = useMediaPair(videoRef, audioRef, src, audioSrc, latest);
-  useEffect(() => {
-    if (videoRef.current) { videoRef.current.muted = Boolean(audioSrc) || muted; videoRef.current.volume = volume; }
-    if (audioRef.current) { audioRef.current.muted = muted; audioRef.current.volume = volume; }
-  }, [audioSrc, muted, volume]);
+  const read = () => ({ start, end, invalid, onTime, onPlaying, onError, scrubbing: scrubbing.current !== null });
+  const waiting = useMediaPair(videoRef, audioRef, src, audioSrc, read);
   return <>
     <video ref={videoRef} preload="metadata" src={src} />
     {audioSrc && <audio ref={audioRef} preload="metadata" src={audioSrc} />}
     {waiting && <p role="status">正在缓冲音视频…</p>}
-    <div className="clip-playback">
-      <label><input type="checkbox" checked={muted} onChange={(event) => setMuted(event.target.checked)} /> 静音</label>
-      <label>音量 <input aria-label="预览音量" type="range" min="0" max="1" step="0.05" value={volume} onChange={(event) => setVolume(Number(event.target.value))} /></label>
-    </div>
   </>;
 }
 
 function useMediaPair(videoRef: Props['videoRef'], audioRef: RefObject<HTMLAudioElement | null>, src: string, audioSrc: string | undefined,
-  latest: RefObject<Pick<Props, 'start' | 'end' | 'invalid' | 'onTime' | 'onPlaying' | 'onError'> & { muted: boolean; volume: number }>) {
+  read: () => Pick<Props, 'start' | 'end' | 'invalid' | 'onTime' | 'onPlaying' | 'onError'> & { scrubbing: boolean }) {
   const [waiting, setWaiting] = useState(false);
+  const latestRead = useRef(read);
+  latestRead.current = read;
   useEffect(() => {
     const video = videoRef.current;
     const audio = audioRef.current;
@@ -72,7 +63,7 @@ function useMediaPair(videoRef: Props['videoRef'], audioRef: RefObject<HTMLAudio
     if (audio && audioSrc) audio.setAttribute('src', audioSrc);
     setWaiting(false);
     const releases = [retainPreview(src), ...(audioSrc ? [retainPreview(audioSrc)] : [])];
-    const disconnect = connectMedia(video, audioSrc ? audio : null, () => latest.current, setWaiting);
+    const disconnect = connectMedia(video, audioSrc ? audio : null, () => latestRead.current(), setWaiting);
     return () => {
       disconnect();
       for (const media of [video, ...(audioSrc && audio ? [audio] : [])]) { media.removeAttribute('src'); media.load(); }
