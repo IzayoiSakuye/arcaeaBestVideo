@@ -163,6 +163,65 @@ test(process.env.QA_EDITING ? '真实组件：数字提交、下载中导航与�
       const at = (index) => until(`document.querySelector('.heading-tag')?.textContent === '第 ${index} / 50 首'`);
       const generateDisabled = `[...document.querySelectorAll('button')].find((b) => b.textContent.trim() === '开始生成').disabled`;
       await click('识别信息'); await at(1);
+      if (process.env.QA_NAV_GESTURES) {
+        const key = async (name, code, vk) => {
+          await send('Input.dispatchKeyEvent', { type: 'keyDown', key: name, code, windowsVirtualKeyCode: vk, ...(name === 'Enter' ? {text:'\r'} : name === ' ' ? {text:' '} : {}) });
+          await send('Input.dispatchKeyEvent', { type: 'keyUp', key: name, code, windowsVirtualKeyCode: vk });
+        };
+        const pointFor = (label) => evaluate(`(() => { const b=[...document.querySelectorAll('button')].find(b=>b.textContent.trim()===${JSON.stringify(label)}); b.scrollIntoView({block:'center'}); const r=b.getBoundingClientRect(); return {x:r.x+r.width/2,y:r.y+r.height/2}; })()`);
+        const pointer = async (label) => {
+          const point = await pointFor(label);
+          await send('Input.dispatchMouseEvent', { type: 'mousePressed', ...point, button: 'left', clickCount: 1 });
+          await send('Input.dispatchMouseEvent', { type: 'mouseReleased', ...point, button: 'left', clickCount: 1 });
+          await delay(60);
+        };
+        const next = '下一首 →', previous = '← 上一首';
+        await input(jump, '10'); await enter(); await at(10);
+        const scenario = process.env.QA_NAV_GESTURES;
+        if (scenario === 'pointer') {
+          await input(jump, '11'); await pointer(previous); await at(11);
+          await pointer(previous); await at(10);
+          for (const [label, index] of [[next,11],[previous,10],[previous,9],[next,10]]) { await pointer(label); await at(index); }
+        } else if (scenario === 'keyboard') {
+          await evaluate(`window.qa.keys=[]; for(const name of ['keydown','keyup','click']) document.addEventListener(name,e=>window.qa.keys.push({type:e.type,key:e.key,target:e.target.textContent?.trim().slice(0,30),trusted:e.isTrusted}),true);`);
+          await input(jump, '10');
+          await key('Tab', 'Tab', 9); await key('Tab', 'Tab', 9);
+          assert.equal(await evaluate('document.activeElement.textContent.trim()'), previous);
+          await key('Enter', 'Enter', 13); console.log('键盘事件：', await evaluate('window.qa.keys')); await at(9);
+          await key('Tab', 'Tab', 9);
+          assert.equal(await evaluate('document.activeElement.textContent.trim()'), next);
+          await key(' ', 'Space', 32); await at(10);
+        } else if (scenario === 'cancel') {
+          await input(jump, '8');
+          const point = await pointFor(previous);
+          await send('Input.dispatchMouseEvent', { type: 'mousePressed', ...point, button: 'left', clickCount: 1 });
+          await at(8);
+          await send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: point.x, y: point.y + 100, buttons: 1 });
+          await send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: point.x, y: point.y + 100, button: 'left', clickCount: 1 });
+          await pointer(next); await at(9); await pointer(previous); await at(8);
+        } else if (scenario === 'touch-cancel') {
+          await evaluate(`window.qa.pointerCancels=0; document.addEventListener('pointercancel',()=>window.qa.pointerCancels++);`);
+          await input(jump, '8'); const point = await pointFor(previous);
+          await send('Emulation.setTouchEmulationEnabled', { enabled: true });
+          await send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{...point,id:1}] });
+          await send('Input.dispatchTouchEvent', { type: 'touchCancel', touchPoints: [] });
+          await delay(80);
+          assert.equal(await evaluate('window.qa.pointerCancels'), 1, '必须产生真实 pointercancel');
+          const moved = await evaluate(`document.querySelector('.heading-tag').textContent === '第 8 / 50 首'`);
+          await pointer(next); await at(moved ? 9 : 8);
+          await pointer(next); await at(moved ? 10 : 9);
+        } else if (scenario === 'draft') {
+          const value = process.env.QA_NAV_DRAFT === 'empty' ? '' : process.env.QA_NAV_DRAFT;
+          const label = process.env.QA_NAV_DIRECTION === 'previous' ? previous : next;
+          await input(jump, value); await pointer(label);
+          console.log('无有效数字跳转时点击下一首：', JSON.stringify({value, heading:await evaluate(`document.querySelector('.heading-tag').textContent`)}));
+          if (process.env.QA_SCREENSHOT) { const shot = await send('Page.captureScreenshot'); await writeFile(process.env.QA_SCREENSHOT, Buffer.from(shot.result.data, 'base64')); }
+          assert.equal(await evaluate(`document.querySelector('.heading-tag').textContent`), `第 ${label === next ? 11 : 9} / 50 首`, '无效或当前项未发生跳转时，相邻按钮仍应执行有效导航');
+        } else throw Error(`未知导航专项：${scenario}`);
+        assert.equal(await evaluate(`!!document.querySelector('dialog[open]')`), false);
+        console.log(`PASS：独立导航专项 ${scenario}`);
+        return;
+      }
       if (process.env.QA_NAV_CLICK) {
         const target = process.env.QA_NAV_TARGET || '12';
         const label = process.env.QA_NAV_CLICK === 'previous' ? '← 上一首' : '下一首 →';
