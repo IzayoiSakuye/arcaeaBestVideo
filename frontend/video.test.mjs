@@ -41,6 +41,7 @@ test('迟到的查询不会覆盖确认新任务或相同任务的下载事件�
 const { connectMedia } = await import('./src/media.ts');
 class Media extends EventTarget {
   paused = true;
+  ended = false;
   readyState = 4;
   currentTime = 0;
   seeking = false;
@@ -160,4 +161,34 @@ test('拖动和未完成的 seek 不发布旧进度、不循环、不纠偏；�
     assert.equal(video.currentTime, 10);
     assert.equal(audio.currentTime, 10);
   } finally { stop(); }
+});
+
+test('自然 pause→ended 保留循环与拖动恢复意图，主动暂停不能被 seek 或缓冲恢复覆盖', async () => {
+  for (const scenario of ['loop', 'hold', 'paused']) {
+    const video = new Media();
+    const audio = new Media();
+    const controls = { start: 4, end: 5, invalid: false, scrubbing: false,
+      onTime() {}, onPlaying() {}, onError() {} };
+    const stop = connectMedia(video, audio, () => controls, () => {});
+    try {
+      await video.play(); await tick();
+      controls.scrubbing = scenario !== 'loop';
+      video.currentTime = 5;
+      video.ended = scenario !== 'paused';
+      video.pause(); await tick();
+      video.emit('ended'); await tick();
+      if (scenario === 'loop') assert.equal(video.currentTime, 4);
+      else {
+        assert.equal(video.currentTime, 5);
+        controls.scrubbing = false;
+        video.ended = false;
+        video.currentTime = 4.6;
+        video.emit('seeking'); video.emit('seeked'); audio.emit('canplay'); await tick();
+        assert.equal(video.currentTime, 4.6);
+        assert.equal(audio.currentTime, 4.6);
+      }
+      assert.equal(video.paused, scenario === 'paused', scenario);
+      assert.equal(audio.paused, scenario === 'paused', scenario);
+    } finally { stop(); }
+  }
 });

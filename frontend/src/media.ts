@@ -34,7 +34,8 @@ export function connectMedia(video: HTMLMediaElement, audio: HTMLMediaElement | 
     finally { starting = false; }
   };
   const play = () => { wanted = true; position(); void resume(); };
-  const paused = () => { if (internalPauses > 0) { internalPauses--; return; } wanted = false; buffering = false; onWaiting(false); audio?.pause(); read().onPlaying(false); };
+  // 自然结束也会先发 pause，保留播放意图供循环或拖动松开后恢复。
+  const paused = () => { if (internalPauses > 0) { internalPauses--; return; } if (!video.ended) wanted = false; buffering = false; onWaiting(false); audio?.pause(); read().onPlaying(false); };
   const wait = () => { if (!wanted) return; buffering = true; onWaiting(true); pause(); };
   const seek = () => { if (read().scrubbing) return; if (audio && Math.abs(audio.currentTime - video.currentTime) > 0.08) audio.currentTime = video.currentTime; wait(); };
   const playing = () => { read().onPlaying(true); if (audio?.paused && wanted) void resume(); };
