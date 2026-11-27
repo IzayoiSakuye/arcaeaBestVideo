@@ -39,7 +39,7 @@ function bootstrap() {
   const functions = {
     Status: () => ({ tools: [], song_count: 2 }), Version: () => 'qa',
     CheckResourceUpdate: () => ({ update_available: false }), CheckOPAudioUpdate: () => ({ files: [] }), ThoughtAudioOptions: () => [],
-    Import: () => ({ Project: clone(project), Notes: [] }),
+    Import: () => ({ Project: clone(project), Notes: location.search.includes('limits') ? ['#8 QA 提示', '#10 QA 提示', '#20 QA 提示'] : [] }),
     Review: (value) => ({ project: clone(value), renderable: true, problems: [], rows: value.songs.map((song) => ({ song_id: song.song_id, title: location.search.includes('long') ? '超长标题LongTitle'.repeat(18) + song.song_id : song.song_id, difficulty: 'FTR', difficulties: ['FTR'], problems: [] })) }),
     VideoInfos: () => {
       const snapshot = clone(states);
@@ -119,7 +119,7 @@ test(process.env.QA_EDITING ? '真实组件：数字提交、下载中导航与�
       assert.equal(await evaluate(`(() => { const button = [...document.querySelectorAll('button')].find((b) => (b.querySelector('.nav-label')?.textContent || b.textContent).trim() === ${JSON.stringify(text)}); if (!button || button.disabled) return false; button.click(); return true; })()`), true, `按钮不可达：${text}`);
       await delay(50);
     };
-    await send('Page.navigate', { url: `http://127.0.0.1:${server.address().port}/${process.env.QA_EDITING ? '?editing=1' : process.env.QA_QUERY_RACE ? '?race=1' : process.env.QA_ORDER ? '?order=1' : '?qa=1'}${process.env.QA_LONG_TITLES ? '&long=1' : ''}` });
+    await send('Page.navigate', { url: `http://127.0.0.1:${server.address().port}/${process.env.QA_EDITING ? '?editing=1' : process.env.QA_QUERY_RACE ? '?race=1' : process.env.QA_ORDER ? '?order=1' : '?qa=1'}${process.env.QA_LONG_TITLES ? '&long=1' : ''}${process.env.QA_NAV_GESTURES === 'limits' ? '&limits=1' : ''}` });
     await until(`!!document.querySelector('.nav-item')`);
     await click('JSON 导入');
     await evaluate(`(() => { const input = document.querySelector('textarea'); Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set.call(input, '{}'); input.dispatchEvent(new Event('input', { bubbles: true })); })()`);
@@ -210,6 +210,17 @@ test(process.env.QA_EDITING ? '真实组件：数字提交、下载中导航与�
           const moved = await evaluate(`document.querySelector('.heading-tag').textContent === '第 8 / 50 首'`);
           await pointer(next); await at(moved ? 9 : 8);
           await pointer(next); await at(moved ? 10 : 9);
+        } else if (scenario === 'limits') {
+          await evaluate(`document.querySelector('.review-toolbar input[type=checkbox]').click()`);
+          await pointer(previous); await at(8);
+          await pointer(next); await at(10);
+          await pointer(next); await at(20);
+          await pointer(next); await at(20);
+          await evaluate(`document.querySelector('.review-toolbar input[type=checkbox]').click()`);
+          await input(jump, '50'); await enter(); await at(50);
+          await pointer('新增歌曲 →');
+          await until(`document.querySelector('.heading-tag')?.textContent === '第 51 / 51 首'`);
+          assert.equal(await evaluate(`document.querySelector('${jump}').value`), '51');
         } else if (scenario === 'draft') {
           const value = process.env.QA_NAV_DRAFT === 'empty' ? '' : process.env.QA_NAV_DRAFT;
           const label = process.env.QA_NAV_DIRECTION === 'previous' ? previous : next;
@@ -217,6 +228,7 @@ test(process.env.QA_EDITING ? '真实组件：数字提交、下载中导航与�
           console.log('无有效数字跳转时点击下一首：', JSON.stringify({value, heading:await evaluate(`document.querySelector('.heading-tag').textContent`)}));
           if (process.env.QA_SCREENSHOT) { const shot = await send('Page.captureScreenshot'); await writeFile(process.env.QA_SCREENSHOT, Buffer.from(shot.result.data, 'base64')); }
           assert.equal(await evaluate(`document.querySelector('.heading-tag').textContent`), `第 ${label === next ? 11 : 9} / 50 首`, '无效或当前项未发生跳转时，相邻按钮仍应执行有效导航');
+          assert.equal(await evaluate(`document.querySelector('${jump}').value`), label === next ? '11' : '9', '切歌后数字框必须同步当前项');
         } else throw Error(`未知导航专项：${scenario}`);
         assert.equal(await evaluate(`!!document.querySelector('dialog[open]')`), false);
         console.log(`PASS：独立导航专项 ${scenario}`);
