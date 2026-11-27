@@ -3,7 +3,7 @@
   "name": "arcaea-best-video",
   "outputfilename": "arcaea-best-video",
   "info": {
-    "productVersion": "1.0.0"
+    "productVersion": "1.1.0"
   },
   "frontend:install": "npm install",
   "frontend:build": "npm run build",
