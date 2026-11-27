@@ -1,7 +1,6 @@
 package app
 
 import (
-	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
@@ -10,7 +9,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"time"
 
 	"rhythm-game-bvideo/internal/catalog"
 	"rhythm-game-bvideo/internal/resource"
@@ -21,14 +19,26 @@ import (
 )
 
 type VideoState struct {
-	Index      int    `json:"index"`
-	URL        string `json:"url"`
-	OwnerName  string `json:"owner_name"`
-	Status     string `json:"status"`
-	PreviewURL string `json:"preview_url"`
+	Index           int     `json:"index"`
+	URL             string  `json:"url"`
+	OwnerName       string  `json:"owner_name"`
+	Status          string  `json:"status"`
+	PreviewURL      string  `json:"preview_url"`
+	PreviewAudioURL string  `json:"preview_audio_url,omitempty"`
+	SongID          string  `json:"song_id"`
+	Difficulty      string  `json:"difficulty"`
+	RequestID       string  `json:"request_id"`
+	DurationMs      int     `json:"duration_ms"`
+	PreviewReady    bool    `json:"preview_ready"`
+	Confirmed       bool    `json:"confirmed"`
+	MaterialReady   bool    `json:"material_ready"`
+	DownloadedBytes int64   `json:"downloaded_bytes"`
+	TotalBytes      int64   `json:"total_bytes"`
+	Progress        float64 `json:"progress"`
+	Error           string  `json:"error,omitempty"`
 }
 
-// VideoInfos 只检查本地文件，供校对页展示每首歌的素材状态
+// VideoInfos 查询准备状态，不触发解析或下载。
 func (a *App) VideoInfos(project *score.Project) ([]VideoState, error) {
 	if project == nil {
 		return nil, fmt.Errorf("缺少成绩数据")
@@ -40,6 +50,34 @@ func (a *App) VideoInfos(project *score.Project) ([]VideoState, error) {
 	out := make([]VideoState, 0, len(project.Songs))
 	for i, song := range project.Songs {
 		state := a.videoInfo(cata, song)
+		state.PreviewReady = state.PreviewURL != ""
+		if score.ClipConfirmed(song) {
+			state.Confirmed = true
+			state.MaterialReady = fileReady(a.videoMaterialPath(song))
+			if state.MaterialReady {
+				state.Status = "ready"
+			} else if state.Status == "ready" {
+				state.Status = "preview"
+			}
+		}
+		a.mu.Lock()
+		if task := a.videoTasks[videoSourceKey(song.SongID, song.Difficulty.Name)]; task != nil {
+			if song.Video == nil || videoIdentity(song) == task.Source || sameLocalVideo(song, task.Song) {
+				a.refreshVideoTaskLocked(task)
+				state = task.State
+				sameRange := song.Clip != nil && task.Song.Clip != nil && song.Clip.ConfirmedKey != "" && song.Clip.ConfirmedKey == task.Song.Clip.ConfirmedKey && song.Clip.StartMs == task.Song.Clip.StartMs && song.Clip.DurationMs == task.Song.Clip.DurationMs
+				// 文件不可用时保留已保存选段的标记，素材仍失败且不可生成。
+				confirmed := score.ClipConfirmed(song) || sameLocalVideo(song, task.Song) && !fileReady(song.Video.LocalPath) && state.Confirmed
+				if !confirmed || !sameRange {
+					state.Confirmed, state.MaterialReady = false, false
+					if state.Status == "ready" {
+						state.Status = "preview"
+					}
+				}
+			}
+		}
+		a.mu.Unlock()
+		state.SongID, state.Difficulty = song.SongID, song.Difficulty.Name
 		state.Index = i + 1
 		out = append(out, state)
 	}
@@ -132,7 +170,7 @@ func (a *App) mediaURL(path, ext string) string {
 	return "/preview/" + token + ext
 }
 
-// NewPreviewHandler 只提供已登记的本地录像
+// NewPreviewHandler 只提供已登记的本地文件及 B站预览流。
 func NewPreviewHandler(a *App) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet && r.Method != http.MethodHead {
@@ -156,7 +194,14 @@ func NewPreviewHandler(a *App) http.Handler {
 		}
 		a.mu.Lock()
 		path := a.previews[token]
+		remote := a.remotePreviews[token]
+		a.cacheUsers++
 		a.mu.Unlock()
+		defer func() { a.mu.Lock(); a.cacheUsers--; a.mu.Unlock() }()
+		if remote != nil && (ext == ".mp4" || ext == ".m4a") {
+			serveRemotePreview(w, r, remote, ext == ".m4a")
+			return
+		}
 		f, err := os.Open(path)
 		if err != nil {
 			http.NotFound(w, r)
@@ -173,6 +218,11 @@ func NewPreviewHandler(a *App) http.Handler {
 			return
 		}
 		w.Header().Set("Content-Type", mime.TypeByExtension(ext))
+		if r.Method == http.MethodGet {
+			a.mu.Lock()
+			a.activatePreviewLocked(r.URL.Path)
+			a.mu.Unlock()
+		}
 		http.ServeContent(w, r, "preview"+ext, fi.ModTime(), f)
 	})
 }
@@ -226,80 +276,26 @@ func (a *App) PickVideoFile(songID, difficulty string) (string, error) {
 	return abs, nil
 }
 
-// DownloadVideo 按索引顺序尝试来源，先库再手动读取
+// DownloadVideo 保留原绑定名称，返回素材准备状态；完成进度通过 video:event 或 VideoInfos 获取。
 func (a *App) DownloadVideo(song score.Song) (VideoState, error) {
-	var state VideoState
-	if song.SongID == "" || song.Difficulty.Name == "" {
-		return state, fmt.Errorf("请先确定曲目和难度")
-	}
-	cata, err := a.catalog()
-	if err != nil {
-		return state, err
-	}
-	var sources []catalog.VideoSource
-	manualURL := song.Video != nil && song.Video.URL != ""
-	if manualURL {
-		link, err := resource.VideoURL(song.Video.URL)
-		if err != nil {
-			return state, err
-		}
-		owner := a.videoInfo(cata, song).OwnerName
-		sources = []catalog.VideoSource{{URL: link, OwnerName: owner}}
-	} else if chart, ok := cata.Chart(song.SongID, song.Difficulty.Name); ok && chart.Video != nil {
-		sources = chart.Video.Sources
-	}
-	if len(sources) == 0 {
-		return state, fmt.Errorf("这首歌没有可下载的录像链接，请手动填写")
-	}
-	overrides, err := loadToolPaths()
-	if err != nil {
-		return state, err
-	}
-	resolved := tools.Detect(overrides).Tools
-	ctx, cancel := context.WithTimeout(a.context(), 30*time.Minute)
-	a.mu.Lock()
-	if a.videoCancel != nil {
-		a.mu.Unlock()
-		cancel()
-		return state, fmt.Errorf("已有录像正在获取")
-	}
-	a.videoCancel = cancel
-	a.mu.Unlock()
-	defer func() {
-		a.mu.Lock()
-		a.videoCancel = nil
-		a.mu.Unlock()
-		cancel()
-	}()
-	var failures []string
-	for _, source := range sources {
-		if err := ctx.Err(); err != nil {
-			return state, fmt.Errorf("录像获取已停止：%w", err)
-		}
-		_, fetchedOwner, err := resource.DownloadVideo(ctx, resolved.YtDlp, resolved.FFmpeg, resolved.FFprobe,
-			filepath.Join(a.cacheDir(), "clips"), song.SongID, song.Difficulty.Name, source.URL)
-		if err == nil {
-			if source.OwnerName == "" {
-				source.OwnerName = fetchedOwner
-			}
-			if manualURL {
-				if err := a.saveVideoSource(song.SongID, song.Difficulty.Name, &score.VideoRef{URL: source.URL, OwnerName: source.OwnerName}); err != nil {
-					return state, fmt.Errorf("录像已获取，但来源记录保存失败：%w", err)
-				}
-			}
-			song.Video = &score.VideoRef{URL: source.URL, OwnerName: source.OwnerName}
-			return a.videoInfo(cata, song), nil
-		}
-		failures = append(failures, err.Error())
-	}
-	return state, fmt.Errorf("所有录像来源均不可用：%s", strings.Join(failures, "；"))
+	return a.PrepareVideo(song)
 }
 
-// CancelVideoDownload 停止当前一首录像的获取
+// CancelVideoDownload 停止素材队列，单项取消使用 CancelVideoPreparation。
 func (a *App) CancelVideoDownload() {
 	a.mu.Lock()
-	defer a.mu.Unlock()
-	if a.videoCancel != nil {
-		a.videoCancel()
+	var states []VideoState
+	for _, task := range a.videoTasks {
+		if task.State.Status == "queued" || task.State.Status == "preparing" || task.State.Status == "downloading" {
+			if task.Cancel != nil {
+				task.Cancel()
+			}
+			task.State.Status, task.State.Error = "cancelled", "素材获取已取消"
+			states = append(states, task.State)
+		}
+	}
+	a.mu.Unlock()
+	for _, state := range states {
+		a.emitVideo(state)
 	}
 }

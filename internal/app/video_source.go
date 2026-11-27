@@ -58,6 +58,9 @@ func (a *App) saveVideoSource(songID, difficulty string, source *score.VideoRef)
 	// shortcut: 多实例同时写入可能互相覆盖，支持多实例编辑时改用跨进程锁
 	a.mu.Lock()
 	defer a.mu.Unlock()
+	if a.jobID != "" {
+		return fmt.Errorf("生成中，无法更改录像来源")
+	}
 	sources, err := loadVideoSources()
 	if err != nil {
 		return err
@@ -91,5 +94,14 @@ func (a *App) saveVideoSource(songID, difficulty string, source *score.VideoRef)
 	if err := f.Close(); err != nil {
 		return err
 	}
-	return os.Rename(f.Name(), file)
+	if err := os.Rename(f.Name(), file); err != nil {
+		return err
+	}
+	if task := a.videoTasks[key]; task != nil {
+		if task.Cancel != nil {
+			task.Cancel()
+		}
+		delete(a.videoTasks, key)
+	}
+	return nil
 }

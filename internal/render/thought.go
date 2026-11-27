@@ -25,7 +25,11 @@ type thoughtImageValue struct {
 }
 
 // Thought 将感想文字逐页渲染，再按相同时长拼成可独立预览的片段
-func Thought(ctx context.Context, thought score.Thought, audioPath, templatesDir, workDir, ffmpeg, ffprobe, edge string) (string, error) {
+func Thought(ctx context.Context, thought score.Thought, audioPath, templatesDir, workDir, ffmpeg, ffprobe, edge string, fades ...AudioFade) (string, error) {
+	var fade AudioFade
+	if len(fades) > 0 {
+		fade = fades[0]
+	}
 	if strings.TrimSpace(thought.Name) == "" {
 		return "", fmt.Errorf("请填写感想片段名称")
 	}
@@ -53,7 +57,7 @@ func Thought(ctx context.Context, thought score.Thought, audioPath, templatesDir
 	if err != nil {
 		return "", err
 	}
-	b = append(b, []byte("video-fade-1s")...)
+	b = append(b, []byte(fmt.Sprintf("seg-av-fade-v2:%t:%t", fade.In, fade.Out))...)
 	for _, path := range []string{audioPath, filepath.Join(templatesDir, "thought-bg.png"), filepath.Join(templatesDir, "thought.html")} {
 		if path == "" {
 			continue
@@ -133,17 +137,17 @@ func Thought(ctx context.Context, thought score.Thought, audioPath, templatesDir
 		args = append(args, "-ss", strconv.FormatFloat(float64(thought.Audio.StartMs)/1000, 'f', 3, 64), "-i", audioPath)
 	}
 	filter := "[0:v]fps=30,scale=1920:1080,setsar=1,scale=out_range=tv,format=yuv420p," + videoFade(thought.DurationMs) + "[v]"
-	audioMap := "1:a:0"
+	audioFilter := "[1:a]aresample=48000,asetpts=PTS-STARTPTS,"
 	if strings.HasPrefix(thought.Audio.Kind, "op") {
 		samples := (thought.Audio.EndMs - thought.Audio.StartMs) * 48
 		if samples <= 0 {
 			return "", fmt.Errorf("OP 音频截取范围无效")
 		}
-		filter += fmt.Sprintf(";[1:a]aresample=48000,atrim=end_sample=%d,asetpts=PTS-STARTPTS,aloop=loop=-1:size=%d[a]", samples, samples)
-		audioMap = "[a]"
+		audioFilter += fmt.Sprintf("atrim=end_sample=%d,aloop=loop=-1:size=%d,", samples, samples)
 	}
+	filter += ";" + audioFilter + audioFade(thought.DurationMs, fade) + "[a]"
 	args = append(args, "-filter_complex", filter,
-		"-map", "[v]", "-map", audioMap, "-t", strconv.FormatFloat(float64(thought.DurationMs)/1000, 'f', 3, 64),
+		"-map", "[v]", "-map", "[a]", "-t", strconv.FormatFloat(float64(thought.DurationMs)/1000, 'f', 3, 64),
 		"-c:v", "libx264", "-preset", Preset, "-crf", strconv.Itoa(CRF), "-pix_fmt", "yuv420p", "-color_range", "tv",
 		"-g", strconv.Itoa(GOP), "-keyint_min", strconv.Itoa(GOP), "-sc_threshold", "0",
 		"-c:a", "aac", "-b:a", "192k", "-ar", "48000", "-ac", "2", output+".part.mp4")

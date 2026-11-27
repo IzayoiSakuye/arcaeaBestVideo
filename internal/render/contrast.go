@@ -46,4 +46,5 @@ type Layers struct {
 	Win        RectWin
 	StartMs    int
 	DurationMs int
+	AudioFade  AudioFade
 }

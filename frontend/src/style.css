@@ -246,3 +246,15 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 .arrange-drop-tail:hover { background: rgba(120,104,235,.12); }
 .arrange-drag-card { position: fixed; top: 0; left: 0; z-index: 9999; pointer-events: none; min-width: 220px; max-width: 360px; padding: 13px 16px; border: 2px solid #7868eb; border-radius: 10px; background: #fff; color: #242033; box-shadow: 0 12px 28px rgba(20,15,60,.28); font-weight: 600; }
 @media (max-width: 800px) { .arrangement { grid-template-columns: 1fr; } }
+
+.material-summary { max-height: 55vh; overflow-y: auto; }
+.material-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 12px 0; border-bottom: 1px solid var(--line, #ddd); }
+.material-row strong { flex: 1 1 100%; overflow-wrap: anywhere; }
+.material-row progress { width: 160px; accent-color: #855daf; }
+.material-row .clip-error { flex-basis: 100%; }
+.video-card > audio { display: none; }
+@media (max-width: 700px) { .material-row progress { width: 100%; } }
+
+.material-status { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; padding: 10px 0; font-size: 13px; border-top: 1px solid #eee8f2; }
+.material-status span { flex: 1 1 100%; overflow-wrap: anywhere; }
+.material-status progress { max-width: 100%; }

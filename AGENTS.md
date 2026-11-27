@@ -263,11 +263,20 @@ node scripts/build-release.ts --version YYYY.MM.DD # 一键发布准备
   npm 会因此跳过 devDependencies，报 "up to date" 却什么都不装。
   **agent 跑 npm 要加 `--include=dev`；用户自己终端里不受影响。**
 - 独立资源仓库的破坏性变更要同步更新其 `README.md` 与相关 `--help`。
-- **不要 `git add` / `commit` / `push`** —— 用户手动验收。
+- **Windows 本地目录开发时，不要自行 `git add` / `commit` / `push`**，由用户手动验收和提交。Multica 远程开发按下方协作与 Git 规则执行。
 - 写注释**简单**一点，不要添加过多agent自身的思考文本、docs文本与后端细节，只要说清楚是干什么的就行
 - 遇到不确定的部分要询问用户，不要自作主张
 - 每次写完一部分以后，一定要说明改动文件，以及新增方法的思路、逻辑、为什么这样做以及怎么做的
-- **当且仅当你的身份（Skills）是pm-master**：你可以在用户决定开始编码时调用subagent并为其发送提示词进行编码等操作，但所有agent都要遵循该文档
+- **PM 负责方案、任务分派和验收，不编写、修改或调试业务代码。** 用户确认方案和总体分工后，通过 Multica 将开发交给 Go agent、QA 交给测试工程师 agent；所有 agent 都须遵循本文档。
+
+### Multica 远程协作与 Git 规则
+
+1. **顺序：用户与 PM 确认方案 → PM 提交协作规范并创建 Draft PR → Go agent 开发 → 测试工程师 agent 做 QA → PM 验收 → 用户合并 PR。** Draft PR 描述先列计划功能及验收项，明确哪些尚未实现；开发期间按功能提交并推送到同一 PR 分支，让用户查看已推送的变化。QA 或 PM 验收发现问题，退回 Go agent 修复，再对受影响部分重新 QA；最终交付须对应通过验证的代码版本。无法执行的检查如实列出，不记为通过。
+2. **Multica 远程环境允许 `git add` / `commit` / `push` 和创建 PR，但所有 agent 均不得自行合并。** Go agent 负责开发和自检，测试工程师 agent 负责 QA，PM 负责审阅阶段改动并执行 Git 交付。开发中的提交不代表 QA 通过；QA 通过且完成验收后，由 PM 更新 PR 描述为实际结果，再转为待用户审阅。PM 的 Git 交付权限不等于业务代码实现权限。
+3. **新建分支使用英文类型前缀和英文内容，以 `/` 分隔**，例如 `feat/online-video-preview`、`fix/cache-cleanup-guard`、`test/clip-cache-reuse`；文档修改可用 `docs/`。
+4. **commit 遵循 Conventional Commits，文案简短，具体内容使用中文**，例如 `feat: 支持在线选段预览`、`fix: 阻止渲染期间清理缓存`。按功能拆分提交，不把全部实现塞进一个 commit；每次提交只包含对应功能的相关改动。
+5. **PR 使用中文描述**，说明实际改动、验证结果和未验证项；标题包含对应 Multica issue 标识，便于关联。PR 合并由用户本人执行。
+6. **提前创建 Draft PR 时不打版本 tag；最终验收后、转为待用户审阅前，在最后一次 commit 上添加 `vx.y.z` 格式的 Git tag。** 具体版本号须先与用户确认，不自行递增、不移动或覆盖已有 tag。最后一次提交完成后再打 tag；若之后又有修复提交，须重新确认 tag 的处理方式，确保交付版本明确。
 
 ---
 

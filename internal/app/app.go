@@ -26,6 +26,13 @@ type App struct {
 	cataErr          error
 	previews         map[string]string
 	videoCancel      context.CancelFunc
+	videoTasks       map[string]*videoTask
+	videoQueue       []videoRequest
+	videoWorker      bool
+	remotePreviews   map[string]*remotePreview
+	cacheUsers       int
+	previewLeases    map[string]string
+	thoughtBusy      bool
 }
 
 func New() *App {
@@ -73,7 +80,7 @@ func (a *App) Startup(ctx context.Context) {
 }
 
 func (a *App) Version() string {
-	return "v1.0.0"
+	return "v1.1.0"
 }
 
 func (a *App) context() context.Context {

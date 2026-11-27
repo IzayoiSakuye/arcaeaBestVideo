@@ -24,6 +24,9 @@ type SegInput struct {
 	StartMs       int               `json:"start_ms,omitempty"`
 	DurationMs    int               `json:"duration_ms,omitempty"`
 	RenderVersion string            `json:"render_version"`
+	AudioFade     render.AudioFade  `json:"audio_fade"`
+	ClipSize      int64             `json:"clip_size"`
+	ClipModified  int64             `json:"clip_modified"`
 }
 
 // isFile 判断传入的是不是文件
