@@ -37,7 +37,8 @@ export function connectMedia(video: HTMLMediaElement, audio: HTMLMediaElement | 
   // 自然结束也会先发 pause，保留播放意图供循环或拖动松开后恢复。
   const paused = () => { if (internalPauses > 0) { internalPauses--; return; } if (!video.ended) wanted = false; buffering = false; onWaiting(false); audio?.pause(); read().onPlaying(false); };
   const wait = () => { if (!wanted) return; buffering = true; onWaiting(true); pause(); };
-  const seek = () => { if (read().scrubbing) return; if (audio && Math.abs(audio.currentTime - video.currentTime) > 0.08) audio.currentTime = video.currentTime; wait(); };
+  // 离散定位同步一次目标，不沿用正常播放的漂移容差。
+  const seek = () => { if (read().scrubbing) return; if (audio && audio.currentTime !== video.currentTime) audio.currentTime = video.currentTime; wait(); };
   const playing = () => { read().onPlaying(true); if (audio?.paused && wanted) void resume(); };
   const ended = () => { if (!wanted || read().scrubbing || video.seeking) return; const { start, invalid } = read(); if (start === null || invalid) return; video.currentTime = start; position(); void resume(); };
   const listeners: [HTMLMediaElement, string, EventListener][] = [];
@@ -46,7 +47,7 @@ export function connectMedia(video: HTMLMediaElement, audio: HTMLMediaElement | 
   on(video, 'seeking', seek); on(video, 'timeupdate', position); on(video, 'ended', ended);
   for (const media of [video, ...(audio ? [audio] : [])]) {
     on(media, 'waiting', wait); on(media, 'stalled', wait); on(media, 'canplay', () => { void resume(); });
-    on(media, 'seeked', () => { if (media === video && audio && Math.abs(audio.currentTime - video.currentTime) > 0.08) audio.currentTime = video.currentTime; position(); void resume(); }); on(media, 'error', fail);
+    on(media, 'seeked', () => { if (media === video && audio && !read().scrubbing && !video.seeking && Math.abs(audio.currentTime - video.currentTime) > 0.08) audio.currentTime = video.currentTime; position(); void resume(); }); on(media, 'error', fail);
   }
   // 不依赖 timeupdate 的低频率来限制音画漂移。
   const timer = globalThis.setInterval(() => { if (wanted && !buffering) position(); }, 100);
