@@ -7,6 +7,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import test from 'node:test';
 import { build } from 'vite';
+import { diagnosePlayback } from './media-seek-diagnostics.mjs';
 
 // 真实 Chromium 媒体事件；不替代 Windows WebView2 和线上取流验收。
 async function checkPlayback(connectMedia, edge, modes) {
@@ -107,7 +108,7 @@ async function checkPlayback(connectMedia, edge, modes) {
   return passed;
 }
 
-test(`真实媒体：${process.env.QA_MEDIA_EDGE || '一秒选区、双流 seek 和循环'}，普通及延迟分块响应`, { timeout: 45000 }, async () => {
+test(`真实媒体：${process.env.QA_MEDIA_PRECISION ? '定位精度回归（受控前提）' : process.env.QA_MEDIA_DIAG ? '定向诊断（含显式注入）' : process.env.QA_MEDIA_EDGE || '一秒选区、双流 seek 和循环'}，普通及延迟分块响应`, { timeout: 45000 }, async () => {
   const directory = await mkdtemp(join(tmpdir(), 'media-playback-'));
   let browser;
   let server;
@@ -126,7 +127,7 @@ test(`真实媒体：${process.env.QA_MEDIA_EDGE || '一秒选区、双流 seek 
     const bundle = await build({ configFile: false, root: frontend, logLevel: 'silent', plugins: [{
       name: 'media-playback-test', resolveId: (id) => id === entry ? entry : undefined,
       load: (id) => id === entry ? `import { connectMedia } from ${JSON.stringify(join(frontend, 'src/media.ts'))};
-        (${checkPlayback.toString()})(connectMedia, ${JSON.stringify(process.env.QA_MEDIA_EDGE || '')}, ${JSON.stringify(process.env.QA_MEDIA_MODE ? [process.env.QA_MEDIA_MODE] : ['local', 'slow'])}).then(passed => fetch('/result', { method: 'POST', body: JSON.stringify({ passed }) })).catch(error => fetch('/result', { method: 'POST', body: JSON.stringify({ error: error.stack }) }));` : undefined,
+        (${(process.env.QA_MEDIA_DIAG || process.env.QA_MEDIA_PRECISION ? diagnosePlayback : checkPlayback).toString()})(connectMedia, ${JSON.stringify(process.env.QA_MEDIA_PRECISION ? 'precision' : process.env.QA_MEDIA_EDGE || '')}, ${JSON.stringify(process.env.QA_MEDIA_MODE ? [process.env.QA_MEDIA_MODE] : ['local', 'slow'])}).then(result => fetch('/result', { method: 'POST', body: JSON.stringify(Array.isArray(result) ? { passed: result } : result) })).catch(error => fetch('/result', { method: 'POST', body: JSON.stringify({ error: error.stack }) }));` : undefined,
     }], build: { write: false, rollupOptions: { input: entry } } });
     const script = bundle.output.find((item) => item.type === 'chunk').code;
     const files = { 'video.mp4': await readFile(join(directory, 'video.mp4')), 'audio.wav': await readFile(join(directory, 'audio.wav')) };
@@ -164,6 +165,7 @@ test(`真实媒体：${process.env.QA_MEDIA_EDGE || '一秒选区、双流 seek 
       once(browser, 'exit').then(([code]) => { throw Error(`Chromium 提前退出：${code}`); }),
       new Promise((_, reject) => { timer = setTimeout(() => reject(Error('媒体断言超时')), 35000); }),
     ]);
+    for (const event of result.diagnostics || []) console.log(JSON.stringify(event));
     assert.equal(result.error, undefined, result.error);
     assert.deepEqual(result.passed, process.env.QA_MEDIA_MODE ? [process.env.QA_MEDIA_MODE] : ['local', 'slow']);
   } finally {
